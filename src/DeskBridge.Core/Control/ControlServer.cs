@@ -119,8 +119,12 @@ public sealed class ControlServer : IAsyncDisposable
             {
                 lock (_sessions)
                     _sessions.Remove(s);
+                if (!fromThisPc)
+                    _log(L.T("{machine} disconnected.", ("machine", s.RemoteMachine)));
             };
             session.Start();
+            if (!fromThisPc) // the coordinator talking to its own agent is not news
+                _log(L.T("{machine} connected from {host}.", ("machine", auth.Machine), ("host", host)));
             SessionOpened?.Invoke(session);
         }
         catch (Exception ex) when (ex is IOException or SocketException or JsonException

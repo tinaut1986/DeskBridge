@@ -176,6 +176,23 @@ public partial class MainWindow : Window
                 AddLog(L.T("Created {path} with a new shared key.", ("path", _options.LocalPath)));
             }
         }
+        // A machine's id is its computer name; settings from older versions ("desktop", "laptop") move over.
+        var id = DefaultMachineId();
+        if (local.Machine != id)
+        {
+            var old = local.Machine;
+            local = local with { Machine = id };
+            if (_options.SnapshotDir is null)
+                local.Save(_options.LocalPath);
+            if (_vm.Model.Machines.FirstOrDefault(m => m.Id.Trim() == old) is { } entry && _vm.Model.Machines.All(m => m.Id.Trim() != id))
+            {
+                entry.Id = id; // profiles refer to the machine itself, so they follow the rename
+                if (_options.SnapshotDir is null && CurrentConfig(showErrors: false) is { } renamed)
+                    ConfigLoader.Save(_options.ConfigPath, renamed);
+            }
+            AddLog(L.T("This PC is now identified by its computer name, {machine} (it was {old}).", ("machine", id), ("old", old)));
+        }
+
         _vm.LocalMachine = local.Machine;
         _vm.LocalKey = local.SharedKey;
         _vm.LocalPort = local.ControlPort.ToString();
@@ -185,9 +202,7 @@ public partial class MainWindow : Window
     private LocalSettings? CurrentLocalSettings(bool showErrors)
     {
         string? error = null;
-        if (string.IsNullOrWhiteSpace(_vm.LocalMachine))
-            error = L.T("Choose which machine this PC is.");
-        else if (!int.TryParse(_vm.LocalPort, out var port) || port is < 1 or > 65535)
+        if (!int.TryParse(_vm.LocalPort, out var port) || port is < 1 or > 65535)
             error = L.T("The control port must be a number between 1 and 65535.");
         else
         {

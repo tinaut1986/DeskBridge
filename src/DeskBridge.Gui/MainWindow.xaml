@@ -199,7 +199,7 @@
                         </StackPanel>
                         <DataGrid x:Name="MachineGrid" ItemsSource="{Binding Model.Machines}" SelectedItem="{Binding SelectedMachine}">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="{l:T 'Id'}" Binding="{Binding Id, UpdateSourceTrigger=LostFocus}" Width="100" />
+                                <DataGridTextColumn Header="{l:T 'Id'}" Binding="{Binding Id}" Width="100" IsReadOnly="True" />
                                 <DataGridTextColumn Header="{l:T 'Name'}" Binding="{Binding Name, UpdateSourceTrigger=LostFocus}" Width="*" />
                                 <DataGridTextColumn Header="{l:T 'Address'}" Binding="{Binding Address, UpdateSourceTrigger=LostFocus}" Width="130" />
                                 <DataGridTextColumn Header="{l:T 'Port'}" Binding="{Binding ControlPort, TargetNullValue=''}" Width="70" />
@@ -278,9 +278,9 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Text="{l:T 'This PC is'}" VerticalAlignment="Center" />
-                            <ComboBox Grid.Row="0" Grid.Column="1" IsEditable="True" Margin="0,4" Width="220" HorizontalAlignment="Left"
-                                      ItemsSource="{Binding MachineIds}" Text="{Binding LocalMachine, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Grid.Row="0" Text="{l:T 'This PC'}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,8" FontWeight="SemiBold" Text="{Binding LocalMachine}"
+                                       ToolTip="{l:T 'Machines are identified by their computer name.'}" />
 
                             <TextBlock Grid.Row="1" Text="{l:T 'Shared key'}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" FontFamily="Consolas" VerticalContentAlignment="Center"
@@ -300,7 +300,7 @@
                                      Text="{Binding LocalConnectTo, UpdateSourceTrigger=PropertyChanged}" />
 
                             <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Style="{StaticResource Hint}" Margin="0,6"
-                                       Text="{l:T 'Every machine needs the same shared key. On the laptop, choose laptop here, paste the key and save: its agent then waits for the coordinator. If the laptop cannot accept connections, also write the coordinator’s address in Connect to. The layout is only edited on the coordinator.'}" />
+                                       Text="{l:T 'Every machine needs the same shared key: copy it here and paste it on the others. A machine that cannot accept connections also needs the coordinator’s address in Connect to. Machines are identified by their computer name and appear on the coordinator by themselves when they connect. The layout is only edited on the coordinator.'}" />
 
                             <StackPanel Grid.Row="5" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
                                 <Button Content="{l:T 'Save and restart agent'}" Style="{StaticResource Primary}" Click="SaveLocal_Click" />

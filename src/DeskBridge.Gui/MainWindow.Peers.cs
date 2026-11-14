@@ -38,6 +38,16 @@ public partial class MainWindow
     private async Task WelcomeAsync(string id, ControlSession session)
     {
         var machine = _vm.Model.Machines.FirstOrDefault(m => m.Id.Trim() == id);
+        if (machine is null
+            && _vm.Model.Machines.FirstOrDefault(m => !m.HasInput && m.Address.Trim() == session.RemoteHost
+                                                      && _agent?.Directory.Find(m.Id.Trim()) is null) is { } sameAddress)
+        {
+            // A machine already known at this address now uses another id (older versions named it "laptop";
+            // now it is its computer name): rename it, so its profiles follow, instead of adding a duplicate.
+            AddLog(L.T("{old} is now identified as {machine}.", ("old", sameAddress.Id), ("machine", id)));
+            sameAddress.Id = id;
+            machine = sameAddress;
+        }
         if (machine is null)
         {
             machine = new MachineVm { Id = id, Name = id, Address = session.RemoteHost };
