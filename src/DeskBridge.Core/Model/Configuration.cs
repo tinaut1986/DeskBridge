@@ -28,8 +28,13 @@ public sealed record StreamSettings(int? Width = null, int? Height = null, int? 
     public static readonly StreamSettings Default = new();
 }
 
+/// <summary>Where a virtual display goes in the borrowing machine's desktop, when placed by hand.</summary>
+public sealed record VirtualPosition(int X, int Y);
+
 /// <summary>"Physical display <paramref name="Display"/> of <paramref name="Machine"/> shows a screen of <paramref name="UsedBy"/>".</summary>
-public sealed record DisplayAssignment(string Machine, string Display, string UsedBy, StreamSettings? Stream = null);
+/// <param name="Position">Hand-placed position of the virtual display in <paramref name="UsedBy"/>'s desktop; null = automatic.</param>
+public sealed record DisplayAssignment(
+    string Machine, string Display, string UsedBy, StreamSettings? Stream = null, VirtualPosition? Position = null);
 
 /// <summary>Where a machine's borrowed (virtual) displays go, relative to the displays it keeps.</summary>
 public enum PlacementSide { Right, Left, Above, Below }

@@ -592,6 +592,16 @@ public partial class MainWindow : Window
                 Canvas.SetLeft(rect, x + (v.X - box.MinX) * scale + 3);
                 Canvas.SetTop(rect, labelHeight + (v.Y - box.MinY) * scale + 3);
                 canvas.Children.Add(rect);
+
+                var assignment = _vm.SelectedProfile?.Assignments.FirstOrDefault(a =>
+                    a.Owner.Id.Trim() == v.ForMachine && a.Display.Id.Trim() == v.ForDisplay);
+                if (assignment is not null)
+                {
+                    var others = box.Machine.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height))
+                        .Concat(virtuals[box.Machine].Where(o => o.Key != v.Key).Select(o => new DisplayRect(o.X, o.Y, o.Width, o.Height)))
+                        .ToList();
+                    MakeDraggable(rect, assignment, v, others, new DragFrame(x, labelHeight, box.MinX, box.MinY, scale));
+                }
             }
 
             x += box.Width * scale + gap;
@@ -650,7 +660,11 @@ public partial class MainWindow : Window
                         InfoBrush));
                 }
                 if (plan.Streams.Count > 0)
+                {
                     lines.Add(new SummaryLine(L.T("Network: about {mbps} Mbps in total.", ("mbps", plan.Streams.Sum(s => s.BitrateMbps))), InfoBrush));
+                    lines.Add(new SummaryLine(L.T("Drag a dashed (virtual) display on the map to place it by hand; right-click it to place it automatically again."),
+                        ThemeManager.Resource("MutedText")));
+                }
                 lines.AddRange(plan.Warnings.Select(w => new SummaryLine("⚠ " + w, WarningBrush)));
             }
             catch (ConfigException ex)
@@ -704,6 +718,7 @@ public partial class MainWindow : Window
             to.Resolution = from.Resolution;
             to.Refresh = from.Refresh;
             to.Bitrate = from.Bitrate;
+            to.Position = from.Position;
         }
         foreach (var (machine, side) in source.Placement)
             copy.Placement[machine] = side;

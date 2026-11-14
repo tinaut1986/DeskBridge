@@ -169,7 +169,29 @@ public static class LayoutPlanner
         }
 
         var placed = Place(config, profile, assignments, virtualDisplays);
+        warnings.AddRange(ArrangementWarnings(config, placed));
         return new LayoutPlan(profile.Name, coordinator.Id, placed, streams, inputRoutes, warnings);
+    }
+
+    /// <summary>Windows needs every display to touch another one, and none may overlap.</summary>
+    private static IEnumerable<string> ArrangementWarnings(DeskBridgeConfig config, List<VirtualDisplaySpec> placed)
+    {
+        foreach (var machine in config.Machines)
+        {
+            var physical = machine.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList();
+            var virtuals = placed.Where(v => v.Machine == machine.Id).ToList();
+            foreach (var v in virtuals)
+            {
+                var rect = new DisplayRect(v.X, v.Y, v.Width, v.Height);
+                var others = physical.Concat(virtuals.Where(o => o.Key != v.Key).Select(o => new DisplayRect(o.X, o.Y, o.Width, o.Height))).ToList();
+                if (others.Any(rect.Overlaps))
+                    yield return L.T("The virtual display of '{machine}' for display '{display}' of '{lender}' overlaps another display.",
+                        ("machine", machine.Id), ("display", v.ForDisplay), ("lender", v.ForMachine));
+                else if (others.Count > 0 && !others.Any(rect.Touches))
+                    yield return L.T("The virtual display of '{machine}' for display '{display}' of '{lender}' does not touch any other display; Windows will move it.",
+                        ("machine", machine.Id), ("display", v.ForDisplay), ("lender", v.ForMachine));
+            }
+        }
     }
 
     /// <summary>
@@ -187,16 +209,28 @@ public static class LayoutPlanner
         var result = new List<VirtualDisplaySpec>();
         foreach (var borrower in config.Machines)
         {
-            var own = borrower.Displays;
-            var bounds = own.Count == 0
+            var mine = virtualDisplays.Where(v => v.Machine == borrower.Id).ToList();
+
+            // Placed by hand: exactly where the user dragged them.
+            var manual = mine
+                .Select(v => (Spec: v, Position: assignments[(v.ForMachine, v.ForDisplay)].Position))
+                .Where(p => p.Position is not null)
+                .Select(p => p.Spec with { X = p.Position!.X, Y = p.Position.Y })
+                .ToList();
+            result.AddRange(manual);
+
+            var occupied = borrower.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height))
+                .Concat(manual.Select(v => new DisplayRect(v.X, v.Y, v.Width, v.Height)))
+                .ToList();
+            bool empty = occupied.Count == 0;
+            var bounds = empty
                 ? (Left: 0, Top: 0, Right: 0, Bottom: 0)
-                : (Left: own.Min(d => d.X), Top: own.Min(d => d.Y), Right: own.Max(d => d.X + d.Width), Bottom: own.Max(d => d.Y + d.Height));
-            bool empty = own.Count == 0;
+                : (Left: occupied.Min(r => r.X), Top: occupied.Min(r => r.Y), Right: occupied.Max(r => r.Right), Bottom: occupied.Max(r => r.Bottom));
             var side = profile.Placement?.GetValueOrDefault(borrower.Id) ?? PlacementSide.Right;
 
             foreach (var lender in config.Machines)
             {
-                var group = virtualDisplays.Where(v => v.Machine == borrower.Id && v.ForMachine == lender.Id).ToList();
+                var group = mine.Where(v => v.ForMachine == lender.Id && manual.All(m => m.Key != v.Key)).ToList();
                 if (group.Count == 0)
                     continue;
 

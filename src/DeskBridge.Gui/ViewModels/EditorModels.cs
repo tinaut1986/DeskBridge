@@ -129,6 +129,11 @@ public sealed class AssignmentVm : ObservableObject
 
     public string DisplayLabel => L.T("Display {id}", ("id", Display.Id));
 
+    private VirtualPosition? _position;
+
+    /// <summary>Where the virtual display goes in the borrower's desktop when dragged by hand; null = automatic.</summary>
+    public VirtualPosition? Position { get => _position; set => Set(ref _position, value); }
+
     /// <summary>After a language change: keywords shown in the new language, labels refreshed.</summary>
     public void Relabel()
     {
@@ -144,7 +149,10 @@ public sealed class AssignmentVm : ObservableObject
         set
         {
             if (Set(ref _usedBy, value ?? Owner))
+            {
                 Raise(nameof(IsLent));
+                Position = null; // a position only makes sense in the desktop it was dragged in
+            }
         }
     }
 
@@ -339,6 +347,7 @@ public sealed class EditorModel
                     continue; // dangling reference in the file: dropped, the user sees the display as "own"
                 row.UsedBy = model.Machines.FirstOrDefault(m => m.Id == a.UsedBy) ?? row.Owner;
                 row.Load(a.Stream);
+                row.Position = a.Position;
             }
             foreach (var (machineId, side) in p.Placement ?? new Dictionary<string, PlacementSide>())
             {
@@ -362,7 +371,7 @@ public sealed class EditorModel
             p.Name.Trim(),
             p.Assignments
                 .Where(a => a.IsLent)
-                .Select(a => new DisplayAssignment(a.Owner.Id.Trim(), a.Display.Id.Trim(), a.UsedBy.Id.Trim(), a.ToStreamSettings(errors)))
+                .Select(a => new DisplayAssignment(a.Owner.Id.Trim(), a.Display.Id.Trim(), a.UsedBy.Id.Trim(), a.ToStreamSettings(errors), a.Position))
                 .ToList(),
             PlacementOf(p))).ToList();
 
