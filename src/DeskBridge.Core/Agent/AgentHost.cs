@@ -1,6 +1,7 @@
 using DeskBridge.Core.Abstractions;
 using DeskBridge.Core.Configuration;
 using DeskBridge.Core.Control;
+using DeskBridge.Core.Localization;
 using DeskBridge.Core.Planning;
 
 namespace DeskBridge.Core.Agent;
@@ -28,7 +29,7 @@ public sealed class AgentHost(LocalSettings local, PlanApplier applier, IDisplay
         var server = new ControlServer(local.Machine, ControlAuth.DecodeKey(local.SharedKey), HandleAsync, local.ControlPort, log: log);
         server.Start(); // throws SocketException if the port is taken
         _server = server;
-        log($"Agent '{local.Machine}' listening on port {server.Port}.");
+        log(L.T("Agent '{machine}' listening on port {port}.", ("machine", local.Machine), ("port", server.Port)));
     }
 
     private async Task<ControlMessage> HandleAsync(ControlMessage request, CancellationToken ct)
@@ -37,18 +38,18 @@ public sealed class AgentHost(LocalSettings local, PlanApplier applier, IDisplay
         {
             case ApplyProfileMessage apply:
             {
-                log($"Applying profile '{apply.Profile}'...");
+                log(L.T("Applying profile '{profile}'...", ("profile", apply.Profile)));
                 var plan = LayoutPlanner.Plan(apply.Config, apply.Profile);
                 await applier.ApplyAsync(apply.Config, plan, local.Machine, ct);
                 ActiveProfile = plan.Profile;
-                log($"Profile '{plan.Profile}' applied.");
+                log(L.T("Profile '{profile}' applied.", ("profile", plan.Profile)));
                 ProfileApplied?.Invoke(plan.Profile);
                 return new AppliedMessage(local.Machine, plan.Profile, plan.Warnings);
             }
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
             default:
-                return new ErrorMessage($"Unexpected request: {request.GetType().Name}.");
+                return new ErrorMessage(L.T("Unexpected request: {request}.", ("request", request.GetType().Name)));
         }
     }
 
@@ -58,7 +59,7 @@ public sealed class AgentHost(LocalSettings local, PlanApplier applier, IDisplay
         {
             await _server.DisposeAsync();
             _server = null;
-            log("Agent stopped.");
+            log(L.T("Agent stopped."));
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using DeskBridge.Core.Localization;
 using DeskBridge.Core.Model;
 
 namespace DeskBridge.Gui.ViewModels;
@@ -97,21 +98,45 @@ public sealed class MachineVm : ObservableObject
 /// <summary>One physical display inside a profile: who uses it and how it is streamed.</summary>
 public sealed class AssignmentVm : ObservableObject
 {
-    public const string Native = "Native";
-    public const string Auto = "Auto";
+    // Keywords are stored as shown (translated) and recognised in any language, so switching
+    // the interface language never turns a valid value into a parse error.
+    public static string Native => L.T("Native");
+    public static string Auto => L.T("Auto");
+
+    public static bool IsNative(string text) => IsKeyword(text, "Native");
+    public static bool IsAuto(string text) => IsKeyword(text, "Auto");
+
+    private static bool IsKeyword(string text, string key)
+    {
+        var t = text.Trim();
+        return t.Length == 0 || L.AllTranslations(key).Any(k => string.Equals(k, t, StringComparison.CurrentCultureIgnoreCase));
+    }
 
     private MachineVm _usedBy;
-    private string _resolution = Native, _refresh = Native, _bitrate = Auto;
+    private string _resolution, _refresh, _bitrate;
 
     public AssignmentVm(MachineVm owner, DisplayVm display)
     {
         Owner = owner;
         Display = display;
         _usedBy = owner;
+        _resolution = _refresh = Native;
+        _bitrate = Auto;
     }
 
     public MachineVm Owner { get; }
     public DisplayVm Display { get; }
+
+    public string DisplayLabel => L.T("Display {id}", ("id", Display.Id));
+
+    /// <summary>After a language change: keywords shown in the new language, labels refreshed.</summary>
+    public void Relabel()
+    {
+        if (IsNative(Resolution)) Resolution = Native;
+        if (IsNative(Refresh)) Refresh = Native;
+        if (IsAuto(Bitrate)) Bitrate = Auto;
+        Raise(nameof(DisplayLabel));
+    }
 
     public MachineVm UsedBy
     {
@@ -143,33 +168,31 @@ public sealed class AssignmentVm : ObservableObject
 
     public StreamSettings? ToStreamSettings(List<string> errors)
     {
-        string where = $"{Owner} display {Display.Id}";
+        string where = L.T("{machine}, display {display}", ("machine", Owner), ("display", Display.Id));
         int? width = null, height = null;
-        var res = Resolution.Trim();
-        if (!res.Equals(Native, StringComparison.OrdinalIgnoreCase) && res.Length > 0)
+        if (!IsNative(Resolution))
         {
-            var parts = res.ToLowerInvariant().Replace('×', 'x').Split('x', StringSplitOptions.TrimEntries);
+            var parts = Resolution.Trim().ToLowerInvariant().Replace('×', 'x').Split('x', StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && int.TryParse(parts[0], out var w) && int.TryParse(parts[1], out var h))
                 (width, height) = (w, h);
             else
-                errors.Add($"{where}: resolution '{Resolution}' is not like 1920x1080.");
+                errors.Add(L.T("{where}: resolution '{value}' is not like 1920x1080.", ("where", where), ("value", Resolution)));
         }
 
-        int? refresh = ParseOptional(Refresh, Native, where, "refresh rate", errors);
-        int? bitrate = ParseOptional(Bitrate, Auto, where, "bitrate", errors);
+        int? refresh = IsNative(Refresh) ? null : ParseNumber(Refresh, () =>
+            errors.Add(L.T("{where}: refresh rate '{value}' is not a number.", ("where", where), ("value", Refresh))));
+        int? bitrate = IsAuto(Bitrate) ? null : ParseNumber(Bitrate, () =>
+            errors.Add(L.T("{where}: bitrate '{value}' is not a number.", ("where", where), ("value", Bitrate))));
 
         var settings = new StreamSettings(width, height, refresh, bitrate);
         return settings == StreamSettings.Default ? null : settings;
     }
 
-    private static int? ParseOptional(string text, string keyword, string where, string what, List<string> errors)
+    private static int? ParseNumber(string text, Action onError)
     {
-        var t = text.Trim();
-        if (t.Length == 0 || t.Equals(keyword, StringComparison.OrdinalIgnoreCase))
-            return null;
-        if (int.TryParse(t.Split(' ')[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
+        if (int.TryParse(text.Trim().Split(' ')[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
             return n;
-        errors.Add($"{where}: {what} '{text}' is not a number.");
+        onError();
         return null;
     }
 }
@@ -207,12 +230,18 @@ public sealed class ProfileVm : ObservableObject
 /// <summary>Editable copy of a <see cref="DeskBridgeConfig"/>.</summary>
 public sealed class EditorModel
 {
-    public static readonly string[] ResolutionOptions =
+    public static IReadOnlyList<string> ResolutionOptions =>
         [AssignmentVm.Native, "1280x720", "1600x900", "1920x1080", "1920x1200", "2560x1080", "2560x1440", "3440x1440", "3840x2160"];
 
-    public static readonly string[] RefreshOptions = [AssignmentVm.Native, "30", "50", "60", "75", "90", "120", "144"];
+    public static IReadOnlyList<string> RefreshOptions => [AssignmentVm.Native, "30", "50", "60", "75", "90", "120", "144"];
 
-    public static readonly string[] BitrateOptions = [AssignmentVm.Auto, "10", "15", "20", "30", "40", "50", "80"];
+    public static IReadOnlyList<string> BitrateOptions => [AssignmentVm.Auto, "10", "15", "20", "30", "40", "50", "80"];
+
+    public void Relabel()
+    {
+        foreach (var a in Profiles.SelectMany(p => p.Assignments))
+            a.Relabel();
+    }
 
     public ObservableCollection<MachineVm> Machines { get; } = new();
     public ObservableCollection<ProfileVm> Profiles { get; } = new();

@@ -1,0 +1,159 @@
+name: Build and release
+
+# Same release scheme as llm-browser and the 3DS ports: a vX.Y.Z tag builds DeskBridge.exe and
+# publishes a GitHub Release, which is also what the app's updater reads (src/DeskBridge.Gui/Updates).
+# Only three-component tags are ours. The channel depends on whether main can reach the tagged commit:
+#   tag on an unmerged release/* branch  -> Beta (pre-release)
+#   tag on main, or merged into main     -> Release
+#   manual run on a branch               -> build only, nothing is published
+# The version and the channel are baked into the build (-p:Version, -p:DeskBridgeChannel); local
+# builds have no channel and never update themselves.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vars:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              TAG="${GITHUB_REF#refs/tags/}"
+              VERSION="${TAG#v}"
+              PUBLISH=true
+              ;;
+            *)
+              # Manual run on a branch: a dev build, kept as a workflow artifact only.
+              TAG=
+              BASE="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n1)"
+              VERSION="${BASE}-dev.${GITHUB_RUN_NUMBER}"
+              PUBLISH=false
+              ;;
+          esac
+          git fetch --no-tags --quiet origin +refs/heads/main:refs/remotes/origin/main || true
+          if [ "$PUBLISH" = true ] && git merge-base --is-ancestor HEAD refs/remotes/origin/main 2>/dev/null; then
+            CHANNEL=release; PRERELEASE=false
+          else
+            CHANNEL=beta; PRERELEASE=true
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "channel=$CHANNEL"
+            echo "prerelease=$PRERELEASE"
+            echo "publish=$PUBLISH"
+          } >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG version=$VERSION channel=$CHANNEL publish=$PUBLISH"
+
+  build:
+    needs: vars
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test -c Release
+      - name: Publish DeskBridge.exe
+        shell: bash
+        run: |
+          # One self-contained file: runs on a PC without .NET installed (the work laptop).
+          dotnet publish src/DeskBridge.Gui -c Release -r win-x64 --self-contained \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:Version="${{ needs.vars.outputs.version }}" \
+            -p:DeskBridgeChannel="${{ needs.vars.outputs.channel }}" \
+            -o publish
+          mkdir -p dist
+          cp publish/DeskBridge.exe "dist/DeskBridge-${{ needs.vars.outputs.version }}-win-x64.exe"
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          if-no-files-found: error
+          path: dist/*.exe
+
+  release:
+    needs: [vars, build]
+    if: needs.vars.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+      - name: Checksums and release notes
+        run: |
+          TAG="${{ needs.vars.outputs.tag }}"
+          V="${{ needs.vars.outputs.version }}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' "HEAD^" 2>/dev/null || true)
+          RANGE="${PREV:+${PREV}..}HEAD"
+          # The updater refuses a download it cannot check against this file.
+          (cd dist && sha256sum *.exe > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          [ -f "docs/release-notes/${TAG}.md" ] || echo "::warning::docs/release-notes/${TAG}.md is missing"
+          # The updater shows the notes in the interface language (src/DeskBridge.Core/Localization/L.cs), English where a file is missing.
+          for L in es ca fr de it pt ru ja zh tw; do
+            [ -f "docs/release-notes/${TAG}.${L}.md" ] || echo "::warning::docs/release-notes/${TAG}.${L}.md is missing: the updater will show English in that language"
+          done
+          {
+            if [ "${{ needs.vars.outputs.prerelease }}" = true ]; then
+              echo "> **Beta build.** It comes off a \`release/*\` branch that has not been"
+              echo "> merged into \`main\` yet, so it is not a stable version."
+              echo
+            fi
+            if [ -f "docs/release-notes/${TAG}.md" ]; then
+              echo "<!-- deskbridge-notes -->"
+              echo "## What's new"
+              echo
+              cat "docs/release-notes/${TAG}.md"
+              echo
+              echo "<!-- /deskbridge-notes -->"
+              echo
+            fi
+            echo "## Download"
+            echo
+            echo "- Windows (x64): [DeskBridge-${V}-win-x64.exe](${BASE}/DeskBridge-${V}-win-x64.exe)"
+            echo
+            echo "A single file that needs no installation and no .NET. Put it in a folder you can write to:"
+            echo "it updates itself from these releases."
+            echo
+            echo "## Changelog"
+            echo
+            git log ${RANGE} --no-merges --pretty='- %s (%h)'
+          } > release_notes.md
+          ls -R dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.vars.outputs.tag }}
+          name: ${{ needs.vars.outputs.prerelease == 'true' && 'Beta' || 'Release' }} ${{ needs.vars.outputs.tag }}
+          prerelease: ${{ needs.vars.outputs.prerelease == 'true' }}
+          # /releases/latest must be the stable one
+          make_latest: ${{ needs.vars.outputs.prerelease == 'true' && 'false' || 'true' }}
+          body_path: release_notes.md
+          files: |
+            dist/*.exe
+            dist/SHA256SUMS.txt

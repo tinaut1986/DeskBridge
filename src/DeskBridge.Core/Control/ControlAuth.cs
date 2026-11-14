@@ -1,3 +1,4 @@
+using DeskBridge.Core.Localization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -22,10 +23,10 @@ public static class ControlAuth
         }
         catch (FormatException)
         {
-            throw new ControlException("The shared key is not valid base64. Generate one with 'deskbridge keygen'.");
+            throw new ControlException(L.T("The shared key is not valid. Generate a new one."));
         }
         if (bytes.Length < 16)
-            throw new ControlException("The shared key is too short. Generate one with 'deskbridge keygen'.");
+            throw new ControlException(L.T("The shared key is too short. Generate a new one."));
         return bytes;
     }
 

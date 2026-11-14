@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using DeskBridge.Core.Localization;
 
 namespace DeskBridge.Core.Control;
 
@@ -80,8 +81,8 @@ public sealed class ControlServer : IAsyncDisposable
                 var auth = await channel.ReceiveAsync(authCts.Token) as AuthMessage;
                 if (auth is null || !ControlAuth.Verify(_key, nonce, auth.Machine, _machine, auth.Proof))
                 {
-                    _log($"Rejected connection from {remote}: authentication failed.");
-                    await channel.SendAsync(new ErrorMessage("Authentication failed: is the shared key the same on both machines?"), ct);
+                    _log(L.T("Rejected connection from {remote}: authentication failed.", ("remote", remote)));
+                    await channel.SendAsync(new ErrorMessage(L.T("Authentication failed: is the shared key the same on both machines?")), ct);
                     return;
                 }
                 await channel.SendAsync(new WelcomeMessage(), ct);
@@ -92,7 +93,7 @@ public sealed class ControlServer : IAsyncDisposable
             catch (Exception ex) when (ex is IOException or SocketException or JsonException
                                            or InvalidDataException or OperationCanceledException)
             {
-                _log($"Connection with {remote} closed: {ex.Message}");
+                _log(L.T("Connection with {remote} closed: {error}", ("remote", remote), ("error", ex.Message)));
             }
         }
     }
@@ -106,7 +107,7 @@ public sealed class ControlServer : IAsyncDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _log($"Request {request.GetType().Name} failed: {ex.Message}");
+            _log(L.T("Request {request} failed: {error}", ("request", request.GetType().Name), ("error", ex.Message)));
             return new ErrorMessage(ex.Message);
         }
         finally

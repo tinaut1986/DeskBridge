@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -11,9 +12,12 @@ using System.Windows.Threading;
 using DeskBridge.Core.Agent;
 using DeskBridge.Core.Configuration;
 using DeskBridge.Core.Control;
+using DeskBridge.Core.Localization;
 using DeskBridge.Core.Model;
 using DeskBridge.Core.Planning;
 using DeskBridge.Core.Simulation;
+using DeskBridge.Core.Updates;
+using DeskBridge.Gui.Updates;
 using DeskBridge.Gui.ViewModels;
 using DeskBridge.Windows;
 
@@ -36,19 +40,31 @@ public partial class MainWindow : Window
 
     private readonly StartupOptions _options;
     private readonly MainViewModel _vm = new();
+    private readonly Updater _updater;
+    private UserSettings _settings;
     private AgentHost? _agent;
+    private string? _activeProfile;
     private bool _redrawPending;
 
-    public MainWindow(StartupOptions options)
+    public MainWindow(StartupOptions options, UserSettings settings)
     {
         _options = options;
+        _settings = settings;
         InitializeComponent();
         DataContext = _vm;
 
         ObservableObject.AnyChanged += ScheduleRedraw;
+        L.Changed += OnLanguageChanged;
         LoadConfig();
         LoadLocalSettings();
+        BuildLanguageMenu();
+        UpdateChannelMenu();
 
+        _updater = new Updater(WantsBetas, () => L.Current, () => this, beforeInstall: () => { });
+        if (options.SnapshotDir is null)
+            _updater.Start();
+
+        UpdateAgentStatus();
         if (options.StartAgent)
             RestartAgent();
         if (options.SnapshotDir is { } dir)
@@ -68,15 +84,17 @@ public partial class MainWindow : Window
         try
         {
             config = File.Exists(_options.ConfigPath) ? ConfigLoader.Load(_options.ConfigPath) : CreateDefaultConfig();
-            if (!File.Exists(_options.ConfigPath))
+            if (!File.Exists(_options.ConfigPath) && _options.SnapshotDir is null)
             {
                 ConfigLoader.Save(_options.ConfigPath, config);
-                AddLog($"Created {_options.ConfigPath} from this PC's displays.");
+                AddLog(L.T("Created {path} from this PC's displays.", ("path", _options.ConfigPath)));
             }
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not read {_options.ConfigPath}:\n{ex.Message}\n\nStarting with a new configuration (the file is not overwritten until you save).",
+            MessageBox.Show(this,
+                L.T("Could not read {path}:", ("path", _options.ConfigPath)) + "\n" + ex.Message + "\n\n"
+                + L.T("Starting with a new configuration (the file is not overwritten until you save)."),
                 "DeskBridge", MessageBoxButton.OK, MessageBoxImage.Warning);
             config = CreateDefaultConfig();
         }
@@ -104,7 +122,7 @@ public partial class MainWindow : Window
         };
         if (displays.Count >= 2)
         {
-            // The laptop takes every desktop display except the primary-ish first one (at most two).
+            // The laptop takes every desktop display except the first one (at most two).
             var lent = displays.Skip(1).Take(2).Select(d => new DisplayAssignment("desktop", d.Id, "laptop"));
             profiles.Add(new("work", [.. lent, new DisplayAssignment("laptop", "1", "desktop")]));
         }
@@ -139,7 +157,7 @@ public partial class MainWindow : Window
             if (_options.SnapshotDir is null)
             {
                 local.Save(_options.LocalPath);
-                AddLog($"Created {_options.LocalPath} with a new shared key.");
+                AddLog(L.T("Created {path} with a new shared key.", ("path", _options.LocalPath)));
             }
         }
         _vm.LocalMachine = local.Machine;
@@ -151,9 +169,9 @@ public partial class MainWindow : Window
     {
         string? error = null;
         if (string.IsNullOrWhiteSpace(_vm.LocalMachine))
-            error = "Pick which machine this PC is.";
+            error = L.T("Choose which machine this PC is.");
         else if (!int.TryParse(_vm.LocalPort, out var port) || port is < 1 or > 65535)
-            error = "The control port must be a number between 1 and 65535.";
+            error = L.T("The control port must be a number between 1 and 65535.");
         else
         {
             try
@@ -180,7 +198,7 @@ public partial class MainWindow : Window
         if (errors.Count == 0)
             return config;
         if (showErrors)
-            MessageBox.Show(this, "Fix these first:\n\n" + string.Join("\n", errors.Select(e => "• " + e)),
+            MessageBox.Show(this, L.T("Fix these first:") + "\n\n" + string.Join("\n", errors.Select(e => "• " + e)),
                 "DeskBridge", MessageBoxButton.OK, MessageBoxImage.Warning);
         return null;
     }
@@ -191,17 +209,100 @@ public partial class MainWindow : Window
         if (config is null)
             return false;
         ConfigLoader.Save(_options.ConfigPath, config);
-        _vm.Status = $"Saved {_options.ConfigPath}";
+        _vm.Status = L.T("Saved {path}", ("path", _options.ConfigPath));
         return true;
     }
 
+    private void SaveUserSettings(UserSettings settings)
+    {
+        _settings = settings;
+        try
+        {
+            settings.Save(_options.SettingsPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AddLog(L.T("Could not save {path}: {error}", ("path", _options.SettingsPath), ("error", ex.Message)));
+        }
+    }
+
+    // ------------------------------------------------------------------ language and updates
+
+    private void BuildLanguageMenu()
+    {
+        // As in NSA and llm-browser: "System" and each language by its own name, so it can be
+        // found even when the current language is not understood.
+        LanguageMenu.Items.Clear();
+        var system = new MenuItem { Header = L.T("System"), IsCheckable = true, IsChecked = _settings.Language == L.System };
+        system.Click += (_, _) => SetLanguage(L.System);
+        LanguageMenu.Items.Add(system);
+        LanguageMenu.Items.Add(new Separator());
+        foreach (var language in L.Languages)
+        {
+            var item = new MenuItem { Header = language.Name, IsCheckable = true, IsChecked = _settings.Language == language.Code };
+            item.Click += (_, _) => SetLanguage(language.Code);
+            LanguageMenu.Items.Add(item);
+        }
+    }
+
+    private void SetLanguage(string setting)
+    {
+        SaveUserSettings(_settings with { Language = L.Codes.Contains(setting) ? setting : L.System });
+        L.SetLanguage(L.Resolve(_settings.Language, L.SystemLocales()));
+        BuildLanguageMenu();
+    }
+
+    private void OnLanguageChanged()
+    {
+        _vm.Model.Relabel();
+        _vm.RaiseComputedTexts();
+        BuildLanguageMenu();
+        UpdateAgentStatus();
+        _updater.LanguageChanged();
+        ScheduleRedraw();
+    }
+
+    /// <summary>Without a user choice, an installed beta keeps offering betas.</summary>
+    private bool WantsBetas() => _settings.Betas ?? AppInfo.Channel == "beta";
+
+    private void UpdateChannelMenu()
+    {
+        StableMenu.IsChecked = !WantsBetas();
+        BetaMenu.IsChecked = WantsBetas();
+    }
+
+    private void SetBetas(bool betas)
+    {
+        SaveUserSettings(_settings with { Betas = betas });
+        UpdateChannelMenu();
+        _updater.BetasChanged();
+    }
+
+    private void Stable_Click(object sender, RoutedEventArgs e) => SetBetas(false);
+    private void Beta_Click(object sender, RoutedEventArgs e) => SetBetas(true);
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e) => await _updater.CheckNowAsync();
+
+    private void About_Click(object sender, RoutedEventArgs e) =>
+        MessageBox.Show(this,
+            $"DeskBridge {AppInfo.DisplayVersion}\n\n"
+            + L.T("Use several computers with one keyboard and mouse, and share their displays.") + "\n\n"
+            + ReleaseFeed.ProjectPage,
+            L.T("About DeskBridge"), MessageBoxButton.OK, MessageBoxImage.Information);
+
+    private void ProjectPage_Click(object sender, RoutedEventArgs e) => OpenExternal(ReleaseFeed.ProjectPage);
+
+    private void OpenSettingsFolder_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(AppPaths.Directory);
+        OpenExternal(AppPaths.Directory);
+    }
+
+    private static void OpenExternal(string target) =>
+        Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })?.Dispose();
+
     // ------------------------------------------------------------------ agent
 
-    private void RestartAgent()
-    {
-        var local = CurrentLocalSettings(showErrors: false);
-        _ = RestartAgentAsync(local);
-    }
+    private void RestartAgent() => _ = RestartAgentAsync(CurrentLocalSettings(showErrors: false));
 
     private async Task RestartAgentAsync(LocalSettings? local)
     {
@@ -210,32 +311,52 @@ public partial class MainWindow : Window
             await _agent.DisposeAsync();
             _agent = null;
         }
+        _activeProfile = null;
         if (local is null)
         {
-            _vm.AgentStatus = "Agent stopped: check 'This PC'";
+            UpdateAgentStatus();
             return;
         }
 
         var agent = new AgentHost(local, Simulated.Applier(AddLog), new WindowsDisplayDetector(), AddLog);
-        agent.ProfileApplied += profile => Dispatcher.BeginInvoke(() => _vm.AgentStatus = $"Agent '{local.Machine}' · port {local.ControlPort} · active: {profile}");
+        agent.ProfileApplied += profile => Dispatcher.BeginInvoke(() =>
+        {
+            _activeProfile = profile;
+            UpdateAgentStatus();
+        });
         try
         {
             agent.Start();
             _agent = agent;
-            _vm.AgentStatus = $"Agent '{local.Machine}' · port {local.ControlPort} · simulated";
         }
         catch (SocketException ex)
         {
-            _vm.AgentStatus = $"Agent stopped: port {local.ControlPort} busy";
-            AddLog($"Could not start the agent on port {local.ControlPort}: {ex.Message}");
+            AddLog(L.T("Could not start the agent on port {port}: {error}", ("port", local.ControlPort), ("error", ex.Message)));
         }
+        UpdateAgentStatus(local.ControlPort);
+    }
+
+    private void UpdateAgentStatus(int? failedPort = null)
+    {
+        if (_agent is null)
+        {
+            _vm.AgentStatus = failedPort is { } port
+                ? L.T("Agent stopped: port {port} is busy", ("port", port))
+                : L.T("Agent stopped: check This PC");
+            return;
+        }
+        _vm.AgentStatus = _activeProfile is null
+            ? L.T("Agent {machine} · port {port} · simulated", ("machine", _agent.Machine), ("port", _agent.Port))
+            : L.T("Agent {machine} · port {port} · active: {profile}", ("machine", _agent.Machine), ("port", _agent.Port), ("profile", _activeProfile));
     }
 
     protected override void OnClosed(EventArgs e)
     {
         ObservableObject.AnyChanged -= ScheduleRedraw;
+        L.Changed -= OnLanguageChanged;
         // The agent's loops run on the thread pool, so blocking briefly here cannot deadlock.
         _agent?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
+        _updater.InstallOnExit();
         base.OnClosed(e);
     }
 
@@ -269,6 +390,7 @@ public partial class MainWindow : Window
             _redrawPending = false;
             DrawLayout();
             UpdateSummary();
+            _vm.RaiseDisplaysTitle(); // the selected machine may have been renamed
         });
     }
 
@@ -309,7 +431,7 @@ public partial class MainWindow : Window
             var color = ColorOf(box.Machine);
             var label = new TextBlock
             {
-                Text = box.Machine + (box.Machine.HasInput ? "   (keyboard & mouse)" : ""),
+                Text = box.Machine + (box.Machine.HasInput ? "   (" + L.T("keyboard and mouse") + ")" : ""),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(color),
             };
@@ -336,7 +458,7 @@ public partial class MainWindow : Window
                 });
                 text.Children.Add(new TextBlock
                 {
-                    Text = lent ? $"→ {user}" : "own",
+                    Text = lent ? $"→ {user}" : L.T("own"),
                     FontWeight = lent ? FontWeights.SemiBold : FontWeights.Normal,
                     Foreground = lent ? new SolidColorBrush(userColor) : InfoBrush,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -360,7 +482,8 @@ public partial class MainWindow : Window
                     BorderThickness = new Thickness(isSelected ? 3 : 1.5),
                     Child = new Viewbox { Child = text, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(4) },
                     Cursor = Cursors.Hand,
-                    ToolTip = $"Display {display.Id} of {box.Machine}: {display.Summary}\nUsed by {user}",
+                    ToolTip = L.T("Display {display} of {machine}: {mode}", ("display", display.Id), ("machine", box.Machine), ("mode", display.Summary))
+                              + "\n" + L.T("Used by {machine}", ("machine", user)),
                 };
                 rect.MouseLeftButtonDown += (_, _) =>
                 {
@@ -380,9 +503,9 @@ public partial class MainWindow : Window
 
     private static string StreamLabel(AssignmentVm a)
     {
-        string res = a.Resolution.Equals(AssignmentVm.Native, StringComparison.OrdinalIgnoreCase) ? $"{a.Display.Width}x{a.Display.Height}" : a.Resolution;
-        string hz = a.Refresh.Equals(AssignmentVm.Native, StringComparison.OrdinalIgnoreCase) ? a.Display.RefreshHz.ToString() : a.Refresh;
-        string mbps = a.Bitrate.Equals(AssignmentVm.Auto, StringComparison.OrdinalIgnoreCase) ? "auto" : a.Bitrate + " Mbps";
+        string res = AssignmentVm.IsNative(a.Resolution) ? $"{a.Display.Width}x{a.Display.Height}" : a.Resolution;
+        string hz = AssignmentVm.IsNative(a.Refresh) ? a.Display.RefreshHz.ToString() : a.Refresh;
+        string mbps = AssignmentVm.IsAuto(a.Bitrate) ? L.T("auto") : $"{a.Bitrate} Mbps";
         return $"{res} @ {hz} · {mbps}";
     }
 
@@ -392,7 +515,7 @@ public partial class MainWindow : Window
         var profile = _vm.SelectedProfile;
         if (profile is null)
         {
-            _vm.Summary = [new SummaryLine("No profile selected. Create one with 'New'.", InfoBrush)];
+            _vm.Summary = [new SummaryLine(L.T("No profile selected. Create one with New."), InfoBrush)];
             return;
         }
 
@@ -405,15 +528,15 @@ public partial class MainWindow : Window
                 var plan = LayoutPlanner.Plan(config, profile.Name.Trim());
                 foreach (var m in config.Machines)
                 {
-                    int virtuals = plan.VirtualDisplaysOf(m.Id).Count(), shows = plan.StreamsTo(m.Id).Count();
-                    var name = string.IsNullOrWhiteSpace(m.Name) ? m.Id : m.Name;
                     lines.Add(new SummaryLine(
-                        $"{name}: creates {virtuals} virtual display{(virtuals == 1 ? "" : "s")} and sends {virtuals} stream{(virtuals == 1 ? "" : "s")}; "
-                        + $"shows {shows} stream{(shows == 1 ? "" : "s")} from other machines.",
+                        L.T("{machine}: virtual displays to create and send: {created} · streams shown from other machines: {shown}",
+                            ("machine", string.IsNullOrWhiteSpace(m.Name) ? m.Id : m.Name),
+                            ("created", plan.VirtualDisplaysOf(m.Id).Count()),
+                            ("shown", plan.StreamsTo(m.Id).Count())),
                         InfoBrush));
                 }
                 if (plan.Streams.Count > 0)
-                    lines.Add(new SummaryLine($"Network: about {plan.Streams.Sum(s => s.BitrateMbps)} Mbps in total.", InfoBrush));
+                    lines.Add(new SummaryLine(L.T("Network: about {mbps} Mbps in total.", ("mbps", plan.Streams.Sum(s => s.BitrateMbps))), InfoBrush));
                 lines.AddRange(plan.Warnings.Select(w => new SummaryLine("⚠ " + w, WarningBrush)));
             }
             catch (ConfigException ex)
@@ -431,7 +554,7 @@ public partial class MainWindow : Window
 
     private void NewProfile_Click(object sender, RoutedEventArgs e)
     {
-        var profile = new ProfileVm { Name = UniqueProfileName("new profile") };
+        var profile = new ProfileVm { Name = UniqueProfileName(L.T("new profile")) };
         profile.Sync(_vm.Model.Machines);
         _vm.Model.Profiles.Add(profile);
         _vm.SelectedProfile = profile;
@@ -441,7 +564,7 @@ public partial class MainWindow : Window
     {
         if (_vm.SelectedProfile is not { } source)
             return;
-        var copy = new ProfileVm { Name = UniqueProfileName(source.Name + " copy") };
+        var copy = new ProfileVm { Name = UniqueProfileName(L.T("{profile} copy", ("profile", source.Name))) };
         copy.Sync(_vm.Model.Machines);
         foreach (var (from, to) in source.Assignments.Zip(copy.Assignments))
         {
@@ -458,7 +581,8 @@ public partial class MainWindow : Window
     {
         if (_vm.SelectedProfile is not { } profile)
             return;
-        if (MessageBox.Show(this, $"Delete profile '{profile.Name}'?", "DeskBridge", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (MessageBox.Show(this, L.T("Delete profile {profile}?", ("profile", profile.Name)), "DeskBridge",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
         int index = _vm.Model.Profiles.IndexOf(profile);
         _vm.Model.Profiles.Remove(profile);
@@ -486,20 +610,20 @@ public partial class MainWindow : Window
 
         var button = (Button)sender;
         button.IsEnabled = false;
-        _vm.Status = $"Applying '{profile.Name}'...";
+        _vm.Status = L.T("Applying {profile}...", ("profile", profile.Name));
         try
         {
             var results = await Coordinator.SwitchProfileAsync(config, local, profile.Name.Trim());
             foreach (var r in results)
             {
-                AddLog($"{r.Machine}: {(r.Ok ? "" : "ERROR ")}{r.Message}");
+                AddLog($"{r.Machine}: {(r.Ok ? "" : L.T("ERROR") + " ")}{r.Message}");
                 foreach (var w in r.Warnings)
-                    AddLog($"    warning: {w}");
+                    AddLog("    " + L.T("warning: {text}", ("text", w)));
             }
             var failed = results.Where(r => !r.Ok).Select(r => r.Machine).ToList();
             _vm.Status = failed.Count == 0
-                ? $"Profile '{profile.Name}' applied on {results.Count} machines (simulated)."
-                : $"Profile '{profile.Name}' failed on: {string.Join(", ", failed)}. See the log in 'This PC'.";
+                ? L.T("Profile {profile} applied on {count} machines (simulated).", ("profile", profile.Name), ("count", results.Count))
+                : L.T("Profile {profile} failed on: {machines}. See the log in This PC.", ("profile", profile.Name), ("machines", string.Join(", ", failed)));
         }
         catch (Exception ex) when (ex is ControlException or ConfigException)
         {
@@ -520,7 +644,7 @@ public partial class MainWindow : Window
         var id = $"machine{n}";
         while (_vm.Model.Machines.Any(m => m.Id == id))
             id = $"machine{++n}";
-        var machine = new MachineVm { Id = id, Name = $"Machine {n}", Address = "192.168.1.x" };
+        var machine = new MachineVm { Id = id, Name = L.T("Machine {number}", ("number", n)), Address = "192.168.1.x" };
         machine.Displays.Add(new DisplayVm());
         _vm.Model.Machines.Add(machine);
         _vm.SelectedMachine = machine;
@@ -530,7 +654,8 @@ public partial class MainWindow : Window
     {
         if (_vm.SelectedMachine is not { } machine)
             return;
-        if (MessageBox.Show(this, $"Remove '{machine}' and its displays from every profile?", "DeskBridge", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (MessageBox.Show(this, L.T("Remove {machine} and its displays from every profile?", ("machine", machine)), "DeskBridge",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
         _vm.Model.Machines.Remove(machine);
         _vm.SelectedMachine = _vm.Model.Machines.FirstOrDefault();
@@ -569,7 +694,7 @@ public partial class MainWindow : Window
             if (local is null)
                 return;
             var config = _vm.Model.ToConfig([]);
-            _vm.Status = $"Asking '{machine.Id}' for its displays...";
+            _vm.Status = L.T("Asking {machine} for its displays...", ("machine", machine));
             try
             {
                 detected = await Coordinator.GetDisplaysAsync(config, local, machine.Id);
@@ -595,15 +720,15 @@ public partial class MainWindow : Window
         foreach (var gone in removed)
             machine.Displays.Remove(gone);
 
-        _vm.Status = $"'{machine}': {detected.Count} display(s) detected"
-            + (removed.Count > 0 ? $", {removed.Count} removed." : ".") + " Save to keep them.";
+        _vm.Status = L.T("{machine}: {count} displays detected, {removed} removed. Save to keep them.",
+            ("machine", machine), ("count", detected.Count), ("removed", removed.Count));
     }
 
     // ------------------------------------------------------------------ this PC tab
 
     private void GenerateKey_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(this, "A new key means pasting it again on every other machine. Continue?", "DeskBridge",
+        if (MessageBox.Show(this, L.T("A new key means pasting it again on every other machine. Continue?"), "DeskBridge",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
             _vm.LocalKey = ControlAuth.NewKey();
     }
@@ -611,7 +736,7 @@ public partial class MainWindow : Window
     private void CopyKey_Click(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText(_vm.LocalKey);
-        _vm.Status = "Shared key copied to the clipboard.";
+        _vm.Status = L.T("Shared key copied to the clipboard.");
     }
 
     private async void SaveLocal_Click(object sender, RoutedEventArgs e)
@@ -620,13 +745,13 @@ public partial class MainWindow : Window
         if (local is null)
             return;
         local.Save(_options.LocalPath);
-        _vm.Status = $"Saved {_options.LocalPath}";
+        _vm.Status = L.T("Saved {path}", ("path", _options.LocalPath));
         await RestartAgentAsync(local);
     }
 
     // ------------------------------------------------------------------ development snapshots
 
-    private void SaveSnapshots(string dir)
+    private async void SaveSnapshots(string dir)
     {
         Directory.CreateDirectory(dir);
         for (int i = 0; i < Tabs.Items.Count; i++)
@@ -635,15 +760,35 @@ public partial class MainWindow : Window
             UpdateLayout();
             Dispatcher.Invoke(DispatcherPriority.ApplicationIdle, () => { DrawLayout(); UpdateSummary(); });
             Dispatcher.Invoke(DispatcherPriority.ApplicationIdle, () => { });
+            Render(this, Path.Combine(dir, $"tab{i}.png"));
+        }
 
-            var root = (FrameworkElement)Content;
-            var bitmap = new RenderTargetBitmap((int)root.ActualWidth, (int)root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(root);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            using var file = File.Create(Path.Combine(dir, $"tab{i}.png"));
-            encoder.Save(file);
+        // With DESKBRIDGE_UPDATER_DEMO set: the update window once the simulated download is ready.
+        if (_updater.Enabled)
+        {
+            await _updater.CheckNowAsync();
+            for (int wait = 0; wait < 200 && _updater.Phase != UpdatePhase.Ready; wait++)
+                await Task.Delay(100);
+            await Task.Delay(300);
+            if (_updater.OpenWindow is { } update)
+            {
+                update.Left = -32000;
+                update.UpdateLayout();
+                Render(update, Path.Combine(dir, "update.png"));
+                update.Close();
+            }
         }
         Close();
+    }
+
+    private static void Render(Window window, string path)
+    {
+        var root = (FrameworkElement)window.Content;
+        var bitmap = new RenderTargetBitmap((int)root.ActualWidth, (int)root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(root);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var file = File.Create(path);
+        encoder.Save(file);
     }
 }

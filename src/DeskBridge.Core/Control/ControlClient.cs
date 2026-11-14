@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using System.Text.Json;
+using DeskBridge.Core.Localization;
 
 namespace DeskBridge.Core.Control;
 
@@ -27,7 +28,8 @@ public static class ControlClient
         }
         catch (Exception ex) when (ex is SocketException or OperationCanceledException && !ct.IsCancellationRequested)
         {
-            throw new ControlException($"Could not connect to {host}:{port} ({ex.Message}). Is the agent running and the port open in the firewall?");
+            throw new ControlException(L.T("Could not connect to {host}:{port} ({error}). Is the agent running and the port open in the firewall?",
+                ("host", host), ("port", port), ("error", ex.Message)));
         }
 
         try
@@ -35,11 +37,13 @@ public static class ControlClient
             var channel = new LineChannel(tcp.GetStream());
 
             if (await channel.ReceiveAsync(ct) is not ChallengeMessage challenge)
-                throw new ControlException($"{host}:{port} does not look like a DeskBridge agent.");
+                throw new ControlException(L.T("{host}:{port} does not look like a DeskBridge agent.", ("host", host), ("port", port)));
             if (challenge.Version != ControlProtocol.Version)
-                throw new ControlException($"Protocol version mismatch with {host} ({challenge.Version}, here {ControlProtocol.Version}). Update both machines.");
+                throw new ControlException(L.T("Protocol version mismatch with {host} ({remote}, here {local}). Update both machines.",
+                    ("host", host), ("remote", challenge.Version), ("local", ControlProtocol.Version)));
             if (challenge.Machine != expectedMachine)
-                throw new ControlException($"'{challenge.Machine}' answers at {host}, not '{expectedMachine}'. Check the address in the configuration.");
+                throw new ControlException(L.T("'{found}' answers at {host}, not '{expected}'. Check the address in the configuration.",
+                    ("found", challenge.Machine), ("host", host), ("expected", expectedMachine)));
 
             var proof = ControlAuth.Proof(key, challenge.Nonce, localMachine, challenge.Machine);
             await channel.SendAsync(new AuthMessage(localMachine, proof), ct);
@@ -51,16 +55,16 @@ public static class ControlClient
                 case ErrorMessage error:
                     throw new ControlException(error.Message);
                 default:
-                    throw new ControlException($"Unexpected reply from {host} during authentication.");
+                    throw new ControlException(L.T("Unexpected reply from {host} during authentication.", ("host", host)));
             }
 
             await channel.SendAsync(request, ct);
             return await channel.ReceiveAsync(ct)
-                ?? throw new ControlException($"{host} closed the connection without replying.");
+                ?? throw new ControlException(L.T("{host} closed the connection without replying.", ("host", host)));
         }
         catch (Exception ex) when (ex is IOException or SocketException or JsonException or InvalidDataException)
         {
-            throw new ControlException($"Communication error with {host}: {ex.Message}");
+            throw new ControlException(L.T("Communication error with {host}: {error}", ("host", host), ("error", ex.Message)));
         }
     }
 }

@@ -1,9 +1,10 @@
+using DeskBridge.Core.Localization;
 using DeskBridge.Core.Model;
 
 namespace DeskBridge.Core.Planning;
 
 public sealed class ConfigException(IReadOnlyList<string> errors)
-    : Exception("Invalid configuration:" + Environment.NewLine + string.Join(Environment.NewLine, errors.Select(e => " - " + e)))
+    : Exception(L.T("Invalid configuration:") + Environment.NewLine + string.Join(Environment.NewLine, errors.Select(e => " - " + e)))
 {
     public IReadOnlyList<string> Errors { get; } = errors;
 }
@@ -31,49 +32,49 @@ public static class LayoutPlanner
         var errors = new List<string>();
 
         if (config.Machines.Count == 0)
-            errors.Add("No machines are defined.");
+            errors.Add(L.T("No machines are defined."));
 
         foreach (var dup in config.Machines.GroupBy(m => m.Id).Where(g => g.Count() > 1))
-            errors.Add($"Machine '{dup.Key}' is defined more than once.");
+            errors.Add(L.T("Machine '{machine}' is defined more than once.", ("machine", dup.Key)));
 
         foreach (var machine in config.Machines)
         {
             if (string.IsNullOrWhiteSpace(machine.Id))
-                errors.Add("A machine has no id.");
+                errors.Add(L.T("A machine has no id."));
             if (string.IsNullOrWhiteSpace(machine.Address))
-                errors.Add($"Machine '{machine.Id}' has no address.");
+                errors.Add(L.T("Machine '{machine}' has no address.", ("machine", machine.Id)));
             foreach (var dup in machine.Displays.GroupBy(d => d.Id).Where(g => g.Count() > 1))
-                errors.Add($"Display '{dup.Key}' of '{machine.Id}' is defined more than once.");
+                errors.Add(L.T("Display '{display}' of '{machine}' is defined more than once.", ("display", dup.Key), ("machine", machine.Id)));
             foreach (var d in machine.Displays.Where(d => d.Width <= 0 || d.Height <= 0 || d.RefreshHz <= 0))
-                errors.Add($"Display '{d.Id}' of '{machine.Id}' has an invalid resolution or refresh rate.");
+                errors.Add(L.T("Display '{display}' of '{machine}' has an invalid resolution or refresh rate.", ("display", d.Id), ("machine", machine.Id)));
         }
 
         int coordinators = config.Machines.Count(m => m.HasInput);
         if (coordinators != 1)
-            errors.Add($"Exactly one machine must have \"hasInput\": true (found {coordinators}).");
+            errors.Add(L.T("Exactly one machine must have the keyboard and mouse (found {count}).", ("count", coordinators)));
 
         foreach (var dup in config.Profiles.GroupBy(p => p.Name).Where(g => g.Count() > 1))
-            errors.Add($"Profile '{dup.Key}' is defined more than once.");
+            errors.Add(L.T("Profile '{profile}' is defined more than once.", ("profile", dup.Key)));
 
         var machines = config.Machines.GroupBy(m => m.Id).ToDictionary(g => g.Key, g => g.First());
         foreach (var profile in config.Profiles)
         {
             if (string.IsNullOrWhiteSpace(profile.Name))
-                errors.Add("A profile has no name.");
+                errors.Add(L.T("A profile has no name."));
 
             foreach (var a in profile.Assignments)
             {
                 if (!machines.TryGetValue(a.Machine, out var owner))
-                    errors.Add($"Profile '{profile.Name}': machine '{a.Machine}' does not exist.");
+                    errors.Add(L.T("Profile '{profile}': machine '{machine}' does not exist.", ("profile", profile.Name), ("machine", a.Machine)));
                 else if (owner.Displays.All(d => d.Id != a.Display))
-                    errors.Add($"Profile '{profile.Name}': '{a.Machine}' has no display '{a.Display}'.");
+                    errors.Add(L.T("Profile '{profile}': '{machine}' has no display '{display}'.", ("profile", profile.Name), ("machine", a.Machine), ("display", a.Display)));
                 if (!machines.ContainsKey(a.UsedBy))
-                    errors.Add($"Profile '{profile.Name}': machine '{a.UsedBy}' (usedBy) does not exist.");
+                    errors.Add(L.T("Profile '{profile}': machine '{machine}' (used by) does not exist.", ("profile", profile.Name), ("machine", a.UsedBy)));
                 if (a.Stream is { } s)
-                    ValidateStream(errors, $"Profile '{profile.Name}', display '{a.Display}' of '{a.Machine}'", s);
+                    ValidateStream(errors, L.T("Profile '{profile}', display '{display}' of '{machine}'", ("profile", profile.Name), ("display", a.Display), ("machine", a.Machine)), s);
             }
             foreach (var dup in profile.Assignments.GroupBy(a => (a.Machine, a.Display)).Where(g => g.Count() > 1))
-                errors.Add($"Profile '{profile.Name}': display '{dup.Key.Display}' of '{dup.Key.Machine}' is assigned more than once.");
+                errors.Add(L.T("Profile '{profile}': display '{display}' of '{machine}' is assigned more than once.", ("profile", profile.Name), ("display", dup.Key.Display), ("machine", dup.Key.Machine)));
         }
 
         return errors;
@@ -82,15 +83,15 @@ public static class LayoutPlanner
     private static void ValidateStream(List<string> errors, string where, StreamSettings s)
     {
         if ((s.Width is null) != (s.Height is null))
-            errors.Add($"{where}: set both width and height, or neither.");
+            errors.Add(L.T("{where}: set both width and height, or neither.", ("where", where)));
         if (s.Width is < MinWidth or > MaxWidth)
-            errors.Add($"{where}: width must be between {MinWidth} and {MaxWidth}.");
+            errors.Add(L.T("{where}: width must be between {min} and {max}.", ("where", where), ("min", MinWidth), ("max", MaxWidth)));
         if (s.Height is < MinHeight or > MaxHeight)
-            errors.Add($"{where}: height must be between {MinHeight} and {MaxHeight}.");
+            errors.Add(L.T("{where}: height must be between {min} and {max}.", ("where", where), ("min", MinHeight), ("max", MaxHeight)));
         if (s.RefreshHz is < MinRefreshHz or > MaxRefreshHz)
-            errors.Add($"{where}: refresh rate must be between {MinRefreshHz} and {MaxRefreshHz} Hz.");
+            errors.Add(L.T("{where}: refresh rate must be between {min} and {max} Hz.", ("where", where), ("min", MinRefreshHz), ("max", MaxRefreshHz)));
         if (s.BitrateMbps is < MinBitrateMbps or > MaxBitrateMbps)
-            errors.Add($"{where}: bitrate must be between {MinBitrateMbps} and {MaxBitrateMbps} Mbps.");
+            errors.Add(L.T("{where}: bitrate must be between {min} and {max} Mbps.", ("where", where), ("min", MinBitrateMbps), ("max", MaxBitrateMbps)));
     }
 
     public static LayoutPlan Plan(DeskBridgeConfig config, string profileName)
@@ -98,7 +99,7 @@ public static class LayoutPlanner
         var errors = Validate(config).ToList();
         var profile = config.Profiles.FirstOrDefault(p => p.Name == profileName);
         if (profile is null)
-            errors.Add($"Profile '{profileName}' does not exist.");
+            errors.Add(L.T("Profile '{profile}' does not exist.", ("profile", profileName)));
         if (errors.Count > 0)
             throw new ConfigException(errors);
 
@@ -134,9 +135,11 @@ public static class LayoutPlanner
                 int bitrate = s.BitrateMbps ?? DefaultBitrateMbps(width, height, refresh);
 
                 if (width * display.Height != height * display.Width)
-                    warnings.Add($"Display '{display.Id}' of '{machine.Id}' is {display.Width}x{display.Height} but receives {width}x{height}: the aspect ratio differs, there will be black bars.");
+                    warnings.Add(L.T("Display '{display}' of '{machine}' is {native} but receives {stream}: the aspect ratio differs, there will be black bars.",
+                        ("display", display.Id), ("machine", machine.Id), ("native", $"{display.Width}x{display.Height}"), ("stream", $"{width}x{height}")));
                 if (refresh > display.RefreshHz)
-                    warnings.Add($"Display '{display.Id}' of '{machine.Id}' runs at {display.RefreshHz} Hz; streaming at {refresh} Hz wastes bandwidth.");
+                    warnings.Add(L.T("Display '{display}' of '{machine}' runs at {native} Hz; streaming at {stream} Hz wastes bandwidth.",
+                        ("display", display.Id), ("machine", machine.Id), ("native", display.RefreshHz), ("stream", refresh)));
 
                 int index = nextVirtualIndex.GetValueOrDefault(user) + 1;
                 nextVirtualIndex[user] = index;
@@ -155,7 +158,7 @@ public static class LayoutPlanner
                 (assignments.GetValueOrDefault((machine.Id, d.Id))?.UsedBy ?? machine.Id) == machine.Id);
             bool borrows = virtualDisplays.Any(v => v.Machine == machine.Id);
             if (!keepsOwn && !borrows)
-                warnings.Add($"'{machine.Id}' has no visible display in profile '{profile.Name}'.");
+                warnings.Add(L.T("'{machine}' has no visible display in profile '{profile}'.", ("machine", machine.Id), ("profile", profile.Name)));
         }
 
         return new LayoutPlan(profile.Name, coordinator.Id, virtualDisplays, streams, inputRoutes, warnings);

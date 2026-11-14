@@ -168,10 +168,10 @@ public class LayoutPlannerTests
 
         var errors = LayoutPlanner.Validate(config);
 
-        Assert.Contains(errors, e => e.Contains("hasInput"));
+        Assert.Contains(errors, e => e.Contains("keyboard and mouse"));
         Assert.Contains(errors, e => e.Contains("'a' has no display '9'"));
         Assert.Contains(errors, e => e.Contains("machine 'c' does not exist"));
-        Assert.Contains(errors, e => e.Contains("machine 'zz' (usedBy) does not exist"));
+        Assert.Contains(errors, e => e.Contains("machine 'zz' (used by) does not exist"));
     }
 
     [Fact]

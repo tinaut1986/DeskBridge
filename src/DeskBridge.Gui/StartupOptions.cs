@@ -4,7 +4,15 @@ namespace DeskBridge.Gui;
 
 /// <param name="SnapshotDir">Development aid: render every tab to PNG files in this folder and exit.</param>
 /// <param name="Profile">Profile selected at start (defaults to the first one).</param>
-public sealed record StartupOptions(string ConfigPath, string LocalPath, bool StartAgent, string? SnapshotDir, string? Profile = null)
+/// <param name="Language">Overrides the language setting for this run (development aid).</param>
+public sealed record StartupOptions(
+    string ConfigPath,
+    string LocalPath,
+    string SettingsPath,
+    bool StartAgent,
+    string? SnapshotDir,
+    string? Profile = null,
+    string? Language = null)
 {
     public static StartupOptions Parse(string[] args)
     {
@@ -18,8 +26,10 @@ public sealed record StartupOptions(string ConfigPath, string LocalPath, bool St
         return new StartupOptions(
             Value("--config") ?? AppPaths.Config,
             Value("--local") ?? AppPaths.Local,
+            Value("--settings") ?? UserSettings.DefaultPath,
             StartAgent: !args.Contains("--no-agent") && snapshot is null,
             snapshot,
-            Value("--profile"));
+            Value("--profile"),
+            Value("--language"));
     }
 }

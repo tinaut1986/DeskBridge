@@ -32,7 +32,34 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
   - **Machines**: equipos, sus direcciones y sus monitores. *Detect* los lee de Windows en este PC, o se los pide al agente del otro equipo por la red. Cada equipo puede tener los monitores que sean.
 - **En el portátil**: en la pestaña **This PC** eliges `laptop`, pegas la clave compartida y guardas. El agente queda esperando órdenes del coordinador.
 
-La configuración se guarda en `%APPDATA%\DeskBridge\`: `deskbridge.json` es común y solo se edita en el coordinador, y `deskbridge.local.json` es de cada equipo y lleva su id y la clave. La primera vez se crean solas a partir de los monitores detectados.
+La configuración se guarda en `%APPDATA%\DeskBridge\`:
+- `deskbridge.json` es común y solo se edita en el coordinador;
+- `deskbridge.local.json` es de cada equipo y lleva su id y la clave;
+- `settings.json` guarda las preferencias de la interfaz (idioma y canal).
+
+Las dos primeras se crean solas la primera vez, a partir de los monitores detectados.
+
+### Idioma
+
+**Settings > Language**: "System" sigue el idioma de Windows, o eliges uno de los 11 disponibles, los mismos que NSA y llm-browser. Cambia al momento, sin reiniciar. Las claves son el texto en inglés y el inglés es el respaldo.
+- Los textos traducibles van en `L.T("...")` (código) y `{l:T '...'}` (XAML), y cada idioma es un JSON en `src/DeskBridge.Core/Locales/`.
+- Para ver qué falta en un idioma:
+  ```bash
+  dotnet run scripts/i18n-keys.cs -- --missing es
+  ```
+- Los tests fallan si a algún idioma le falta un texto, si los `{marcadores}` no coinciden o si sobra una clave que ya no se usa.
+
+### Actualizaciones
+
+DeskBridge se actualiza solo desde las GitHub Releases, como llm-browser:
+- comprueba al arrancar y cada 6 horas, o con **Settings > Check for updates now**;
+- descarga el nuevo `DeskBridge.exe`, lo verifica con el `SHA256SUMS.txt` de la release y lo cambia al reiniciar. Si cierras sin reiniciar, lo cambia al salir;
+- canal **Stable** o **Beta** en **Settings > Update channel**;
+- las novedades salen en tu idioma (`docs/release-notes/`; ver [su README](docs/release-notes/README.md)).
+
+Solo se actualizan las versiones publicadas; una compilación local nunca. Para ver la ventana sin publicar nada: `DESKBRIDGE_UPDATER_DEMO=<carpeta con vX.Y.Z*.md>`.
+
+> Mientras el repositorio sea **privado**, el actualizador no puede leer las releases (GitHub responde 404 sin autenticación). Hay que hacerlo público o añadir un token antes de la primera versión.
 
 ## Estado
 
@@ -70,13 +97,22 @@ deskbridge displays [<machine>] | keygen | agent | switch <profile>
 
 Con `--config` y `--local` se usan otros ficheros. Por ejemplo, para probar en un solo PC: `"address": "127.0.0.1"` y un `"controlPort"` distinto en cada equipo, y dos agentes con `--local` apuntando a dos ficheros locales.
 
+## Publicar
+
+Mismo esquema que llm-browser y los ports de 3DS (`.github/workflows/build-release.yml`):
+- un tag `vX.Y.Z` compila `DeskBridge-X.Y.Z-win-x64.exe` (autocontenido y de un solo archivo: no necesita .NET instalado) y publica la release con su `SHA256SUMS.txt`;
+- si el commit del tag está en `main` es **Release**; si está en una rama `release/*` sin fusionar, es **Beta**;
+- antes del tag, escribe las notas en `docs/release-notes/`.
+
 ## Estructura
 
 ```
-src/DeskBridge.Core        Lógica sin dependencias de Windows: modelo, planificador, canal de control, agente
+src/DeskBridge.Core        Lógica sin dependencias de Windows: modelo, planificador, canal de control, agente,
+                           traducciones (Locales/) y lectura de releases
 src/DeskBridge.Windows     Piezas específicas de Windows (detección de monitores; luego driver virtual, entrada...)
 src/DeskBridge.Gui         Aplicación WPF (DeskBridge.exe)
 src/DeskBridge.App         CLI (deskbridge.exe)
 tests/DeskBridge.Core.Tests
-docs/                      Arquitectura y hoja de ruta
+scripts/i18n-keys.cs       Lista los textos traducibles (o los que faltan en un idioma)
+docs/                      Arquitectura, hoja de ruta y notas de versión
 ```

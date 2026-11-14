@@ -1,3 +1,4 @@
+using DeskBridge.Core.Localization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DeskBridge.Core.Model;
@@ -20,7 +21,7 @@ public static class ConfigLoader
 
     public static DeskBridgeConfig Parse(string json) =>
         JsonSerializer.Deserialize<DeskBridgeConfig>(json, JsonOptions)
-        ?? throw new InvalidDataException("The configuration file is empty.");
+        ?? throw new InvalidDataException(L.T("The configuration file is empty."));
 
     public static DeskBridgeConfig Load(string path) => Parse(File.ReadAllText(path));
 

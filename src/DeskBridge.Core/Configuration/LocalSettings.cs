@@ -1,3 +1,4 @@
+using DeskBridge.Core.Localization;
 using System.Text.Json;
 
 namespace DeskBridge.Core.Configuration;
@@ -14,9 +15,9 @@ public sealed record LocalSettings(string Machine, string SharedKey, int Control
     public static LocalSettings Load(string path)
     {
         var settings = JsonSerializer.Deserialize<LocalSettings>(File.ReadAllText(path), ConfigLoader.JsonOptions)
-            ?? throw new InvalidDataException($"'{path}' is empty.");
+            ?? throw new InvalidDataException(L.T("'{path}' is empty.", ("path", path)));
         if (string.IsNullOrWhiteSpace(settings.Machine) || string.IsNullOrWhiteSpace(settings.SharedKey))
-            throw new InvalidDataException($"'{path}' is missing \"machine\" or \"sharedKey\".");
+            throw new InvalidDataException(L.T("'{path}' does not say which machine this is or has no shared key.", ("path", path)));
         return settings;
     }
 

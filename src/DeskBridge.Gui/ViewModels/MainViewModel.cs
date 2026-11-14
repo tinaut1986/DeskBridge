@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
+using DeskBridge.Core.Localization;
 
 namespace DeskBridge.Gui.ViewModels;
 
@@ -17,7 +18,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private ProfileVm? _selectedProfile;
     private MachineVm? _selectedMachine;
     private IReadOnlyList<SummaryLine> _summary = [];
-    private string _status = "", _agentStatus = "Agent stopped";
+    private string _status = "", _agentStatus = "";
     private string _localMachine = "", _localKey = "", _localPort = "47900";
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -34,7 +35,36 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    public MachineVm? SelectedMachine { get => _selectedMachine; set => Set(ref _selectedMachine, value); }
+    public MachineVm? SelectedMachine
+    {
+        get => _selectedMachine;
+        set
+        {
+            if (Set(ref _selectedMachine, value))
+                Raise(nameof(DisplaysTitle));
+        }
+    }
+
+    public string DisplaysTitle => SelectedMachine is null
+        ? L.T("Physical displays")
+        : L.T("Physical displays of {machine}", ("machine", SelectedMachine));
+
+    public IReadOnlyList<string> ResolutionOptions => EditorModel.ResolutionOptions;
+    public IReadOnlyList<string> RefreshOptions => EditorModel.RefreshOptions;
+    public IReadOnlyList<string> BitrateOptions => EditorModel.BitrateOptions;
+
+    public void RaiseDisplaysTitle() => Raise(nameof(DisplaysTitle));
+
+    /// <summary>After a language change: texts built in code.</summary>
+    public void RaiseComputedTexts()
+    {
+        Raise(nameof(DisplaysTitle));
+        Raise(nameof(ResolutionOptions));
+        Raise(nameof(RefreshOptions));
+        Raise(nameof(BitrateOptions));
+    }
+
+    private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     public IReadOnlyList<SummaryLine> Summary { get => _summary; set => Set(ref _summary, value); }
     public string Status { get => _status; set => Set(ref _status, value); }
