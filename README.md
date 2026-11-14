@@ -31,7 +31,8 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 
 ## Estado
 
-Fase 0: esqueleto. Está hecho el modelo de configuración, el planificador de perfiles (con tests) y una CLI que muestra el plan y simula aplicarlo. Las piezas reales (pantallas virtuales, streaming, entrada) son interfaces con implementaciones simuladas.
+- Hecho: configuración, planificador de perfiles y **canal de control** entre equipos (agente en cada equipo; el coordinador cambia el perfil en todos a la vez), con tests.
+- Simulado: las piezas reales (pantallas virtuales, streaming, entrada) son interfaces cuyas implementaciones de momento solo dicen lo que harían.
 
 Ver la [hoja de ruta](docs/arquitectura.md#hoja-de-ruta).
 
@@ -51,7 +52,26 @@ dotnet run --project src/DeskBridge.App -- plan trabajo --config deskbridge.exam
 dotnet run --project src/DeskBridge.App -- aplicar trabajo portatil --config deskbridge.example.json
 ```
 
-Para tu configuración real, copia `deskbridge.example.json` a `deskbridge.json` (está en `.gitignore`) y pon las IPs de tus equipos.
+## Uso con dos equipos
+
+1. En el coordinador, copia `deskbridge.example.json` a `deskbridge.json` y pon las IPs reales. Solo hace falta en el coordinador: se envía a los agentes con cada cambio de perfil.
+2. Genera una clave compartida:
+   ```bash
+   dotnet run --project src/DeskBridge.App -- clave
+   ```
+3. En **cada** equipo, copia `deskbridge.local.example.json` a `deskbridge.local.json`, con su id y la misma clave.
+4. En cada equipo, arranca el agente. La primera vez Windows pedirá permiso en el firewall para el puerto 47900:
+   ```bash
+   dotnet run --project src/DeskBridge.App -- agente
+   ```
+5. Desde el coordinador:
+   ```bash
+   dotnet run --project src/DeskBridge.App -- cambiar trabajo
+   ```
+
+`deskbridge.json` y `deskbridge.local.json` están en `.gitignore`.
+
+Para probar en un solo PC, pon `"address": "127.0.0.1"` y un `"controlPort"` distinto en cada equipo de `deskbridge.json`, y arranca dos agentes con `--local` apuntando a dos ficheros locales.
 
 ## Estructura
 

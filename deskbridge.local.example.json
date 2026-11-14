@@ -1,0 +1,10 @@
+// Copia este fichero como deskbridge.local.json en CADA equipo.
+// No se envía nunca por la red ni se sube al repo.
+{
+  // Id de este equipo en deskbridge.json ("sobremesa" o "portatil").
+  "machine": "sobremesa",
+  // La misma en todos los equipos. Genera una con: deskbridge clave
+  "sharedKey": "PON-AQUI-LA-CLAVE",
+  // Debe coincidir con "controlPort" de deskbridge.json.
+  "controlPort": 47900
+}
