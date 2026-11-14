@@ -274,6 +274,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Text="{l:T 'This PC is'}" VerticalAlignment="Center" />
@@ -292,10 +293,15 @@
                             <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" Width="90" HorizontalAlignment="Left" VerticalContentAlignment="Center"
                                      Text="{Binding LocalPort, UpdateSourceTrigger=PropertyChanged}" />
 
-                            <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Style="{StaticResource Hint}" Margin="0,6"
-                                       Text="{l:T 'Every machine needs the same shared key. On the laptop, choose laptop here, paste the key and save: its agent then waits for the coordinator. The layout is only edited on the coordinator.'}" />
+                            <TextBlock Grid.Row="3" Text="{l:T 'Connect to'}" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4" VerticalContentAlignment="Center"
+                                     ToolTip="{l:T 'Address of the coordinator, e.g. 192.168.1.52. Only on a machine that cannot accept connections (a firewall you cannot change): it connects to the coordinator instead. Leave empty on the coordinator.'}"
+                                     Text="{Binding LocalConnectTo, UpdateSourceTrigger=PropertyChanged}" />
 
-                            <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
+                            <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Style="{StaticResource Hint}" Margin="0,6"
+                                       Text="{l:T 'Every machine needs the same shared key. On the laptop, choose laptop here, paste the key and save: its agent then waits for the coordinator. If the laptop cannot accept connections, also write the coordinator’s address in Connect to. The layout is only edited on the coordinator.'}" />
+
+                            <StackPanel Grid.Row="5" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
                                 <Button Content="{l:T 'Save and restart agent'}" Style="{StaticResource Primary}" Click="SaveLocal_Click" />
                                 <TextBlock Text="{Binding AgentStatus}" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}" Margin="6,0" />
                             </StackPanel>

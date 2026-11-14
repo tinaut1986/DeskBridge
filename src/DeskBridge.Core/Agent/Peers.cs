@@ -14,24 +14,33 @@ public static class Peers
     public static (string Host, int Port) Endpoint(DeskBridgeConfig config, LocalSettings local, MachineConfig machine) =>
         (machine.Id == local.Machine ? "127.0.0.1" : machine.Address, machine.ControlPort ?? config.ControlPort);
 
-    public static Task<ControlConnection> ConnectAsync(DeskBridgeConfig config, LocalSettings local, string machineId, CancellationToken ct = default)
+    /// <summary>
+    /// A session with a machine: the one already open in <paramref name="directory"/> (e.g. the machine
+    /// connected to us because it cannot accept connections), or a new one to its address.
+    /// </summary>
+    public static async Task<PeerLink> ConnectAsync(
+        DeskBridgeConfig config, LocalSettings local, string machineId, PeerDirectory? directory = null, CancellationToken ct = default)
     {
+        if (directory?.Find(machineId) is { } open)
+            return new PeerLink(open, owned: false);
+
         var machine = config.Machines.FirstOrDefault(m => m.Id == machineId)
             ?? throw new ControlException(L.T("Machine '{machine}' is not in the configuration.", ("machine", machineId)));
         var (host, port) = Endpoint(config, local, machine);
-        return ControlConnection.OpenAsync(host, port, local.Machine, machine.Id, ControlAuth.DecodeKey(local.SharedKey), ct);
+        var session = await ControlClient.OpenAsync(host, port, local.Machine, machine.Id, ControlAuth.DecodeKey(local.SharedKey), ct: ct);
+        return new PeerLink(session, owned: true);
     }
 
     /// <summary>Sends what was copied here to every other machine, in parallel; each one decides whether to take it.</summary>
     public static async Task<IReadOnlyList<MachineResult>> SendClipboardAsync(
-        DeskBridgeConfig config, LocalSettings local, ClipboardMessage clipboard, CancellationToken ct = default)
+        DeskBridgeConfig config, LocalSettings local, ClipboardMessage clipboard, PeerDirectory? directory = null, CancellationToken ct = default)
     {
         return await Task.WhenAll(config.Machines.Where(m => m.Id != local.Machine).Select(async machine =>
         {
             try
             {
-                using var connection = await ConnectAsync(config, local, machine.Id, ct);
-                return await connection.RequestAsync(clipboard, ct) switch
+                await using var link = await ConnectAsync(config, local, machine.Id, directory, ct);
+                return await link.RequestAsync(clipboard, ct) switch
                 {
                     OkMessage => new MachineResult(machine.Id, true, "", []),
                     ErrorMessage e => new MachineResult(machine.Id, false, e.Message, []),
@@ -45,7 +54,7 @@ public static class Peers
         }));
     }
 
-    /// <summary>Sends files to one machine over a single connection.</summary>
+    /// <summary>Sends files to one machine over a single session.</summary>
     /// <returns>Where each file was saved on the other machine.</returns>
     public static async Task<IReadOnlyList<string>> SendFilesAsync(
         DeskBridgeConfig config,
@@ -53,9 +62,10 @@ public static class Peers
         string machineId,
         IReadOnlyList<string> paths,
         IProgress<(string File, long Done, long Total)>? progress = null,
+        PeerDirectory? directory = null,
         CancellationToken ct = default)
     {
-        using var connection = await ConnectAsync(config, local, machineId, ct);
+        await using var link = await ConnectAsync(config, local, machineId, directory, ct);
         var saved = new List<string>();
         long total = paths.Sum(p => new FileInfo(p).Length), done = 0;
         var buffer = new byte[ChunkBytes];
@@ -65,7 +75,7 @@ public static class Peers
             var transfer = Guid.NewGuid();
             var name = Path.GetFileName(path);
             await using var file = File.OpenRead(path);
-            Expect<OkMessage>(await connection.RequestAsync(new FileStartMessage(transfer, name, file.Length), ct));
+            Expect<OkMessage>(await link.RequestAsync(new FileStartMessage(transfer, name, file.Length), ct));
 
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             long offset = 0;
@@ -73,12 +83,12 @@ public static class Peers
             while ((read = await file.ReadAsync(buffer, ct)) > 0)
             {
                 hash.AppendData(buffer, 0, read);
-                Expect<OkMessage>(await connection.RequestAsync(new FileChunkMessage(transfer, offset, Convert.ToBase64String(buffer, 0, read)), ct));
+                Expect<OkMessage>(await link.RequestAsync(new FileChunkMessage(transfer, offset, Convert.ToBase64String(buffer, 0, read)), ct));
                 offset += read;
                 done += read;
                 progress?.Report((name, done, total));
             }
-            var end = Expect<FileSavedMessage>(await connection.RequestAsync(new FileEndMessage(transfer, Convert.ToHexStringLower(hash.GetHashAndReset())), ct));
+            var end = Expect<FileSavedMessage>(await link.RequestAsync(new FileEndMessage(transfer, Convert.ToHexStringLower(hash.GetHashAndReset())), ct));
             saved.Add(end.Path);
         }
         return saved;

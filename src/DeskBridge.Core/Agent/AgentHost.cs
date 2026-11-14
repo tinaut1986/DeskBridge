@@ -9,9 +9,9 @@ using DeskBridge.Core.Transfer;
 namespace DeskBridge.Core.Agent;
 
 /// <summary>
-/// The background part that runs on every machine: listens on the control channel and does what
-/// the other machines ask (apply a profile, list displays, take a clipboard or a file). Hosted by
-/// the GUI (normal use) or by 'deskbridge agent' (CLI).
+/// The background part that runs on every machine: listens on the control channel (and, when set, keeps
+/// a connection open to the coordinator) and does what the other machines ask: apply a profile, list
+/// displays, take a clipboard or a file. Hosted by the GUI (normal use) or by 'deskbridge agent' (CLI).
 /// </summary>
 public sealed class AgentHost(
     LocalSettings local,
@@ -22,10 +22,17 @@ public sealed class AgentHost(
 {
     private readonly SemaphoreSlim _applyLock = new(1, 1);
     private ControlServer? _server;
+    private ReverseLink? _reverse;
 
     public string Machine => local.Machine;
     public int? Port => _server?.Port;
     public string? ActiveProfile { get; private set; }
+
+    /// <summary>Open sessions with other machines (incoming, or the one to the coordinator).</summary>
+    public PeerDirectory Directory { get; } = new();
+
+    /// <summary>The coordinator this machine connects to, when <see cref="LocalSettings.ConnectTo"/> is set.</summary>
+    public ReverseLink? Reverse => _reverse;
 
     /// <summary>Raised (on a thread-pool thread) after a profile is applied.</summary>
     public event Action<string>? ProfileApplied;
@@ -36,14 +43,38 @@ public sealed class AgentHost(
     /// <summary>Takes a clipboard from another machine; false (or unset) refuses it.</summary>
     public Func<string, ClipboardMessage, Task<bool>>? ClipboardHandler { get; set; }
 
-    public void Start()
+    /// <param name="listen">
+    /// Accept incoming connections. Off is fine on a machine that only connects out; if the port is
+    /// taken and <see cref="LocalSettings.ConnectTo"/> is set, the agent carries on without listening.
+    /// </param>
+    public void Start(bool listen = true)
     {
-        if (_server is not null)
+        if (_server is not null || _reverse is not null)
             throw new InvalidOperationException("The agent is already running.");
-        var server = new ControlServer(local.Machine, ControlAuth.DecodeKey(local.SharedKey), HandleAsync, local.ControlPort, log: log);
-        server.Start(); // throws SocketException if the port is taken
-        _server = server;
-        log(L.T("Agent '{machine}' listening on port {port}.", ("machine", local.Machine), ("port", server.Port)));
+
+        if (listen)
+        {
+            var server = new ControlServer(local.Machine, ControlAuth.DecodeKey(local.SharedKey), HandleAsync, local.ControlPort, log: log);
+            server.SessionOpened += Directory.Add;
+            try
+            {
+                server.Start();
+                _server = server;
+                log(L.T("Agent '{machine}' listening on port {port}.", ("machine", local.Machine), ("port", server.Port)));
+            }
+            catch (System.Net.Sockets.SocketException) when (!string.IsNullOrWhiteSpace(local.ConnectTo))
+            {
+                log(L.T("Port {port} is busy: this agent only connects out.", ("port", local.ControlPort)));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(local.ConnectTo))
+        {
+            ControlAuth.DecodeKey(local.SharedKey); // fail now, not in the background loop
+            var (host, port) = ReverseLink.ParseAddress(local.ConnectTo, local.ControlPort);
+            _reverse = new ReverseLink(local, host, port, HandleAsync, Directory, log);
+            _reverse.Start();
+        }
     }
 
     private async Task<ControlMessage> HandleAsync(string from, ControlMessage request, CancellationToken ct)
@@ -91,11 +122,18 @@ public sealed class AgentHost(
 
     public async ValueTask DisposeAsync()
     {
+        bool running = _server is not null || _reverse is not null;
+        if (_reverse is not null)
+        {
+            await _reverse.DisposeAsync();
+            _reverse = null;
+        }
         if (_server is not null)
         {
             await _server.DisposeAsync();
             _server = null;
-            log(L.T("Agent stopped."));
         }
+        if (running)
+            log(L.T("Agent stopped."));
     }
 }

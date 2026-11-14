@@ -50,7 +50,7 @@ public class ControlChannelTests
         int count = 0;
         await using var server = StartServer(Key, (_, _, _) => Task.FromResult<ControlMessage>(new ErrorMessage($"#{Interlocked.Increment(ref count)}")));
 
-        using var connection = await ControlConnection.OpenAsync("127.0.0.1", server.Port, "desktop", "laptop", Key);
+        await using var connection = await ControlClient.OpenAsync("127.0.0.1", server.Port, "desktop", "laptop", Key);
         for (int i = 1; i <= 3; i++)
             Assert.Equal($"#{i}", Assert.IsType<ErrorMessage>(await connection.RequestAsync(new GetDisplaysMessage())).Message);
     }
@@ -216,7 +216,7 @@ public class ControlChannelTests
         await using var m = new TwoMachines();
 
         // The laptop has the key but is not the coordinator: it talks to the desktop's agent directly.
-        using var connection = await Peers.ConnectAsync(m.Config, m.Laptop, "desktop");
+        await using var connection = await Peers.ConnectAsync(m.Config, m.Laptop, "desktop");
         var reply = await connection.RequestAsync(new ApplyProfileMessage(m.Config, "work"));
 
         Assert.Contains("Only the coordinator", Assert.IsType<ErrorMessage>(reply).Message);

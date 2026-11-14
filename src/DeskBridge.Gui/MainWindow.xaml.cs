@@ -175,6 +175,7 @@ public partial class MainWindow : Window
         _vm.LocalMachine = local.Machine;
         _vm.LocalKey = local.SharedKey;
         _vm.LocalPort = local.ControlPort.ToString();
+        _vm.LocalConnectTo = local.ConnectTo ?? "";
     }
 
     private LocalSettings? CurrentLocalSettings(bool showErrors)
@@ -189,7 +190,8 @@ public partial class MainWindow : Window
             try
             {
                 ControlAuth.DecodeKey(_vm.LocalKey.Trim());
-                return new LocalSettings(_vm.LocalMachine.Trim(), _vm.LocalKey.Trim(), port);
+                return new LocalSettings(_vm.LocalMachine.Trim(), _vm.LocalKey.Trim(), port,
+                    string.IsNullOrWhiteSpace(_vm.LocalConnectTo) ? null : _vm.LocalConnectTo.Trim());
             }
             catch (ControlException ex)
             {
@@ -358,6 +360,9 @@ public partial class MainWindow : Window
         {
             agent.Start();
             _agent = agent;
+            agent.Directory.Changed += () => Dispatcher.BeginInvoke(() => UpdateAgentStatus());
+            if (agent.Reverse is { } reverse)
+                reverse.StateChanged += () => Dispatcher.BeginInvoke(() => UpdateAgentStatus());
         }
         catch (SocketException ex)
         {
@@ -375,9 +380,20 @@ public partial class MainWindow : Window
                 : L.T("Agent stopped: check This PC");
             return;
         }
-        _vm.AgentStatus = _activeProfile is null
-            ? L.T("Agent {machine} · port {port} · simulated", ("machine", _agent.Machine), ("port", _agent.Port))
-            : L.T("Agent {machine} · port {port} · active: {profile}", ("machine", _agent.Machine), ("port", _agent.Port), ("profile", _activeProfile));
+
+        var parts = new List<string> { L.T("Agent {machine}", ("machine", _agent.Machine)) };
+        parts.Add(_agent.Port is { } listening ? L.T("port {port}", ("port", listening)) : L.T("outgoing only"));
+        if (_agent.Reverse is { } reverse)
+        {
+            parts.Add(reverse.ConnectedTo is { } coordinator
+                ? L.T("connected to {machine}", ("machine", MachineName(coordinator)))
+                : L.T("connecting to {address}…", ("address", reverse.Target)));
+        }
+        var incoming = _agent.Directory.Connected.Where(m => m != _agent.Reverse?.ConnectedTo).ToList();
+        if (incoming.Count > 0)
+            parts.Add(L.T("connected: {machines}", ("machines", string.Join(", ", incoming.Select(MachineName)))));
+        parts.Add(_activeProfile is null ? L.T("simulated") : L.T("active: {profile}", ("profile", _activeProfile)));
+        _vm.AgentStatus = string.Join(" · ", parts);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -764,7 +780,7 @@ public partial class MainWindow : Window
         _vm.Status = L.T("Applying {profile}...", ("profile", profile.Name));
         try
         {
-            var results = await Coordinator.SwitchProfileAsync(config, local, profile.Name.Trim());
+            var results = await Coordinator.SwitchProfileAsync(config, local, profile.Name.Trim(), _agent?.Directory);
             foreach (var r in results)
             {
                 AddLog($"{r.Machine}: {(r.Ok ? "" : L.T("ERROR") + " ")}{r.Message}");
@@ -849,7 +865,7 @@ public partial class MainWindow : Window
             _vm.Status = L.T("Asking {machine} for its displays...", ("machine", machine));
             try
             {
-                detected = await Coordinator.GetDisplaysAsync(config, local, machine.Id);
+                detected = await Coordinator.GetDisplaysAsync(config, local, machine.Id, _agent?.Directory);
             }
             catch (ControlException ex)
             {

@@ -7,9 +7,12 @@ namespace DeskBridge.Core.Control;
 /// Messages of the control channel: newline-delimited JSON over TCP.
 /// Handshake (plain text): server sends <see cref="ChallengeMessage"/>, client answers <see cref="AuthMessage"/>,
 /// server replies <see cref="WelcomeMessage"/> (with its own proof) or <see cref="ErrorMessage"/>.
-/// Then encrypted request/reply pairs, as many as the client wants on the same connection.
+/// Then encrypted <see cref="SessionFrame"/>s: either side can send requests on the same connection
+/// (so a machine that cannot accept connections can still be reached over the one it opened).
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(SessionFrame), "frame")]
+[JsonDerivedType(typeof(PingMessage), "ping")]
 [JsonDerivedType(typeof(ChallengeMessage), "challenge")]
 [JsonDerivedType(typeof(AuthMessage), "auth")]
 [JsonDerivedType(typeof(WelcomeMessage), "welcome")]
@@ -25,6 +28,12 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(FileEndMessage), "fileEnd")]
 [JsonDerivedType(typeof(FileSavedMessage), "fileSaved")]
 public abstract record ControlMessage;
+
+/// <summary>A request (or the reply to request <paramref name="Id"/>) inside an authenticated session.</summary>
+public sealed record SessionFrame(long Id, bool IsReply, ControlMessage Body) : ControlMessage;
+
+/// <summary>Keeps a long-lived connection known to be alive; answered with <see cref="OkMessage"/>.</summary>
+public sealed record PingMessage() : ControlMessage;
 
 /// <param name="Machine">Id of the agent the client has reached.</param>
 public sealed record ChallengeMessage(int Version, string Machine, string Nonce) : ControlMessage;
@@ -62,8 +71,8 @@ public sealed record FileSavedMessage(string Path) : ControlMessage;
 
 public static class ControlProtocol
 {
-    /// <summary>2: mutual authentication and encrypted messages.</summary>
-    public const int Version = 2;
+    /// <summary>2: mutual authentication and encrypted messages. 3: two-way sessions (requests from either side).</summary>
+    public const int Version = 3;
 }
 
 public sealed class ControlException(string message) : Exception(message);

@@ -4,28 +4,25 @@ using DeskBridge.Core.Localization;
 
 namespace DeskBridge.Core.Control;
 
-/// <summary>
-/// An authenticated, encrypted connection to another machine's agent. Several requests can go
-/// over it one after another (a file is sent as many chunks on the same connection).
-/// </summary>
-public sealed class ControlConnection : IDisposable
+/// <summary>Opens sessions to other machines' agents.</summary>
+public static class ControlClient
 {
     public static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly TcpClient _tcp;
-    private readonly LineChannel _channel;
-    private readonly string _host;
-
-    private ControlConnection(TcpClient tcp, LineChannel channel, string host)
-    {
-        _tcp = tcp;
-        _channel = channel;
-        _host = host;
-    }
-
-    /// <param name="expectedMachine">Id the agent must announce, to catch a wrong address in the config.</param>
-    public static async Task<ControlConnection> OpenAsync(
-        string host, int port, string localMachine, string expectedMachine, byte[] key, CancellationToken ct = default)
+    /// <summary>
+    /// Connects, authenticates both ways and starts an encrypted session.
+    /// </summary>
+    /// <param name="expectedMachine">Id the agent must announce (catches a wrong address); null accepts any.</param>
+    /// <param name="handler">Answers requests the other side sends over this session; null refuses them.</param>
+    public static async Task<ControlSession> OpenAsync(
+        string host,
+        int port,
+        string localMachine,
+        string? expectedMachine,
+        byte[] key,
+        ControlRequestHandler? handler = null,
+        Action<string>? log = null,
+        CancellationToken ct = default)
     {
         var tcp = new TcpClient();
         try
@@ -43,6 +40,7 @@ public sealed class ControlConnection : IDisposable
 
         try
         {
+            tcp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
             var channel = new LineChannel(tcp.GetStream());
 
             if (await channel.ReceiveAsync(ct) is not ChallengeMessage challenge)
@@ -50,7 +48,7 @@ public sealed class ControlConnection : IDisposable
             if (challenge.Version != ControlProtocol.Version)
                 throw new ControlException(L.T("Protocol version mismatch with {host} ({remote}, here {local}). Update both machines.",
                     ("host", host), ("remote", challenge.Version), ("local", ControlProtocol.Version)));
-            if (challenge.Machine != expectedMachine)
+            if (expectedMachine is not null && challenge.Machine != expectedMachine)
                 throw new ControlException(L.T("'{found}' answers at {host}, not '{expected}'. Check the address in the configuration.",
                     ("found", challenge.Machine), ("host", host), ("expected", expectedMachine)));
 
@@ -73,7 +71,9 @@ public sealed class ControlConnection : IDisposable
 
             var (clientToServer, serverToClient) = ControlAuth.SessionKeys(key, challenge.Nonce, clientNonce);
             channel.Encrypt(sendKey: clientToServer, receiveKey: serverToClient);
-            return new ControlConnection(tcp, channel, host);
+            var session = new ControlSession(channel, tcp, challenge.Machine, host, handler, log);
+            session.Start();
+            return session;
         }
         catch (Exception ex) when (ex is IOException or SocketException or JsonException or InvalidDataException)
         {
@@ -87,30 +87,11 @@ public sealed class ControlConnection : IDisposable
         }
     }
 
-    public async Task<ControlMessage> RequestAsync(ControlMessage request, CancellationToken ct = default)
-    {
-        try
-        {
-            await _channel.SendAsync(request, ct);
-            return await _channel.ReceiveAsync(ct)
-                ?? throw new ControlException(L.T("{host} closed the connection without replying.", ("host", _host)));
-        }
-        catch (Exception ex) when (ex is IOException or SocketException or JsonException or InvalidDataException)
-        {
-            throw new ControlException(L.T("Communication error with {host}: {error}", ("host", _host), ("error", ex.Message)));
-        }
-    }
-
-    public void Dispose() => _tcp.Dispose();
-}
-
-/// <summary>One request on a fresh connection.</summary>
-public static class ControlClient
-{
+    /// <summary>One request on a fresh session, closed afterwards.</summary>
     public static async Task<ControlMessage> SendAsync(
         string host, int port, string localMachine, string expectedMachine, byte[] key, ControlMessage request, CancellationToken ct = default)
     {
-        using var connection = await ControlConnection.OpenAsync(host, port, localMachine, expectedMachine, key, ct);
-        return await connection.RequestAsync(request, ct);
+        await using var session = await OpenAsync(host, port, localMachine, expectedMachine, key, ct: ct);
+        return await session.RequestAsync(request, ct);
     }
 }

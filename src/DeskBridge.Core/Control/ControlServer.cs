@@ -5,12 +5,10 @@ using DeskBridge.Core.Localization;
 
 namespace DeskBridge.Core.Control;
 
-/// <summary>Handles one request; <c>from</c> is the authenticated machine that sent it.</summary>
-public delegate Task<ControlMessage> ControlRequestHandler(string from, ControlMessage request, CancellationToken ct);
-
 /// <summary>
 /// The listening side of the control channel. It authenticates the other machine (and proves itself),
-/// encrypts the session and hands each request to the handler.
+/// encrypts the session and keeps it open: requests from the other side go to the handler, and the
+/// session is announced (<see cref="SessionOpened"/>) so this side can send requests over it too.
 /// </summary>
 public sealed class ControlServer : IAsyncDisposable
 {
@@ -22,6 +20,7 @@ public sealed class ControlServer : IAsyncDisposable
     private readonly Action<string> _log;
     private readonly TcpListener _listener;
     private readonly CancellationTokenSource _stop = new();
+    private readonly List<ControlSession> _sessions = [];
     private Task? _acceptLoop;
 
     public ControlServer(
@@ -41,6 +40,9 @@ public sealed class ControlServer : IAsyncDisposable
 
     /// <summary>The port actually listened on (useful when started with port 0).</summary>
     public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+    /// <summary>Raised (on a thread-pool thread) for every authenticated incoming session.</summary>
+    public event Action<ControlSession>? SessionOpened;
 
     public void Start()
     {
@@ -63,43 +65,52 @@ public sealed class ControlServer : IAsyncDisposable
             {
                 return;
             }
-            _ = HandleAsync(client, ct);
+            _ = HandshakeAsync(client, ct);
         }
     }
 
-    private async Task HandleAsync(TcpClient client, CancellationToken ct)
+    private async Task HandshakeAsync(TcpClient client, CancellationToken ct)
     {
         var remote = client.Client.RemoteEndPoint?.ToString() ?? "?";
-        using (client)
+        try
         {
-            try
-            {
-                var channel = new LineChannel(client.GetStream());
-                var serverNonce = ControlAuth.NewNonce();
-                await channel.SendAsync(new ChallengeMessage(ControlProtocol.Version, _machine, serverNonce), ct);
+            client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            var channel = new LineChannel(client.GetStream());
+            var serverNonce = ControlAuth.NewNonce();
+            await channel.SendAsync(new ChallengeMessage(ControlProtocol.Version, _machine, serverNonce), ct);
 
-                using var authCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                authCts.CancelAfter(AuthTimeout);
-                var auth = await channel.ReceiveAsync(authCts.Token) as AuthMessage;
-                if (auth is null || !ValidNonce(auth.Nonce)
-                    || !ControlAuth.Matches(ControlAuth.ClientProof(_key, serverNonce, auth.Nonce, auth.Machine, _machine), auth.Proof))
-                {
-                    _log(L.T("Rejected connection from {remote}: authentication failed.", ("remote", remote)));
-                    await channel.SendAsync(new ErrorMessage(L.T("Authentication failed: is the shared key the same on both machines?")), ct);
-                    return;
-                }
-                await channel.SendAsync(new WelcomeMessage(ControlAuth.ServerProof(_key, serverNonce, auth.Nonce, auth.Machine, _machine)), ct);
-                var (clientToServer, serverToClient) = ControlAuth.SessionKeys(_key, serverNonce, auth.Nonce);
-                channel.Encrypt(sendKey: serverToClient, receiveKey: clientToServer);
-
-                while (await channel.ReceiveAsync(ct) is { } message)
-                    await channel.SendAsync(await HandleRequestAsync(auth.Machine, message, ct), ct);
-            }
-            catch (Exception ex) when (ex is IOException or SocketException or JsonException
-                                           or InvalidDataException or OperationCanceledException)
+            using var authCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            authCts.CancelAfter(AuthTimeout);
+            var auth = await channel.ReceiveAsync(authCts.Token) as AuthMessage;
+            if (auth is null || !ValidNonce(auth.Nonce)
+                || !ControlAuth.Matches(ControlAuth.ClientProof(_key, serverNonce, auth.Nonce, auth.Machine, _machine), auth.Proof))
             {
-                _log(L.T("Connection with {remote} closed: {error}", ("remote", remote), ("error", ex.Message)));
+                _log(L.T("Rejected connection from {remote}: authentication failed.", ("remote", remote)));
+                await channel.SendAsync(new ErrorMessage(L.T("Authentication failed: is the shared key the same on both machines?")), ct);
+                client.Dispose();
+                return;
             }
+            await channel.SendAsync(new WelcomeMessage(ControlAuth.ServerProof(_key, serverNonce, auth.Nonce, auth.Machine, _machine)), ct);
+            var (clientToServer, serverToClient) = ControlAuth.SessionKeys(_key, serverNonce, auth.Nonce);
+            channel.Encrypt(sendKey: serverToClient, receiveKey: clientToServer);
+
+            var host = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? remote;
+            var session = new ControlSession(channel, client, auth.Machine, host, (from, request, token) => _onRequest(from, request, token), _log);
+            lock (_sessions)
+                _sessions.Add(session);
+            session.Closed += s =>
+            {
+                lock (_sessions)
+                    _sessions.Remove(s);
+            };
+            session.Start();
+            SessionOpened?.Invoke(session);
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or JsonException
+                                       or InvalidDataException or OperationCanceledException)
+        {
+            _log(L.T("Connection with {remote} closed: {error}", ("remote", remote), ("error", ex.Message)));
+            client.Dispose();
         }
     }
 
@@ -115,25 +126,17 @@ public sealed class ControlServer : IAsyncDisposable
         }
     }
 
-    private async Task<ControlMessage> HandleRequestAsync(string from, ControlMessage request, CancellationToken ct)
-    {
-        try
-        {
-            return await _onRequest(from, request, ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _log(L.T("Request {request} failed: {error}", ("request", request.GetType().Name), ("error", ex.Message)));
-            return new ErrorMessage(ex.Message);
-        }
-    }
-
     public async ValueTask DisposeAsync()
     {
         await _stop.CancelAsync();
         _listener.Stop();
         if (_acceptLoop is not null)
             await _acceptLoop;
+        List<ControlSession> open;
+        lock (_sessions)
+            open = [.. _sessions];
+        foreach (var session in open)
+            await session.DisposeAsync();
         _stop.Dispose();
     }
 }

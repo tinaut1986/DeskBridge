@@ -19,7 +19,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private MachineVm? _selectedMachine;
     private IReadOnlyList<SummaryLine> _summary = [];
     private string _status = "", _agentStatus = "";
-    private string _localMachine = "", _localKey = "", _localPort = "47900";
+    private string _localMachine = "", _localKey = "", _localPort = "47900", _localConnectTo = "";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -82,6 +82,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string LocalMachine { get => _localMachine; set => Set(ref _localMachine, value); }
     public string LocalKey { get => _localKey; set => Set(ref _localKey, value); }
     public string LocalPort { get => _localPort; set => Set(ref _localPort, value); }
+
+    /// <summary>Coordinator address this machine connects to (empty: it only listens).</summary>
+    public string LocalConnectTo { get => _localConnectTo; set => Set(ref _localConnectTo, value); }
 
     public void RaiseMachineIds() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MachineIds)));
 

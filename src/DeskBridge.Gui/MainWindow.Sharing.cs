@@ -80,7 +80,8 @@ public partial class MainWindow
     {
         if (PeerContext() is not { } context)
             return;
-        var results = await Task.Run(() => Peers.SendClipboardAsync(context.Config, context.Local, message));
+        var directory = _agent?.Directory;
+        var results = await Task.Run(() => Peers.SendClipboardAsync(context.Config, context.Local, message, directory));
         foreach (var r in results.Where(r => !r.Ok))
             AddLog(L.T("Clipboard not sent to {machine}: {error}", ("machine", MachineName(r.Machine)), ("error", r.Message)));
     }
@@ -178,7 +179,7 @@ public partial class MainWindow
                 ("file", p.File), ("machine", machine), ("percent", p.Total == 0 ? 100 : p.Done * 100 / p.Total)));
         try
         {
-            var saved = await Peers.SendFilesAsync(context.Config, context.Local, machine.Id.Trim(), files, progress);
+            var saved = await Peers.SendFilesAsync(context.Config, context.Local, machine.Id.Trim(), files, progress, _agent?.Directory);
             var text = L.T("Sent {count} files to {machine}.", ("count", saved.Count), ("machine", machine));
             _vm.Status = text;
             AddLog(text);

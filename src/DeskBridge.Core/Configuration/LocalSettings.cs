@@ -10,7 +10,11 @@ namespace DeskBridge.Core.Configuration;
 /// <param name="Machine">This machine's id in deskbridge.json.</param>
 /// <param name="SharedKey">Same value on every machine; generate it with 'deskbridge keygen'.</param>
 /// <param name="ControlPort">Port the agent listens on; must match the control port in deskbridge.json.</param>
-public sealed record LocalSettings(string Machine, string SharedKey, int ControlPort = 47900)
+/// <param name="ConnectTo">
+/// "host" or "host:port" of the coordinator, for a machine that cannot accept incoming connections
+/// (a firewall it cannot change): its agent connects there and is reached over that connection.
+/// </param>
+public sealed record LocalSettings(string Machine, string SharedKey, int ControlPort = 47900, string? ConnectTo = null)
 {
     public static LocalSettings Load(string path)
     {
