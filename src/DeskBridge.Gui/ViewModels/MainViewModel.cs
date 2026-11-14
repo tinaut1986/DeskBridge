@@ -1,0 +1,61 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows.Media;
+
+namespace DeskBridge.Gui.ViewModels;
+
+public sealed record SummaryLine(string Text, Brush Brush);
+
+/// <summary>
+/// Window state. Deliberately not an <see cref="ObservableObject"/>: changes here (status, summary)
+/// must not trigger a layout redraw, or redrawing would loop.
+/// </summary>
+public sealed class MainViewModel : INotifyPropertyChanged
+{
+    private EditorModel _model = new();
+    private ProfileVm? _selectedProfile;
+    private MachineVm? _selectedMachine;
+    private IReadOnlyList<SummaryLine> _summary = [];
+    private string _status = "", _agentStatus = "Agent stopped";
+    private string _localMachine = "", _localKey = "", _localPort = "47900";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public EditorModel Model { get => _model; set => Set(ref _model, value); }
+
+    public ProfileVm? SelectedProfile
+    {
+        get => _selectedProfile;
+        set
+        {
+            if (Set(ref _selectedProfile, value))
+                ObservableObject.NotifyAnyChanged();
+        }
+    }
+
+    public MachineVm? SelectedMachine { get => _selectedMachine; set => Set(ref _selectedMachine, value); }
+
+    public IReadOnlyList<SummaryLine> Summary { get => _summary; set => Set(ref _summary, value); }
+    public string Status { get => _status; set => Set(ref _status, value); }
+    public string AgentStatus { get => _agentStatus; set => Set(ref _agentStatus, value); }
+
+    public ObservableCollection<string> Log { get; } = new();
+
+    public IEnumerable<string> MachineIds => Model.Machines.Select(m => m.Id);
+
+    public string LocalMachine { get => _localMachine; set => Set(ref _localMachine, value); }
+    public string LocalKey { get => _localKey; set => Set(ref _localKey, value); }
+    public string LocalPort { get => _localPort; set => Set(ref _localPort, value); }
+
+    public void RaiseMachineIds() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MachineIds)));
+
+    private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        return true;
+    }
+}

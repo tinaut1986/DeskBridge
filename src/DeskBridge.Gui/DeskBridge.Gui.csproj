@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>DeskBridge</AssemblyName>
+    <RootNamespace>DeskBridge.Gui</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeskBridge.Core\DeskBridge.Core.csproj" />
+    <ProjectReference Include="..\DeskBridge.Windows\DeskBridge.Windows.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -17,6 +17,8 @@
    └ IStreamReceiver ◄────────── vídeo ──  └ IStreamSender
 ```
 
+- **`AgentHost`** (Core): el agente. Escucha en el canal de control y ejecuta lo que pide el coordinador: aplicar un perfil o informar de sus monitores. Funciona siempre en segundo plano: lo lleva dentro la interfaz gráfica, o se arranca con `deskbridge agent`.
+- **`Coordinator`** (Core): lo que hace el coordinador. Envía el perfil a todos los agentes, incluido el suyo, y pide los monitores a un equipo remoto.
 - **`LayoutPlanner`** (Core): lógica pura. A partir de la configuración y un perfil calcula las pantallas virtuales que debe crear cada equipo, los streams (origen → monitor de destino) y las rutas de entrada. Todos los agentes calculan el mismo plan a partir de la misma configuración.
 - **`PlanApplier`** (Core): aplica la parte del plan del equipo local. Primero para los streams, luego ajusta las pantallas virtuales, emite y recibe.
 - **`IVirtualDisplayDriver`**: crea y quita monitores virtuales. Implementación prevista: [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), un driver IDD firmado y open source. No vamos a escribir un driver propio: firmarlo es un infierno.
@@ -36,7 +38,8 @@
 ## Decisiones
 
 - **Mismo binario en todos los equipos.** No hay servidor ni cliente fijos: cada agente emite y recibe a la vez según el perfil.
-- **La pantalla virtual copia la resolución y la frecuencia del monitor físico** que la va a mostrar, para que la imagen sea exacta píxel a píxel.
+- **Por defecto, la pantalla virtual copia la resolución y la frecuencia del monitor físico** que la va a mostrar, para que la imagen sea exacta píxel a píxel. Cada pantalla prestada puede cambiar la resolución, los Hz y el bitrate (`stream` en la asignación). El planificador avisa si la proporción no coincide, porque saldrían bandas negras, o si se envían más Hz de los que muestra el monitor.
+- **Bitrate por defecto**: unos 0,16 bits por píxel y fotograma, que son ~20 Mbps para 1080p60.
 - **Las pantallas no asignadas no existen.** Una pantalla virtual sin stream haría que Windows abriera ventanas donde no se ven.
 - **El monitor prestado sigue activo en su dueño.** Lo necesita para mostrar el vídeo. El agente lo tapa con una ventana a pantalla completa y evita que el cursor y las ventanas locales entren en él.
 
@@ -45,8 +48,9 @@
 1. **Fase 0, esqueleto** (hecho): configuración, planificador, CLI y tests.
 2. **Prueba de concepto manual**: Virtual Display Driver + Sunshine en el portátil y Moonlight en el sobremesa. Medir latencia y nitidez por Wi-Fi 6 a 1080p60.
 3. **`IVirtualDisplayDriver` real**: crear y quitar N pantallas de VDD desde el agente y saber qué id de Windows recibe cada una.
-4. **Canal de control** (hecho): agente en cada equipo y `cambiar <perfil>` desde el coordinador, con clave compartida. Pendiente: arrancar el agente como servicio o tarea programada, y cifrar el canal.
-5. **Streaming v1**: lanzar y parar instancias de Sunshine y Moonlight por pantalla, con la ventana de Moonlight sin bordes en el monitor correcto.
-6. **`IInputRouter`**: paso del ratón entre zonas, teclado, portapapeles y atajos para cambiar de perfil.
-7. **App de bandeja**: elegir perfil con un clic o un atajo, y ver el estado de cada equipo.
-8. **Opcional**: pila de streaming propia, audio y servicio SYSTEM para el escritorio seguro (UAC, Ctrl+Alt+Supr).
+4. **Canal de control** (hecho): agente en cada equipo, cambio de perfil desde el coordinador y lectura remota de monitores, con clave compartida. Pendiente: cifrar el canal.
+5. **Interfaz gráfica** (hecho, primera versión): mapa de pantallas, asignación por pantalla con resolución, Hz y bitrate, equipos y monitores con detección, ajustes locales, agente integrado y log.
+6. **Streaming v1**: lanzar y parar instancias de Sunshine y Moonlight por pantalla, con la ventana de Moonlight sin bordes en el monitor correcto y la resolución, los Hz y el bitrate del perfil (`--resolution`, `--fps`, `--bitrate`).
+7. **`IInputRouter`**: paso del ratón entre zonas, teclado, portapapeles y atajos para cambiar de perfil.
+8. **Bandeja del sistema y arranque con Windows**: la aplicación se minimiza a la bandeja; en el portátil arranca sola y solo con el agente.
+9. **Opcional**: pila de streaming propia, audio y servicio SYSTEM para el escritorio seguro (UAC, Ctrl+Alt+Supr).

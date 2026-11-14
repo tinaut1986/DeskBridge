@@ -42,7 +42,9 @@ public sealed class ControlServer : IAsyncDisposable
     public void Start()
     {
         _listener.Start();
-        _acceptLoop = AcceptLoopAsync(_stop.Token);
+        // Off the caller's synchronization context (e.g. the GUI thread), so connections never
+        // queue behind the UI and disposing from the UI thread cannot deadlock.
+        _acceptLoop = Task.Run(() => AcceptLoopAsync(_stop.Token));
     }
 
     private async Task AcceptLoopAsync(CancellationToken ct)
