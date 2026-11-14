@@ -1,10 +1,10 @@
-// Copia este fichero como deskbridge.local.json en CADA equipo.
-// No se envía nunca por la red ni se sube al repo.
+// This machine's settings (%APPDATA%\DeskBridge\deskbridge.local.json). The GUI creates it for you.
+// It never travels over the network and is not committed.
 {
-  // Id de este equipo en deskbridge.json ("sobremesa" o "portatil").
-  "machine": "sobremesa",
-  // La misma en todos los equipos. Genera una con: deskbridge clave
-  "sharedKey": "PON-AQUI-LA-CLAVE",
-  // Debe coincidir con "controlPort" de deskbridge.json.
+  // This machine's id in deskbridge.json ("desktop" or "laptop").
+  "machine": "desktop",
+  // The same on every machine. Generate one with: deskbridge keygen
+  "sharedKey": "PUT-THE-KEY-HERE",
+  // Must match the control port in deskbridge.json.
   "controlPort": 47900
 }

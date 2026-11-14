@@ -1,22 +1,23 @@
-// Copia este fichero como deskbridge.json y cambia las direcciones.
-// Los ids de pantalla son los números que muestra Windows en Configuración > Pantalla.
+// Example configuration. The GUI creates and edits %APPDATA%\DeskBridge\deskbridge.json for you.
+// Display ids are the numbers Windows shows in Settings > Display > Identify.
+// x/y are the display positions as arranged in Windows.
 {
   "controlPort": 47900,
   "machines": [
     {
-      "id": "sobremesa",
-      "name": "PC de sobremesa",
+      "id": "desktop",
+      "name": "Desktop PC",
       "address": "192.168.1.10",
       "hasInput": true,
       "displays": [
-        { "id": "1", "width": 1920, "height": 1080, "refreshHz": 60 },
-        { "id": "2", "width": 1920, "height": 1080, "refreshHz": 60 },
-        { "id": "3", "width": 1920, "height": 1080, "refreshHz": 60 }
+        { "id": "1", "width": 1920, "height": 1080, "refreshHz": 60, "x": 0, "y": 0 },
+        { "id": "2", "width": 1920, "height": 1080, "refreshHz": 60, "x": 1920, "y": 0 },
+        { "id": "3", "width": 1920, "height": 1080, "refreshHz": 60, "x": 3840, "y": 0 }
       ]
     },
     {
-      "id": "portatil",
-      "name": "Portátil del trabajo",
+      "id": "laptop",
+      "name": "Work laptop",
       "address": "192.168.1.20",
       "displays": [
         { "id": "1", "width": 1920, "height": 1080, "refreshHz": 60 }
@@ -25,25 +26,25 @@
   ],
   "profiles": [
     {
-      // Cada equipo con sus pantallas; solo se comparten teclado y ratón.
+      // Every machine keeps its own displays; only keyboard and mouse are shared.
       "name": "personal",
       "assignments": []
     },
     {
-      // La pantalla del portátil pasa a ser la 4ª del sobremesa.
-      "name": "cuatro-pantallas",
+      // The laptop screen becomes the desktop's 4th display.
+      "name": "four-screens",
       "assignments": [
-        { "machine": "portatil", "display": "1", "usedBy": "sobremesa" }
+        { "machine": "laptop", "display": "1", "usedBy": "desktop" }
       ]
     },
     {
-      // El portátil trabaja en las pantallas 2 y 3 del sobremesa,
-      // y su propia pantalla muestra una del sobremesa.
-      "name": "trabajo",
+      // The laptop works on desktop displays 2 and 3,
+      // and its own screen shows one of the desktop's.
+      "name": "work",
       "assignments": [
-        { "machine": "sobremesa", "display": "2", "usedBy": "portatil" },
-        { "machine": "sobremesa", "display": "3", "usedBy": "portatil" },
-        { "machine": "portatil", "display": "1", "usedBy": "sobremesa" }
+        { "machine": "desktop", "display": "2", "usedBy": "laptop" },
+        { "machine": "desktop", "display": "3", "usedBy": "laptop", "stream": { "bitrateMbps": 30 } },
+        { "machine": "laptop", "display": "1", "usedBy": "desktop" }
       ]
     }
   ]

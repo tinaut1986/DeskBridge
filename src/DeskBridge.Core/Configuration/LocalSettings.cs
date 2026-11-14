@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace DeskBridge.Core.Configuration;
 
 /// <summary>
@@ -5,11 +7,28 @@ namespace DeskBridge.Core.Configuration;
 /// who this machine is and the shared key of the control channel.
 /// </summary>
 /// <param name="Machine">This machine's id in deskbridge.json.</param>
-/// <param name="SharedKey">Same value on every machine; generate it with 'deskbridge clave'.</param>
-/// <param name="ControlPort">Port the agent listens on; must match controlPort in deskbridge.json.</param>
+/// <param name="SharedKey">Same value on every machine; generate it with 'deskbridge keygen'.</param>
+/// <param name="ControlPort">Port the agent listens on; must match the control port in deskbridge.json.</param>
 public sealed record LocalSettings(string Machine, string SharedKey, int ControlPort = 47900)
 {
-    public static LocalSettings Load(string path) =>
-        System.Text.Json.JsonSerializer.Deserialize<LocalSettings>(File.ReadAllText(path), ConfigLoader.JsonOptions)
-        ?? throw new InvalidDataException($"'{path}' está vacío.");
+    public static LocalSettings Load(string path)
+    {
+        var settings = JsonSerializer.Deserialize<LocalSettings>(File.ReadAllText(path), ConfigLoader.JsonOptions)
+            ?? throw new InvalidDataException($"'{path}' is empty.");
+        if (string.IsNullOrWhiteSpace(settings.Machine) || string.IsNullOrWhiteSpace(settings.SharedKey))
+            throw new InvalidDataException($"'{path}' is missing \"machine\" or \"sharedKey\".");
+        return settings;
+    }
+
+    public void Save(string path) => ConfigLoader.WriteJson(path, this);
+}
+
+/// <summary>Default file locations: %APPDATA%\DeskBridge.</summary>
+public static class AppPaths
+{
+    public static string Directory { get; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DeskBridge");
+
+    public static string Config => Path.Combine(Directory, "deskbridge.json");
+    public static string Local => Path.Combine(Directory, "deskbridge.local.json");
 }

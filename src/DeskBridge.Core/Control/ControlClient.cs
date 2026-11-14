@@ -8,7 +8,7 @@ public static class ControlClient
 {
     public static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
-    /// <param name="expectedMachine">Id the agent must announce, to catch a wrong IP in the config.</param>
+    /// <param name="expectedMachine">Id the agent must announce, to catch a wrong address in the config.</param>
     public static async Task<ControlMessage> SendAsync(
         string host,
         int port,
@@ -27,7 +27,7 @@ public static class ControlClient
         }
         catch (Exception ex) when (ex is SocketException or OperationCanceledException && !ct.IsCancellationRequested)
         {
-            throw new ControlException($"No se pudo conectar con {host}:{port} ({ex.Message}). ¿Está el agente arrancado y el puerto abierto en el firewall?");
+            throw new ControlException($"Could not connect to {host}:{port} ({ex.Message}). Is the agent running and the port open in the firewall?");
         }
 
         try
@@ -35,11 +35,11 @@ public static class ControlClient
             var channel = new LineChannel(tcp.GetStream());
 
             if (await channel.ReceiveAsync(ct) is not ChallengeMessage challenge)
-                throw new ControlException($"{host}:{port} no parece un agente DeskBridge.");
+                throw new ControlException($"{host}:{port} does not look like a DeskBridge agent.");
             if (challenge.Version != ControlProtocol.Version)
-                throw new ControlException($"Versión de protocolo distinta en {host} ({challenge.Version}, aquí {ControlProtocol.Version}). Actualiza los dos equipos.");
+                throw new ControlException($"Protocol version mismatch with {host} ({challenge.Version}, here {ControlProtocol.Version}). Update both machines.");
             if (challenge.Machine != expectedMachine)
-                throw new ControlException($"En {host} responde '{challenge.Machine}', no '{expectedMachine}'. Revisa la dirección en la configuración.");
+                throw new ControlException($"'{challenge.Machine}' answers at {host}, not '{expectedMachine}'. Check the address in the configuration.");
 
             var proof = ControlAuth.Proof(key, challenge.Nonce, localMachine, challenge.Machine);
             await channel.SendAsync(new AuthMessage(localMachine, proof), ct);
@@ -51,16 +51,16 @@ public static class ControlClient
                 case ErrorMessage error:
                     throw new ControlException(error.Message);
                 default:
-                    throw new ControlException($"Respuesta inesperada de {host} durante la autenticación.");
+                    throw new ControlException($"Unexpected reply from {host} during authentication.");
             }
 
             await channel.SendAsync(request, ct);
             return await channel.ReceiveAsync(ct)
-                ?? throw new ControlException($"{host} cerró la conexión sin responder.");
+                ?? throw new ControlException($"{host} closed the connection without replying.");
         }
         catch (Exception ex) when (ex is IOException or SocketException or JsonException or InvalidDataException)
         {
-            throw new ControlException($"Error de comunicación con {host}: {ex.Message}");
+            throw new ControlException($"Communication error with {host}: {ex.Message}");
         }
     }
 }

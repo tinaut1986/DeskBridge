@@ -14,6 +14,8 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(WelcomeMessage), "welcome")]
 [JsonDerivedType(typeof(ApplyProfileMessage), "applyProfile")]
 [JsonDerivedType(typeof(AppliedMessage), "applied")]
+[JsonDerivedType(typeof(GetDisplaysMessage), "getDisplays")]
+[JsonDerivedType(typeof(DisplaysMessage), "displays")]
 [JsonDerivedType(typeof(ErrorMessage), "error")]
 public abstract record ControlMessage;
 
@@ -28,6 +30,11 @@ public sealed record WelcomeMessage() : ControlMessage;
 public sealed record ApplyProfileMessage(DeskBridgeConfig Config, string Profile) : ControlMessage;
 
 public sealed record AppliedMessage(string Machine, string Profile, IReadOnlyList<string> Warnings) : ControlMessage;
+
+/// <summary>Asks an agent for the physical monitors of its machine, so the coordinator can fill the config.</summary>
+public sealed record GetDisplaysMessage() : ControlMessage;
+
+public sealed record DisplaysMessage(string Machine, IReadOnlyList<DisplayConfig> Displays) : ControlMessage;
 
 public sealed record ErrorMessage(string Message) : ControlMessage;
 

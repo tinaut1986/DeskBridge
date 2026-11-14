@@ -27,7 +27,7 @@ internal sealed class LineChannel(Stream stream, int maxLineBytes = 1 << 20)
         if (line is null)
             return null;
         return JsonSerializer.Deserialize<ControlMessage>(line, ConfigLoader.JsonOptions)
-            ?? throw new InvalidDataException("Mensaje vacío.");
+            ?? throw new InvalidDataException("Empty message.");
     }
 
     private async Task<string?> ReadLineAsync(CancellationToken ct)
@@ -46,11 +46,11 @@ internal sealed class LineChannel(Stream stream, int maxLineBytes = 1 << 20)
             line.Write(_buffer, _start, _end - _start);
             _start = _end = 0;
             if (line.Length > maxLineBytes)
-                throw new InvalidDataException("Mensaje demasiado grande.");
+                throw new InvalidDataException("Message too large.");
 
             int read = await stream.ReadAsync(_buffer, ct);
             if (read == 0)
-                return line.Length == 0 ? null : throw new EndOfStreamException("Conexión cerrada a mitad de un mensaje.");
+                return line.Length == 0 ? null : throw new EndOfStreamException("Connection closed in the middle of a message.");
             _end = read;
         }
     }

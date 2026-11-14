@@ -22,10 +22,10 @@ public static class ControlAuth
         }
         catch (FormatException)
         {
-            throw new ControlException("La clave compartida no es base64 válido. Genera una con 'deskbridge clave'.");
+            throw new ControlException("The shared key is not valid base64. Generate one with 'deskbridge keygen'.");
         }
         if (bytes.Length < 16)
-            throw new ControlException("La clave compartida es demasiado corta. Genera una con 'deskbridge clave'.");
+            throw new ControlException("The shared key is too short. Generate one with 'deskbridge keygen'.");
         return bytes;
     }
 

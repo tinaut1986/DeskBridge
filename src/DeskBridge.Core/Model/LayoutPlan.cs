@@ -16,7 +16,8 @@ public sealed record StreamSpec(
     string SinkDisplay,
     int Width,
     int Height,
-    int RefreshHz);
+    int RefreshHz,
+    int BitrateMbps);
 
 /// <summary>When the coordinator's cursor is on <paramref name="Display"/>, input goes to <paramref name="ToMachine"/>.</summary>
 public sealed record InputRoute(string Display, string ToMachine);

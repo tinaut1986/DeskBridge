@@ -17,7 +17,7 @@ public sealed class PlanApplier(
     {
         var addresses = config.Machines.ToDictionary(m => m.Id, m => m.Address);
         if (!addresses.ContainsKey(localMachine))
-            throw new ArgumentException($"El equipo '{localMachine}' no está en la configuración.", nameof(localMachine));
+            throw new ArgumentException($"Machine '{localMachine}' is not in the configuration.", nameof(localMachine));
 
         // Tear down first so a monitor never shows two things at once while switching.
         await receiver.StopAllAsync(ct);

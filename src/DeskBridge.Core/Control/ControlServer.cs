@@ -5,8 +5,8 @@ using System.Text.Json;
 namespace DeskBridge.Core.Control;
 
 /// <summary>
-/// The agent side of the control channel. Every machine runs one; it authenticates the
-/// coordinator and applies the profiles it receives, one at a time.
+/// The listening side of the control channel. It authenticates the coordinator and hands
+/// each request to <c>onRequest</c>, one at a time.
 /// </summary>
 public sealed class ControlServer : IAsyncDisposable
 {
@@ -14,24 +14,24 @@ public sealed class ControlServer : IAsyncDisposable
 
     private readonly string _machine;
     private readonly byte[] _key;
-    private readonly Func<ApplyProfileMessage, CancellationToken, Task<ControlMessage>> _onApply;
+    private readonly Func<ControlMessage, CancellationToken, Task<ControlMessage>> _onRequest;
     private readonly Action<string> _log;
     private readonly TcpListener _listener;
-    private readonly SemaphoreSlim _applyLock = new(1, 1);
+    private readonly SemaphoreSlim _requestLock = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
     private Task? _acceptLoop;
 
     public ControlServer(
         string machine,
         byte[] key,
-        Func<ApplyProfileMessage, CancellationToken, Task<ControlMessage>> onApply,
+        Func<ControlMessage, CancellationToken, Task<ControlMessage>> onRequest,
         int port,
         IPAddress? bindAddress = null,
         Action<string>? log = null)
     {
         _machine = machine;
         _key = key;
-        _onApply = onApply;
+        _onRequest = onRequest;
         _log = log ?? (_ => { });
         _listener = new TcpListener(bindAddress ?? IPAddress.Any, port);
     }
@@ -78,46 +78,38 @@ public sealed class ControlServer : IAsyncDisposable
                 var auth = await channel.ReceiveAsync(authCts.Token) as AuthMessage;
                 if (auth is null || !ControlAuth.Verify(_key, nonce, auth.Machine, _machine, auth.Proof))
                 {
-                    _log($"Conexión rechazada desde {remote}: autenticación fallida.");
-                    await channel.SendAsync(new ErrorMessage("Autenticación fallida: ¿la clave compartida es la misma en los dos equipos?"), ct);
+                    _log($"Rejected connection from {remote}: authentication failed.");
+                    await channel.SendAsync(new ErrorMessage("Authentication failed: is the shared key the same on both machines?"), ct);
                     return;
                 }
                 await channel.SendAsync(new WelcomeMessage(), ct);
-                _log($"'{auth.Machine}' conectado desde {remote}.");
 
                 while (await channel.ReceiveAsync(ct) is { } message)
-                {
-                    var reply = message switch
-                    {
-                        ApplyProfileMessage apply => await ApplyAsync(apply, ct),
-                        _ => new ErrorMessage($"Mensaje no esperado: {message.GetType().Name}."),
-                    };
-                    await channel.SendAsync(reply, ct);
-                }
+                    await channel.SendAsync(await HandleRequestAsync(message, ct), ct);
             }
             catch (Exception ex) when (ex is IOException or SocketException or JsonException
                                            or InvalidDataException or OperationCanceledException)
             {
-                _log($"Conexión con {remote} cerrada: {ex.Message}");
+                _log($"Connection with {remote} closed: {ex.Message}");
             }
         }
     }
 
-    private async Task<ControlMessage> ApplyAsync(ApplyProfileMessage message, CancellationToken ct)
+    private async Task<ControlMessage> HandleRequestAsync(ControlMessage request, CancellationToken ct)
     {
-        await _applyLock.WaitAsync(ct);
+        await _requestLock.WaitAsync(ct);
         try
         {
-            return await _onApply(message, ct);
+            return await _onRequest(request, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _log($"Error aplicando '{message.Profile}': {ex.Message}");
+            _log($"Request {request.GetType().Name} failed: {ex.Message}");
             return new ErrorMessage(ex.Message);
         }
         finally
         {
-            _applyLock.Release();
+            _requestLock.Release();
         }
     }
 
@@ -128,6 +120,6 @@ public sealed class ControlServer : IAsyncDisposable
         if (_acceptLoop is not null)
             await _acceptLoop;
         _stop.Dispose();
-        _applyLock.Dispose();
+        _requestLock.Dispose();
     }
 }
