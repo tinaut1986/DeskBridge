@@ -58,5 +58,5 @@ public static class Coordinator
     }
 
     private static (string Host, int Port) Endpoint(DeskBridgeConfig config, LocalSettings local, MachineConfig machine) =>
-        (machine.Id == local.Machine ? "127.0.0.1" : machine.Address, machine.ControlPort ?? config.ControlPort);
+        Peers.Endpoint(config, local, machine);
 }

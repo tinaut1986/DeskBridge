@@ -12,7 +12,9 @@ public sealed record StartupOptions(
     bool StartAgent,
     string? SnapshotDir,
     string? Profile = null,
-    string? Language = null)
+    string? Language = null,
+    ThemeChoice? Theme = null,
+    bool Minimized = false)
 {
     public static StartupOptions Parse(string[] args)
     {
@@ -30,6 +32,8 @@ public sealed record StartupOptions(
             StartAgent: !args.Contains("--no-agent") && snapshot is null,
             snapshot,
             Value("--profile"),
-            Value("--language"));
+            Value("--language"),
+            Enum.TryParse<ThemeChoice>(Value("--theme"), ignoreCase: true, out var theme) ? theme : null,
+            args.Contains("--minimized"));
     }
 }

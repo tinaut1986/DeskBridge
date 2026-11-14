@@ -8,10 +8,10 @@ namespace DeskBridge.Gui.Updates;
 
 public partial class UpdateWindow : Window
 {
-    private static readonly Brush Ok = new SolidColorBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));
-    private static readonly Brush Bad = new SolidColorBrush(Color.FromRgb(0xFE, 0xE2, 0xE2));
-    private static readonly Brush Neutral = new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB));
-    private static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80));
+    private static Brush Ok => ThemeManager.Resource("OkChipBackground");
+    private static Brush Bad => ThemeManager.Resource("BadChipBackground");
+    private static Brush Neutral => ThemeManager.Resource("ChipBackground");
+    private static Brush Muted => ThemeManager.Resource("MutedText");
 
     private readonly Updater _updater;
     private string _lastButtons = "";
@@ -22,7 +22,12 @@ public partial class UpdateWindow : Window
         _updater = updater;
         InitializeComponent();
         updater.Changed += Render;
-        Closed += (_, _) => updater.Changed -= Render;
+        ThemeManager.Changed += Render;
+        Closed += (_, _) =>
+        {
+            updater.Changed -= Render;
+            ThemeManager.Changed -= Render;
+        };
         PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape && Buttons.Children.Count > 0)
@@ -146,9 +151,9 @@ public partial class UpdateWindow : Window
             var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 4) };
             header.Children.Add(new TextBlock { Text = $"v{n.Version}", FontWeight = FontWeights.SemiBold });
             if (n.Beta)
-                header.Children.Add(Chip(L.T("Beta"), Color.FromRgb(0xFE, 0xF3, 0xC7), null));
+                header.Children.Add(Chip(L.T("Beta"), ThemeManager.Resource("BetaChipBackground"), null));
             if (!n.Translated)
-                header.Children.Add(Chip("English", Color.FromRgb(0xE5, 0xE7, 0xEB), L.T("Not translated into your language yet")));
+                header.Children.Add(Chip("English", ThemeManager.Resource("ChipBackground"), L.T("Not translated into your language yet")));
             NotesList.Children.Add(header);
 
             if (n.Lines.Count == 0)
@@ -168,9 +173,9 @@ public partial class UpdateWindow : Window
         }
     }
 
-    private static Border Chip(string text, Color background, string? tooltip) => new()
+    private static Border Chip(string text, Brush background, string? tooltip) => new()
     {
-        Background = new SolidColorBrush(background),
+        Background = background,
         CornerRadius = new CornerRadius(9),
         Padding = new Thickness(7, 1, 7, 1),
         Margin = new Thickness(8, 0, 0, 0),

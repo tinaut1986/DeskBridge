@@ -34,9 +34,9 @@ public partial class MainWindow : Window
         Color.FromRgb(0xDB, 0x27, 0x77), // pink
     ];
 
-    private static readonly Brush ErrorBrush = new SolidColorBrush(Color.FromRgb(0xDC, 0x26, 0x26));
-    private static readonly Brush WarningBrush = new SolidColorBrush(Color.FromRgb(0xB4, 0x53, 0x09));
-    private static readonly Brush InfoBrush = new SolidColorBrush(Color.FromRgb(0x37, 0x41, 0x51));
+    private static Brush ErrorBrush => ThemeManager.Resource("ErrorText");
+    private static Brush WarningBrush => ThemeManager.Resource("WarningText");
+    private static Brush InfoBrush => ThemeManager.Resource("InfoText");
 
     private readonly StartupOptions _options;
     private readonly MainViewModel _vm = new();
@@ -57,7 +57,10 @@ public partial class MainWindow : Window
         L.Changed += OnLanguageChanged;
         LoadConfig();
         LoadLocalSettings();
+        InitSharing();
         BuildLanguageMenu();
+        BuildThemeMenu();
+        ThemeManager.Changed += ScheduleRedraw;
         UpdateChannelMenu();
 
         _updater = new Updater(WantsBetas, () => L.Current, () => this, beforeInstall: () => { });
@@ -99,10 +102,18 @@ public partial class MainWindow : Window
             config = CreateDefaultConfig();
         }
 
+        ShowConfig(config, _options.Profile);
+    }
+
+    /// <summary>Replaces what is being edited, keeping the selected profile and machine when they still exist.</summary>
+    private void ShowConfig(DeskBridgeConfig config, string? profile = null)
+    {
+        profile ??= _vm.SelectedProfile?.Name;
+        var machine = _vm.SelectedMachine?.Id;
         _vm.Model = EditorModel.FromConfig(config);
         _vm.Model.Machines.CollectionChanged += (_, _) => _vm.RaiseMachineIds();
-        _vm.SelectedProfile = _vm.Model.Profiles.FirstOrDefault(p => p.Name == _options.Profile) ?? _vm.Model.Profiles.FirstOrDefault();
-        _vm.SelectedMachine = _vm.Model.Machines.FirstOrDefault();
+        _vm.SelectedProfile = _vm.Model.Profiles.FirstOrDefault(p => p.Name == profile) ?? _vm.Model.Profiles.FirstOrDefault();
+        _vm.SelectedMachine = _vm.Model.Machines.FirstOrDefault(m => m.Id == machine) ?? _vm.Model.Machines.FirstOrDefault();
         _vm.RaiseMachineIds();
     }
 
@@ -245,6 +256,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BuildThemeMenu()
+    {
+        ThemeMenu.Items.Clear();
+        foreach (var (choice, label) in new[] { (ThemeChoice.System, L.T("System")), (ThemeChoice.Light, L.T("Light")), (ThemeChoice.Dark, L.T("Dark")) })
+        {
+            var item = new MenuItem { Header = label, IsCheckable = true, IsChecked = _settings.Theme == choice };
+            item.Click += (_, _) =>
+            {
+                SaveUserSettings(_settings with { Theme = choice });
+                ThemeManager.Apply(choice);
+                BuildThemeMenu();
+            };
+            ThemeMenu.Items.Add(item);
+        }
+    }
+
     private void SetLanguage(string setting)
     {
         SaveUserSettings(_settings with { Language = L.Codes.Contains(setting) ? setting : L.System });
@@ -258,6 +285,7 @@ public partial class MainWindow : Window
         _vm.RaiseComputedTexts();
         _placementRowsStale = true;
         BuildLanguageMenu();
+        BuildThemeMenu();
         UpdateAgentStatus();
         _updater.LanguageChanged();
         ScheduleRedraw();
@@ -319,7 +347,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var agent = new AgentHost(local, Simulated.Applier(AddLog), new WindowsDisplayDetector(), AddLog);
+        var agent = CreateAgent(local);
         agent.ProfileApplied += profile => Dispatcher.BeginInvoke(() =>
         {
             _activeProfile = profile;
@@ -355,6 +383,8 @@ public partial class MainWindow : Window
     {
         ObservableObject.AnyChanged -= ScheduleRedraw;
         L.Changed -= OnLanguageChanged;
+        ThemeManager.Changed -= ScheduleRedraw;
+        _clipboard?.Dispose();
         // The agent's loops run on the thread pool, so blocking briefly here cannot deadlock.
         _agent?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
         _updater.InstallOnExit();

@@ -1,12 +1,14 @@
-﻿<Window x:Class="DeskBridge.Gui.MainWindow"
+<Window x:Class="DeskBridge.Gui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:DeskBridge.Gui.Localization"
         Title="DeskBridge" Width="1180" Height="820" MinWidth="900" MinHeight="600"
-        Background="#F5F6F8" FontFamily="Segoe UI" FontSize="13">
+        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
+        Background="{DynamicResource AppBackground}" FontFamily="Segoe UI" FontSize="13">
 
     <Window.Resources>
-        <Style TargetType="Button">
+        <!-- Implicit styles extend the theme's (Fluent) ones instead of replacing them. -->
+        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Padding" Value="12,5" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="MinWidth" Value="70" />
@@ -17,33 +19,44 @@
             <Setter Property="BorderBrush" Value="#1D4ED8" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
-        <Style TargetType="GroupBox">
+        <Style TargetType="GroupBox" BasedOn="{StaticResource {x:Type GroupBox}}">
             <Setter Property="Padding" Value="8" />
             <Setter Property="Margin" Value="0,0,0,10" />
-            <Setter Property="Background" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
         </Style>
-        <Style TargetType="DataGrid">
+        <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
             <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="RowBackground" Value="{DynamicResource CardBackground}" />
+            <Setter Property="AlternatingRowBackground" Value="{DynamicResource CardBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="CanUserDeleteRows" Value="False" />
             <Setter Property="HeadersVisibility" Value="Column" />
             <Setter Property="GridLinesVisibility" Value="Horizontal" />
-            <Setter Property="HorizontalGridLinesBrush" Value="#E5E7EB" />
-            <Setter Property="Background" Value="White" />
+            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
             <Setter Property="RowHeight" Value="30" />
             <Setter Property="SelectionMode" Value="Single" />
         </Style>
         <Style x:Key="Hint" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#6B7280" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
     </Window.Resources>
 
-    <DockPanel>
+    <!-- Own background: the Fluent window itself is transparent (Mica). -->
+    <DockPanel Background="{DynamicResource AppBackground}">
         <!-- Menu -->
-        <Menu DockPanel.Dock="Top" Background="White" Padding="6,2">
+        <Menu DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" Padding="6,2">
+            <MenuItem Header="{l:T 'File'}" SubmenuOpened="FileMenu_SubmenuOpened">
+                <MenuItem x:Name="SendFilesMenu" Header="{l:T 'Send files to'}" />
+                <MenuItem Header="{l:T 'Open received files folder'}" Click="OpenFilesFolder_Click" />
+                <Separator />
+                <MenuItem Header="{l:T 'Quit'}" Click="Quit_Click" />
+            </MenuItem>
             <MenuItem Header="{l:T 'Settings'}">
                 <MenuItem x:Name="LanguageMenu" Header="{l:T 'Language'}" />
+                <MenuItem x:Name="ThemeMenu" Header="{l:T 'Theme'}" />
                 <Separator />
                 <MenuItem Header="{l:T 'Update channel'}">
                     <MenuItem x:Name="StableMenu" Header="{l:T 'Stable'}" IsCheckable="True" Click="Stable_Click" />
@@ -59,12 +72,12 @@
         </Menu>
 
         <!-- Profile bar -->
-        <Border DockPanel.Dock="Top" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1" Padding="12,10">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1" Padding="12,10">
             <DockPanel LastChildFill="False">
                 <TextBlock Text="{l:T 'Profile'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
                 <ComboBox Width="200" ItemsSource="{Binding Model.Profiles}" DisplayMemberPath="Name"
                           SelectedItem="{Binding SelectedProfile}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
-                <TextBlock Text="{l:T 'Name'}" VerticalAlignment="Center" Margin="4,0,6,0" Foreground="#6B7280" />
+                <TextBlock Text="{l:T 'Name'}" VerticalAlignment="Center" Margin="4,0,6,0" Foreground="{DynamicResource MutedText}" />
                 <TextBox Width="150" Text="{Binding SelectedProfile.Name, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
                 <Button Content="{l:T 'New'}" Click="NewProfile_Click" />
                 <Button Content="{l:T 'Duplicate'}" Click="DuplicateProfile_Click" />
@@ -76,14 +89,14 @@
         </Border>
 
         <!-- Status bar -->
-        <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Padding="12,6">
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="12,6">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding AgentStatus}" Foreground="#6B7280" />
+                <TextBlock DockPanel.Dock="Right" Text="{Binding AgentStatus}" Foreground="{DynamicResource MutedText}" />
                 <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
             </DockPanel>
         </Border>
 
-        <TabControl x:Name="Tabs" Margin="10" Padding="10" Background="#F5F6F8">
+        <TabControl x:Name="Tabs" Margin="10" Padding="10" Background="{DynamicResource AppBackground}">
             <!-- ============ Layout ============ -->
             <TabItem Header="{l:T 'Layout'}" Padding="14,3">
                 <Grid>
@@ -93,7 +106,7 @@
                         <RowDefinition Height="3*" MinHeight="160" />
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="6" Padding="10">
+                    <Border Grid.Row="0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="6" Padding="10">
                         <Canvas x:Name="LayoutCanvas" ClipToBounds="True" SizeChanged="LayoutCanvas_SizeChanged" />
                     </Border>
 
@@ -221,8 +234,31 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-                    <GroupBox Header="{l:T 'This machine'}">
+                    <GroupBox Grid.Row="0" Grid.Column="1" Header="{l:T 'Sharing'}" Margin="10,0,0,10">
+                        <StackPanel>
+                            <CheckBox x:Name="ClipboardSendBox" Margin="0,3" Click="Sharing_Click"
+                                      Content="{l:T 'Send what I copy on this PC to the other machines'}" />
+                            <CheckBox x:Name="ClipboardReceiveBox" Margin="0,3" Click="Sharing_Click"
+                                      Content="{l:T 'Put in this PC’s clipboard what is copied on the other machines'}" />
+                            <CheckBox x:Name="AcceptFilesBox" Margin="0,3" Click="Sharing_Click"
+                                      Content="{l:T 'Accept files sent from the other machines'}" />
+                            <DockPanel Margin="22,4,0,0">
+                                <TextBlock Text="{l:T 'Save them in'}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <Button DockPanel.Dock="Right" Content="{l:T 'Open'}" Click="OpenFilesFolder_Click" Margin="6,0,0,0" />
+                                <Button DockPanel.Dock="Right" Content="{l:T 'Choose…'}" Click="ChooseFilesFolder_Click" Margin="6,0,0,0" />
+                                <TextBox x:Name="FilesFolderBox" IsReadOnly="True" VerticalContentAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                                       Text="{l:T 'To send files, drop them on this window or use File, Send files to. Everything travels encrypted. On a work computer, check your company’s rules before sharing its clipboard or files.'}" />
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Grid.Row="0" Grid.Column="0" Header="{l:T 'This machine'}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="150" />
@@ -258,12 +294,12 @@
 
                             <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
                                 <Button Content="{l:T 'Save and restart agent'}" Style="{StaticResource Primary}" Click="SaveLocal_Click" />
-                                <TextBlock Text="{Binding AgentStatus}" VerticalAlignment="Center" Foreground="#6B7280" Margin="6,0" />
+                                <TextBlock Text="{Binding AgentStatus}" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}" Margin="6,0" />
                             </StackPanel>
                         </Grid>
                     </GroupBox>
 
-                    <GroupBox Grid.Row="1" Header="{l:T 'Log'}" Margin="0">
+                    <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="{l:T 'Log'}" Margin="0">
                         <ListBox x:Name="LogList" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="12" BorderThickness="0" />
                     </GroupBox>
                 </Grid>

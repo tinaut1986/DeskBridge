@@ -13,6 +13,7 @@ public partial class App : Application
         var options = StartupOptions.Parse(e.Args);
         var settings = UserSettings.Load(options.SettingsPath);
         L.SetLanguage(L.Resolve(options.Language ?? settings.Language, L.SystemLocales()));
+        ThemeManager.Apply(options.Theme ?? settings.Theme);
 
         var window = new MainWindow(options, settings);
         MainWindow = window;
