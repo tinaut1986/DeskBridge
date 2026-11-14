@@ -58,6 +58,16 @@ internal sealed class LineChannel(Stream stream)
     /// <returns>The next message, or null if the peer closed the connection cleanly.</returns>
     public async Task<ControlMessage?> ReceiveAsync(CancellationToken ct)
     {
+        var json = await ReceiveJsonAsync(ct);
+        if (json is null)
+            return null;
+        return JsonSerializer.Deserialize<ControlMessage>(json, ConfigLoader.JsonOptions)
+            ?? throw new InvalidDataException("Empty message.");
+    }
+
+    /// <summary>The next message as JSON, decrypted but not interpreted; null when the peer closed cleanly.</summary>
+    public async Task<byte[]?> ReceiveJsonAsync(CancellationToken ct)
+    {
         var line = await ReadLineAsync(ct);
         if (line is null)
             return null;
@@ -90,8 +100,7 @@ internal sealed class LineChannel(Stream stream)
                 throw new InvalidDataException("A message failed authentication (altered, replayed or wrong key).");
             }
         }
-        return JsonSerializer.Deserialize<ControlMessage>(json, ConfigLoader.JsonOptions)
-            ?? throw new InvalidDataException("Empty message.");
+        return json;
     }
 
     private static byte[] Nonce(ulong counter)

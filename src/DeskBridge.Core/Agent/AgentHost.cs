@@ -106,6 +106,13 @@ public sealed class AgentHost(
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
 
+            case ConfigSyncMessage sync:
+                // Only the coordinator named in that config may replace it (it is the one place it is edited).
+                if (sync.Config.Machines.FirstOrDefault(m => m.HasInput)?.Id != from)
+                    return new ErrorMessage(L.T("Only the coordinator can change the configuration."));
+                ConfigReceived?.Invoke(sync.Config);
+                return new OkMessage();
+
             case ClipboardMessage clipboard:
                 return ClipboardHandler is { } handler && await handler(from, clipboard)
                     ? new OkMessage()

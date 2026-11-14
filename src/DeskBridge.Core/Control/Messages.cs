@@ -18,6 +18,7 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(WelcomeMessage), "welcome")]
 [JsonDerivedType(typeof(OkMessage), "ok")]
 [JsonDerivedType(typeof(ErrorMessage), "error")]
+[JsonDerivedType(typeof(ConfigSyncMessage), "configSync")]
 [JsonDerivedType(typeof(ApplyProfileMessage), "applyProfile")]
 [JsonDerivedType(typeof(AppliedMessage), "applied")]
 [JsonDerivedType(typeof(GetDisplaysMessage), "getDisplays")]
@@ -45,6 +46,9 @@ public sealed record WelcomeMessage(string Proof) : ControlMessage;
 public sealed record OkMessage() : ControlMessage;
 
 public sealed record ErrorMessage(string Message) : ControlMessage;
+
+/// <summary>The coordinator's current configuration, sent when a machine connects and whenever it is saved.</summary>
+public sealed record ConfigSyncMessage(DeskBridgeConfig Config) : ControlMessage;
 
 /// <summary>The coordinator sends the whole config, so it only has to be edited on one machine.</summary>
 public sealed record ApplyProfileMessage(DeskBridgeConfig Config, string Profile) : ControlMessage;

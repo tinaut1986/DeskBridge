@@ -71,6 +71,7 @@
                 <MenuItem Header="{l:T 'About DeskBridge'}" Click="About_Click" />
                 <MenuItem Header="{l:T 'Project page'}" Click="ProjectPage_Click" />
                 <MenuItem Header="{l:T 'Open settings folder'}" Click="OpenSettingsFolder_Click" />
+                <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
             </MenuItem>
         </Menu>
 
@@ -309,7 +310,17 @@
                     </GroupBox>
 
                     <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="{l:T 'Log'}" Margin="0">
-                        <ListBox x:Name="LogList" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="12" BorderThickness="0" />
+                        <ListBox x:Name="LogList" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="12" BorderThickness="0"
+                                 SelectionMode="Extended" KeyDown="LogList_KeyDown">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="{l:T 'Copy'}" Click="CopyLogSelection_Click" />
+                                    <MenuItem Header="{l:T 'Copy all'}" Click="CopyLogAll_Click" />
+                                    <Separator />
+                                    <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
                     </GroupBox>
                 </Grid>
             </TabItem>

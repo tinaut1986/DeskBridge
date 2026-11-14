@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     {
         _options = options;
         _settings = settings;
+        FileLog.Enabled = options.SnapshotDir is null;
         InitializeComponent();
         DataContext = _vm;
 
@@ -141,15 +142,25 @@ public partial class MainWindow : Window
         return new DeskBridgeConfig([desktop, laptop], profiles);
     }
 
+    /// <summary>
+    /// This PC's address on the real network: an IPv4 of an adapter that is up and has a gateway
+    /// (virtual adapters of WSL, Hyper-V or VirtualBox have none), wired first.
+    /// </summary>
     private static string? LocalIPv4()
     {
         try
         {
-            return Dns.GetHostAddresses(Dns.GetHostName())
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+                .Select(n => (Adapter: n, Props: n.GetIPProperties()))
+                .Where(x => x.Props.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any)))
+                .OrderBy(x => x.Adapter.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Ethernet ? 0 : 1)
+                .SelectMany(x => x.Props.UnicastAddresses)
+                .Select(u => u.Address)
                 .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a))
                 ?.ToString();
         }
-        catch (SocketException)
+        catch (System.Net.NetworkInformation.NetworkInformationException)
         {
             return null;
         }
@@ -224,6 +235,8 @@ public partial class MainWindow : Window
             return false;
         ConfigLoader.Save(_options.ConfigPath, config);
         _vm.Status = L.T("Saved {path}", ("path", _options.ConfigPath));
+        if (_agent is not null && IsCoordinatorHere())
+            _ = Coordinator.SyncConfigAsync(config, _agent.Directory);
         return true;
     }
 
@@ -329,6 +342,35 @@ public partial class MainWindow : Window
         OpenExternal(AppPaths.Directory);
     }
 
+    private void OpenLogFolder_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(FileLog.Directory);
+        OpenExternal(FileLog.Directory);
+    }
+
+    private void CopyLogSelection_Click(object sender, RoutedEventArgs e) => CopyLog(LogList.SelectedItems.Cast<string>());
+
+    private void CopyLogAll_Click(object sender, RoutedEventArgs e) => CopyLog(_vm.Log);
+
+    private void LogList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            CopyLog(LogList.SelectedItems.Cast<string>());
+            e.Handled = true;
+        }
+    }
+
+    private void CopyLog(IEnumerable<string> lines)
+    {
+        // In display order, whatever order they were selected in.
+        var text = string.Join(Environment.NewLine, _vm.Log.Where(lines.ToHashSet().Contains));
+        if (text.Length == 0)
+            return;
+        Clipboard.SetText(text);
+        _vm.Status = L.T("Log copied to the clipboard.");
+    }
+
     private static void OpenExternal(string target) =>
         Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })?.Dispose();
 
@@ -360,7 +402,7 @@ public partial class MainWindow : Window
         {
             agent.Start();
             _agent = agent;
-            agent.Directory.Changed += () => Dispatcher.BeginInvoke(() => UpdateAgentStatus());
+            agent.Directory.Changed += () => Dispatcher.BeginInvoke(OnPeersChanged);
             if (agent.Reverse is { } reverse)
                 reverse.StateChanged += () => Dispatcher.BeginInvoke(() => UpdateAgentStatus());
         }
@@ -389,7 +431,7 @@ public partial class MainWindow : Window
                 ? L.T("connected to {machine}", ("machine", MachineName(coordinator)))
                 : L.T("connecting to {address}…", ("address", reverse.Target)));
         }
-        var incoming = _agent.Directory.Connected.Where(m => m != _agent.Reverse?.ConnectedTo).ToList();
+        var incoming = _agent.Directory.Connected.Where(m => m != _agent.Reverse?.ConnectedTo && m != _agent.Machine).ToList();
         if (incoming.Count > 0)
             parts.Add(L.T("connected: {machines}", ("machines", string.Join(", ", incoming.Select(MachineName)))));
         parts.Add(_activeProfile is null ? L.T("simulated") : L.T("active: {profile}", ("profile", _activeProfile)));
@@ -411,6 +453,9 @@ public partial class MainWindow : Window
 
     private void AddLog(string message)
     {
+        foreach (var line in message.Split('\n'))
+            FileLog.Write(line.TrimEnd());
+
         void Append()
         {
             foreach (var line in message.Split('\n'))
@@ -875,7 +920,15 @@ public partial class MainWindow : Window
             }
         }
 
-        // Update in place so profiles keep their settings for displays that still exist.
+        int removed = MergeDisplays(machine, detected);
+        _vm.Status = L.T("{machine}: {count} displays detected, {removed} removed. Save to keep them.",
+            ("machine", machine), ("count", detected.Count), ("removed", removed));
+    }
+
+    /// <summary>Updates a machine's displays in place, so profiles keep their settings for displays that still exist.</summary>
+    /// <returns>How many displays were removed.</returns>
+    private static int MergeDisplays(MachineVm machine, IReadOnlyList<DisplayConfig> detected)
+    {
         foreach (var d in detected)
         {
             var existing = machine.Displays.FirstOrDefault(x => x.Id == d.Id);
@@ -887,9 +940,7 @@ public partial class MainWindow : Window
         var removed = machine.Displays.Where(x => detected.All(d => d.Id != x.Id)).ToList();
         foreach (var gone in removed)
             machine.Displays.Remove(gone);
-
-        _vm.Status = L.T("{machine}: {count} displays detected, {removed} removed. Save to keep them.",
-            ("machine", machine), ("count", detected.Count), ("removed", removed.Count));
+        return removed.Count;
     }
 
     // ------------------------------------------------------------------ this PC tab

@@ -97,20 +97,29 @@ public sealed class ControlSession : IAsyncDisposable
     {
         try
         {
-            while (await _channel.ReceiveAsync(_closing.Token) is { } message)
+            while (await _channel.ReceiveJsonAsync(_closing.Token) is { } json)
             {
-                if (message is not SessionFrame frame)
-                    throw new InvalidDataException("Unexpected message outside a session frame.");
+                var frame = ReadFrame(json);
                 if (frame.IsReply)
                 {
                     if (_pending.TryRemove(frame.Id, out var pending))
-                        pending.TrySetResult(frame.Body);
+                    {
+                        if (frame.Body is { } body)
+                            pending.TrySetResult(body);
+                        else
+                            pending.TrySetException(new ControlException(Unknown(frame.Type)));
+                    }
                 }
-                else
+                else if (frame.Body is { } request)
                 {
                     // Not awaited: a slow request (applying a profile) must not hold up replies.
                     // Senders wait for each reply before the next request where order matters (file chunks).
-                    _ = HandleAsync(frame);
+                    _ = HandleAsync(frame.Id, request);
+                }
+                else
+                {
+                    // A request this version does not know (the other machine is newer): say so, keep the session.
+                    _ = ReplyAsync(frame.Id, new ErrorMessage(Unknown(frame.Type)));
                 }
             }
         }
@@ -126,31 +135,62 @@ public sealed class ControlSession : IAsyncDisposable
         }
     }
 
-    private async Task HandleAsync(SessionFrame frame)
+    /// <summary>A received frame; <c>Body</c> is null when its message type is unknown to this version.</summary>
+    private readonly record struct ReceivedFrame(long Id, bool IsReply, string Type, ControlMessage? Body);
+
+    private static ReceivedFrame ReadFrame(byte[] json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("type", out var type) || type.GetString() != "frame"
+            || !root.TryGetProperty("id", out var id) || !root.TryGetProperty("body", out var body))
+            throw new InvalidDataException("Unexpected message outside a session frame.");
+        bool isReply = root.TryGetProperty("isReply", out var r) && r.ValueKind == JsonValueKind.True;
+        var bodyType = body.TryGetProperty("type", out var t) ? t.GetString() ?? "?" : "?";
+        ControlMessage? message;
+        try
+        {
+            message = body.Deserialize<ControlMessage>(Configuration.ConfigLoader.JsonOptions);
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            message = null;
+        }
+        return new ReceivedFrame(id.GetInt64(), isReply, bodyType, message);
+    }
+
+    private static string Unknown(string type) =>
+        L.T("The other machine sent '{request}', which this version of DeskBridge does not know. Update both machines.", ("request", type));
+
+    private async Task HandleAsync(long id, ControlMessage request)
     {
         ControlMessage reply;
         try
         {
-            reply = frame.Body switch
+            reply = request switch
             {
                 PingMessage => new OkMessage(),
-                _ when _handler is null => new ErrorMessage(L.T("Unexpected request: {request}.", ("request", frame.Body.GetType().Name))),
-                _ => await _handler(RemoteMachine, frame.Body, _closing.Token),
+                _ when _handler is null => new ErrorMessage(L.T("Unexpected request: {request}.", ("request", request.GetType().Name))),
+                _ => await _handler(RemoteMachine, request, _closing.Token),
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _log(L.T("Request {request} failed: {error}", ("request", frame.Body.GetType().Name), ("error", ex.Message)));
+            _log(L.T("Request {request} failed: {error}", ("request", request.GetType().Name), ("error", ex.Message)));
             reply = new ErrorMessage(ex.Message);
         }
         catch (OperationCanceledException)
         {
             return;
         }
+        await ReplyAsync(id, reply);
+    }
 
+    private async Task ReplyAsync(long id, ControlMessage reply)
+    {
         try
         {
-            await SendAsync(new SessionFrame(frame.Id, IsReply: true, reply), _closing.Token);
+            await SendAsync(new SessionFrame(id, IsReply: true, reply), _closing.Token);
         }
         catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or OperationCanceledException)
         {

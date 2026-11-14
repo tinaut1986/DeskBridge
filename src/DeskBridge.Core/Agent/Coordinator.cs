@@ -40,6 +40,24 @@ public static class Coordinator
         }));
     }
 
+    /// <summary>Sends the current configuration to every machine connected right now (best effort).</summary>
+    public static async Task SyncConfigAsync(DeskBridgeConfig config, PeerDirectory directory, CancellationToken ct = default)
+    {
+        await Task.WhenAll(directory.Connected.Select(async machine =>
+        {
+            if (directory.Find(machine) is not { } session)
+                return;
+            try
+            {
+                await session.RequestAsync(new ConfigSyncMessage(config), ct);
+            }
+            catch (ControlException)
+            {
+                // it will get it again when it reconnects
+            }
+        }));
+    }
+
     /// <summary>Asks a machine's agent for its physical monitors.</summary>
     public static async Task<IReadOnlyList<DisplayConfig>> GetDisplaysAsync(
         DeskBridgeConfig config, LocalSettings local, string machineId, PeerDirectory? directory = null, CancellationToken ct = default)
