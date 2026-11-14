@@ -1,0 +1,50 @@
+// Copia este fichero como deskbridge.json y cambia las direcciones.
+// Los ids de pantalla son los números que muestra Windows en Configuración > Pantalla.
+{
+  "controlPort": 47900,
+  "machines": [
+    {
+      "id": "sobremesa",
+      "name": "PC de sobremesa",
+      "address": "192.168.1.10",
+      "hasInput": true,
+      "displays": [
+        { "id": "1", "width": 1920, "height": 1080, "refreshHz": 60 },
+        { "id": "2", "width": 1920, "height": 1080, "refreshHz": 60 },
+        { "id": "3", "width": 1920, "height": 1080, "refreshHz": 60 }
+      ]
+    },
+    {
+      "id": "portatil",
+      "name": "Portátil del trabajo",
+      "address": "192.168.1.20",
+      "displays": [
+        { "id": "1", "width": 1920, "height": 1080, "refreshHz": 60 }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      // Cada equipo con sus pantallas; solo se comparten teclado y ratón.
+      "name": "personal",
+      "assignments": []
+    },
+    {
+      // La pantalla del portátil pasa a ser la 4ª del sobremesa.
+      "name": "cuatro-pantallas",
+      "assignments": [
+        { "machine": "portatil", "display": "1", "usedBy": "sobremesa" }
+      ]
+    },
+    {
+      // El portátil trabaja en las pantallas 2 y 3 del sobremesa,
+      // y su propia pantalla muestra una del sobremesa.
+      "name": "trabajo",
+      "assignments": [
+        { "machine": "sobremesa", "display": "2", "usedBy": "portatil" },
+        { "machine": "sobremesa", "display": "3", "usedBy": "portatil" },
+        { "machine": "portatil", "display": "1", "usedBy": "sobremesa" }
+      ]
+    }
+  ]
+}
