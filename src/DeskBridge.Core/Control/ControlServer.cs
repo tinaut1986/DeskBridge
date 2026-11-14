@@ -81,12 +81,29 @@ public sealed class ControlServer : IAsyncDisposable
 
             using var authCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             authCts.CancelAfter(AuthTimeout);
-            var auth = await channel.ReceiveAsync(authCts.Token) as AuthMessage;
+            var received = await channel.ReceiveAsync(authCts.Token);
+            if (received is null)
+            {
+                // The other side hung up before authenticating (e.g. it saw this is not the machine it wanted).
+                client.Dispose();
+                return;
+            }
+            var auth = received as AuthMessage;
             if (auth is null || !ValidNonce(auth.Nonce)
                 || !ControlAuth.Matches(ControlAuth.ClientProof(_key, serverNonce, auth.Nonce, auth.Machine, _machine), auth.Proof))
             {
                 _log(L.T("Rejected connection from {remote}: authentication failed.", ("remote", remote)));
                 await channel.SendAsync(new ErrorMessage(L.T("Authentication failed: is the shared key the same on both machines?")), ct);
+                client.Dispose();
+                return;
+            }
+            bool fromThisPc = client.Client.RemoteEndPoint is IPEndPoint { Address: var address } && IPAddress.IsLoopback(address);
+            if (auth.Machine == _machine && !fromThisPc)
+            {
+                // Two machines with the same id would be mistaken for one another (it happens if both keep a default name).
+                var sameName = L.T("The other machine uses the same name '{machine}' as this one. Change This PC is on one of them.", ("machine", _machine));
+                _log(sameName);
+                await channel.SendAsync(new ErrorMessage(sameName), ct);
                 client.Dispose();
                 return;
             }

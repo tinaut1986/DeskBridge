@@ -11,7 +11,7 @@ using DeskBridge.Core.Simulation;
 using DeskBridge.Core.Transfer;
 using DeskBridge.Gui.Sharing;
 using DeskBridge.Gui.ViewModels;
-using DeskBridge.Platform.Windows;
+using DeskBridge.Platform;
 
 namespace DeskBridge.Gui;
 
@@ -43,7 +43,7 @@ public partial class MainWindow
 
     private AgentHost CreateAgent(LocalSettings local)
     {
-        var agent = new AgentHost(local, Simulated.Applier(AddLog), new WindowsDisplayDetector(), AddLog, _files);
+        var agent = new AgentHost(local, Simulated.Applier(AddLog), PlatformServices.DisplayDetector(), AddLog, _files);
         agent.ClipboardHandler = (_, message) =>
             Dispatcher.InvokeAsync(() => _settings.ClipboardReceive && _clipboard?.Apply(message) == true).Task;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));

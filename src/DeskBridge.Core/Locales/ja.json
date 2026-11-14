@@ -175,6 +175,7 @@
   "The file arrived incomplete.": "ファイルが不完全な状態で届きました。",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "キーボードとマウスを持つマシンがコーディネーターです。プロファイルの編集と適用はそこから行います。ポートを空にすると既定値を使用します。",
   "The other machine sent '{request}', which this version of DeskBridge does not know. Update both machines.": "相手のマシンが「{request}」を送信しましたが、このバージョンの DeskBridge では認識できません。両方のマシンを更新してください。",
+  "The other machine uses the same name '{machine}' as this one. Change This PC is on one of them.": "相手のマシンはこのマシンと同じ名前「{machine}」を使っています。どちらかで「この PC は」を変更してください。",
   "The shared key is not valid. Generate a new one.": "共有キーが無効です。新しく生成してください。",
   "The shared key is too short. Generate a new one.": "共有キーが短すぎます。新しく生成してください。",
   "The virtual display of '{machine}' for display '{display}' of '{lender}' does not touch any other display; Windows will move it.": "「{lender}」のディスプレイ「{display}」用の「{machine}」の仮想ディスプレイがほかのディスプレイに接していないため、Windows が移動します。",

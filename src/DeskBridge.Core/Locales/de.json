@@ -175,6 +175,7 @@
   "The file arrived incomplete.": "Die Datei ist unvollständig angekommen.",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "Der Rechner mit Tastatur und Maus ist der Koordinator: Profile werden dort bearbeitet und angewendet. Lassen Sie den Port leer, um den Standard zu verwenden.",
   "The other machine sent '{request}', which this version of DeskBridge does not know. Update both machines.": "Der andere Rechner hat '{request}' gesendet, das diese DeskBridge-Version nicht kennt. Aktualisieren Sie beide Rechner.",
+  "The other machine uses the same name '{machine}' as this one. Change This PC is on one of them.": "Der andere Rechner verwendet denselben Namen '{machine}' wie dieser. Ändern Sie Dieser PC ist auf einem der beiden.",
   "The shared key is not valid. Generate a new one.": "Der gemeinsame Schlüssel ist ungültig. Erzeugen Sie einen neuen.",
   "The shared key is too short. Generate a new one.": "Der gemeinsame Schlüssel ist zu kurz. Erzeugen Sie einen neuen.",
   "The virtual display of '{machine}' for display '{display}' of '{lender}' does not touch any other display; Windows will move it.": "Der virtuelle Bildschirm von '{machine}' für Bildschirm '{display}' von '{lender}' berührt keinen anderen Bildschirm; Windows wird ihn verschieben.",

@@ -100,6 +100,30 @@ public class ControlChannelTests
     }
 
     [Fact]
+    public async Task Two_machines_with_the_same_name_are_refused_with_a_clear_message()
+    {
+        // Listening on every address, reached through this PC's LAN address: as if from another machine.
+        var lan = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+            .Select(u => u.Address)
+            .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a));
+        if (lan is null)
+            return; // no network adapter: nothing to test
+        var server = new ControlServer("desktop", Key, (_, _, _) => Task.FromResult<ControlMessage>(new OkMessage()), port: 0, IPAddress.Any);
+        server.Start();
+        await using var _ = server;
+
+        // The client also calls itself "desktop" (both kept a default name).
+        var ex = await Assert.ThrowsAsync<ControlException>(() =>
+            ControlClient.SendAsync(lan.ToString(), server.Port, "desktop", "desktop", Key, new GetDisplaysMessage()));
+        Assert.Contains("same name 'desktop'", ex.Message);
+
+        // The coordinator talking to its own agent (same name, from this PC) is fine.
+        Assert.IsType<OkMessage>(await ControlClient.SendAsync("127.0.0.1", server.Port, "desktop", "desktop", Key, new GetDisplaysMessage()));
+    }
+
+    [Fact]
     public async Task Wrong_machine_at_address_is_detected()
     {
         await using var server = StartServer(Key, (_, _, _) => Task.FromResult<ControlMessage>(new OkMessage()), machine: "other");

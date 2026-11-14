@@ -19,7 +19,7 @@ using DeskBridge.Core.Simulation;
 using DeskBridge.Core.Updates;
 using DeskBridge.Gui.Updates;
 using DeskBridge.Gui.ViewModels;
-using DeskBridge.Platform.Windows;
+using DeskBridge.Platform;
 
 namespace DeskBridge.Gui;
 
@@ -119,28 +119,22 @@ public partial class MainWindow : Window
         _vm.RaiseMachineIds();
     }
 
+    /// <summary>
+    /// First run: only this PC, named after Windows' computer name (so two machines never share an id).
+    /// The others appear by themselves when they connect to it.
+    /// </summary>
     private static DeskBridgeConfig CreateDefaultConfig()
     {
-        var displays = new WindowsDisplayDetector().DetectDisplays();
+        var displays = PlatformServices.DisplayDetector().DetectDisplays();
         if (displays.Count == 0)
             displays = [new DisplayConfig("1", 1920, 1080)];
 
-        var desktop = new MachineConfig("desktop", Environment.MachineName, LocalIPv4() ?? "127.0.0.1", displays, HasInput: true);
-        var laptop = new MachineConfig("laptop", "Laptop", "192.168.1.20", [new DisplayConfig("1", 1920, 1080)]);
-
-        var profiles = new List<ProfileConfig>
-        {
-            new("personal", []),
-            new("four-screens", [new DisplayAssignment("laptop", "1", "desktop")]),
-        };
-        if (displays.Count >= 2)
-        {
-            // The laptop takes every desktop display except the first one (at most two).
-            var lent = displays.Skip(1).Take(2).Select(d => new DisplayAssignment("desktop", d.Id, "laptop"));
-            profiles.Add(new("work", [.. lent, new DisplayAssignment("laptop", "1", "desktop")]));
-        }
-        return new DeskBridgeConfig([desktop, laptop], profiles);
+        var self = new MachineConfig(DefaultMachineId(), Environment.MachineName, LocalIPv4() ?? "127.0.0.1", displays, HasInput: true);
+        return new DeskBridgeConfig([self], [new ProfileConfig("personal", [])]);
     }
+
+    /// <summary>This PC's id by default: its computer name, lower case.</summary>
+    private static string DefaultMachineId() => Environment.MachineName.ToLowerInvariant();
 
     /// <summary>
     /// This PC's address on the real network: an IPv4 of an adapter that is up and has a gateway
@@ -175,8 +169,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException)
         {
-            var coordinator = _vm.Model.Machines.FirstOrDefault(m => m.HasInput)?.Id ?? "desktop";
-            local = new LocalSettings(coordinator, ControlAuth.NewKey(), _vm.Model.ControlPort);
+            local = new LocalSettings(DefaultMachineId(), ControlAuth.NewKey(), _vm.Model.ControlPort);
             if (_options.SnapshotDir is null)
             {
                 local.Save(_options.LocalPath);
@@ -899,7 +892,7 @@ public partial class MainWindow : Window
         IReadOnlyList<DisplayConfig> detected;
         if (machine.Id == _vm.LocalMachine.Trim())
         {
-            detected = new WindowsDisplayDetector().DetectDisplays();
+            detected = PlatformServices.DisplayDetector().DetectDisplays();
         }
         else
         {

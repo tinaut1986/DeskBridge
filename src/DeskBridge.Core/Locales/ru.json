@@ -175,6 +175,7 @@
   "The file arrived incomplete.": "Файл пришёл не полностью.",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "Компьютер с клавиатурой и мышью — координатор: профили редактируются и применяются с него. Оставьте порт пустым, чтобы использовать порт по умолчанию.",
   "The other machine sent '{request}', which this version of DeskBridge does not know. Update both machines.": "Другой компьютер отправил «{request}», что неизвестно этой версии DeskBridge. Обновите оба компьютера.",
+  "The other machine uses the same name '{machine}' as this one. Change This PC is on one of them.": "Другой компьютер использует то же имя «{machine}», что и этот. Измените «Этот ПК —» на одном из них.",
   "The shared key is not valid. Generate a new one.": "Общий ключ недействителен. Создайте новый.",
   "The shared key is too short. Generate a new one.": "Общий ключ слишком короткий. Создайте новый.",
   "The virtual display of '{machine}' for display '{display}' of '{lender}' does not touch any other display; Windows will move it.": "Виртуальный экран «{machine}» для экрана «{display}» компьютера «{lender}» не касается ни одного экрана; Windows переместит его.",

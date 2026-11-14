@@ -175,6 +175,7 @@
   "The file arrived incomplete.": "文件未完整到达。",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "连接键盘和鼠标的电脑即为协调端：方案在它上面编辑和应用。端口留空则使用默认值。",
   "The other machine sent '{request}', which this version of DeskBridge does not know. Update both machines.": "另一台电脑发送了“{request}”，此版本的 DeskBridge 无法识别。请更新两台电脑。",
+  "The other machine uses the same name '{machine}' as this one. Change This PC is on one of them.": "另一台电脑使用了与本机相同的名称“{machine}”。请在其中一台上更改“本机是”。",
   "The shared key is not valid. Generate a new one.": "共享密钥无效。请重新生成一个。",
   "The shared key is too short. Generate a new one.": "共享密钥太短。请重新生成一个。",
   "The virtual display of '{machine}' for display '{display}' of '{lender}' does not touch any other display; Windows will move it.": "“{machine}”为“{lender}”的显示器“{display}”创建的虚拟显示器未与任何显示器相接；Windows 会移动它。",

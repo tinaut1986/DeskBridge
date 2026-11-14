@@ -175,6 +175,7 @@
   "The file arrived incomplete.": "El fitxer ha arribat incomplet.",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "L'equip amb el teclat i el ratolí és el coordinador: els perfils s'editen i s'apliquen des d'ell. Deixa el port buit per usar el predeterminat.",
   "The other machine sent '{request}', which this version of DeskBridge does not know. Update both machines.": "L'altre equip ha enviat '{request}', que aquesta versió de DeskBridge no coneix. Actualitza els dos equips.",
+  "The other machine uses the same name '{machine}' as this one. Change This PC is on one of them.": "L'altre equip fa servir el mateix nom '{machine}' que aquest. Canvia Aquest PC és en un dels dos.",
   "The shared key is not valid. Generate a new one.": "La clau compartida no és vàlida. Genera'n una de nova.",
   "The shared key is too short. Generate a new one.": "La clau compartida és massa curta. Genera'n una de nova.",
   "The virtual display of '{machine}' for display '{display}' of '{lender}' does not touch any other display; Windows will move it.": "La pantalla virtual de '{machine}' per a la pantalla '{display}' de '{lender}' no toca cap altra pantalla; Windows la mourà.",
