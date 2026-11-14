@@ -11,7 +11,7 @@ using DeskBridge.Core.Simulation;
 using DeskBridge.Core.Transfer;
 using DeskBridge.Gui.Sharing;
 using DeskBridge.Gui.ViewModels;
-using DeskBridge.Windows;
+using DeskBridge.Platform.Windows;
 
 namespace DeskBridge.Gui;
 

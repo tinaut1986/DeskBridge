@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DeskBridge.Core\DeskBridge.Core.csproj" />
-    <ProjectReference Include="..\DeskBridge.Windows\DeskBridge.Windows.csproj" />
+    <ProjectReference Include="..\DeskBridge.Platform\DeskBridge.Platform.csproj" />
   </ItemGroup>
 
 </Project>

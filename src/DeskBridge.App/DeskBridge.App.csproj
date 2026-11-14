@@ -2,14 +2,14 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>deskbridge</AssemblyName>
     <RootNamespace>DeskBridge.App</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DeskBridge.Core\DeskBridge.Core.csproj" />
-    <ProjectReference Include="..\DeskBridge.Windows\DeskBridge.Windows.csproj" />
+    <ProjectReference Include="..\DeskBridge.Platform\DeskBridge.Platform.csproj" />
   </ItemGroup>
 
 </Project>

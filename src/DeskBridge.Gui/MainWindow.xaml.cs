@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -19,7 +19,7 @@ using DeskBridge.Core.Simulation;
 using DeskBridge.Core.Updates;
 using DeskBridge.Gui.Updates;
 using DeskBridge.Gui.ViewModels;
-using DeskBridge.Windows;
+using DeskBridge.Platform.Windows;
 
 namespace DeskBridge.Gui;
 

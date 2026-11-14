@@ -1,11 +1,12 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using DeskBridge.Core.Agent;
 using DeskBridge.Core.Configuration;
 using DeskBridge.Core.Control;
 using DeskBridge.Core.Model;
 using DeskBridge.Core.Planning;
 using DeskBridge.Core.Simulation;
-using DeskBridge.Windows;
+using DeskBridge.Platform;
+using DeskBridge.Platform.Windows;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
@@ -77,10 +78,15 @@ try
             await Simulated.Applier(Console.WriteLine).ApplyAsync(config, LayoutPlanner.Plan(config, argList[1]), argList[2]);
             return 0;
         }
-        case ("displays", 1):
+        case ("displays", 1) when OperatingSystem.IsWindows():
             foreach (var d in WindowsDisplayDetector.DetectDetailed())
                 Console.WriteLine($"{d.Config.Id,-3} {d.Config.Width}x{d.Config.Height}@{d.Config.RefreshHz}  at ({d.Config.X},{d.Config.Y})"
                     + $"{(d.IsPrimary ? "  primary" : "")}  {d.DeviceName}  {d.AdapterName}");
+            return 0;
+
+        case ("displays", 1):
+            foreach (var d in PlatformServices.DisplayDetector().DetectDisplays())
+                Console.WriteLine($"{d.Id,-3} {d.Width}x{d.Height}@{d.RefreshHz}  at ({d.X},{d.Y})");
             return 0;
 
         case ("displays", 2):
@@ -127,7 +133,7 @@ static async Task<int> RunAgentAsync(LocalSettings local)
         stopped.TrySetResult();
     };
 
-    await using var agent = new AgentHost(local, Simulated.Applier(Log), new WindowsDisplayDetector(), Log);
+    await using var agent = new AgentHost(local, Simulated.Applier(Log), PlatformServices.DisplayDetector(), Log);
     try
     {
         agent.Start();

@@ -1,13 +1,15 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using DeskBridge.Core.Abstractions;
 using DeskBridge.Core.Model;
 
-namespace DeskBridge.Windows;
+namespace DeskBridge.Platform.Windows;
 
 /// <summary>A monitor as Windows reports it, with extra details for the UI.</summary>
 public sealed record DetectedDisplay(DisplayConfig Config, string DeviceName, string AdapterName, bool IsPrimary);
 
 /// <summary>Lists the monitors attached to the desktop with EnumDisplayDevices / EnumDisplaySettings.</summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsDisplayDetector : IDisplayDetector
 {
     public IReadOnlyList<DisplayConfig> DetectDisplays() => DetectDetailed().Select(d => d.Config).ToList();
