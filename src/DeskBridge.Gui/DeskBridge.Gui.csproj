@@ -4,9 +4,17 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- Only for the notification area icon (NotifyIcon); WPF has none. -->
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>DeskBridge</AssemblyName>
     <RootNamespace>DeskBridge.Gui</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep WPF's Application, MessageBox, Clipboard... unambiguous. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DeskBridge.Core\DeskBridge.Core.csproj" />

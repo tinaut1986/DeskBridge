@@ -39,6 +39,21 @@ La configuración se guarda en `%APPDATA%\DeskBridge\`:
 
 Las dos primeras se crean solas la primera vez, a partir de los monitores detectados.
 
+### Compartir portapapeles y archivos
+
+En **This PC > Sharing**, por equipo y desactivado por defecto, porque uno de los equipos puede ser del trabajo:
+- **Enviar lo que copio:** lo que copies en este PC (texto o imágenes) llega a los demás.
+- **Recibir lo que se copia:** lo que copien los demás aparece en el portapapeles de este PC.
+- **Aceptar archivos:** se guardan en la carpeta elegida, por defecto `Descargas\DeskBridge`. Para enviar, suelta los archivos en la ventana y elige el equipo, o usa **File > Send files to**.
+
+Todo viaja cifrado. Los archivos se verifican con SHA-256 y nunca sobrescriben a otro.
+
+### Bandeja del sistema y modo noche
+
+- Cerrar la ventana deja DeskBridge en el área de notificación, con el agente funcionando; **File > Quit** lo cierra de verdad.
+- **Settings > Start with Windows** lo arranca minimizado, que es lo que conviene en el portátil.
+- **Settings > Theme**: System (sigue a Windows), Light o Dark.
+
 ### Idioma
 
 **Settings > Language**: "System" sigue el idioma de Windows, o eliges uno de los 11 disponibles, los mismos que NSA y llm-browser. Cambia al momento, sin reiniciar. Las claves son el texto en inglés y el inglés es el respaldo.
@@ -64,12 +79,14 @@ Solo se actualizan las versiones publicadas; una compilación local nunca. Para 
 ## Estado
 
 - Hecho:
-  - configuración y planificador de perfiles, con ajustes de stream por pantalla;
-  - canal de control autenticado;
+  - configuración y planificador de perfiles, con ajustes de stream por pantalla y colocación de las pantallas virtuales;
+  - canal de control cifrado y con autenticación mutua;
   - detección de monitores (local y remota);
-  - interfaz gráfica con agente integrado;
+  - interfaz gráfica con agente integrado, en 11 idiomas, con modo noche, bandeja del sistema, arranque con Windows y actualización automática;
+  - portapapeles compartido (texto e imágenes) y envío de archivos entre equipos;
   - CLI;
   - tests.
+- Diseñado, pendiente de decidir: micrófono y cámara ([docs/microfono-camara.md](docs/microfono-camara.md)).
 - Simulado: las piezas reales (pantallas virtuales, streaming, entrada) son interfaces cuyas implementaciones de momento solo escriben en el log lo que harían.
 
 Ver la [hoja de ruta](docs/arquitectura.md#hoja-de-ruta).

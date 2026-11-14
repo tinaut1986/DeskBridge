@@ -33,7 +33,8 @@
 - Cada agente escucha. El coordinador se conecta a cada agente, también al suyo por `127.0.0.1`, y envía `applyProfile` con **la configuración completa** y el perfil. La configuración solo se edita en el coordinador.
 - Autenticación por desafío y respuesta: el agente envía un nonce y el coordinador responde con HMAC-SHA256(clave, nonce + equipos). La clave compartida está en `deskbridge.local.json` y nunca viaja por la red.
 - El agente anuncia su id y el coordinador lo comprueba, así se detecta una IP equivocada en la configuración.
-- Pendiente: el canal está autenticado pero **no cifrado**, y los mensajes posteriores al saludo no van firmados. En una LAN doméstica basta para empezar; más adelante, TLS con clave precompartida o un MAC por mensaje.
+- **Protocolo v2**: autenticación mutua (cada lado demuestra con un HMAC que tiene la clave, así un falso agente no recibe nada) y después cada mensaje va cifrado y autenticado con AES-GCM. Las claves de sesión se derivan con HKDF de la clave compartida y de los nonces de ambos lados, y el nonce es un contador por dirección, así que un mensaje alterado, repetido o reordenado corta la conexión.
+- Varias peticiones por conexión, y cualquier equipo puede hablar con cualquier otro (portapapeles y archivos). Solo el coordinador puede aplicar perfiles.
 
 ## Decisiones
 
@@ -47,10 +48,11 @@
 
 1. **Fase 0, esqueleto** (hecho): configuración, planificador, CLI y tests.
 2. **Prueba de concepto manual**: Virtual Display Driver + Sunshine en el portátil y Moonlight en el sobremesa. Medir latencia y nitidez por Wi-Fi 6 a 1080p60.
-3. **`IVirtualDisplayDriver` real**: crear y quitar N pantallas de VDD desde el agente y saber qué id de Windows recibe cada una.
-4. **Canal de control** (hecho): agente en cada equipo, cambio de perfil desde el coordinador y lectura remota de monitores, con clave compartida. Pendiente: cifrar el canal.
-5. **Interfaz gráfica** (hecho, primera versión): mapa de pantallas, asignación por pantalla con resolución, Hz y bitrate, equipos y monitores con detección, ajustes locales, agente integrado y log.
-6. **Streaming v1**: lanzar y parar instancias de Sunshine y Moonlight por pantalla, con la ventana de Moonlight sin bordes en el monitor correcto y la resolución, los Hz y el bitrate del perfil (`--resolution`, `--fps`, `--bitrate`).
-7. **`IInputRouter`**: paso del ratón entre zonas, teclado, portapapeles y atajos para cambiar de perfil.
-8. **Bandeja del sistema y arranque con Windows**: la aplicación se minimiza a la bandeja; en el portátil arranca sola y solo con el agente.
-9. **Opcional**: pila de streaming propia, audio y servicio SYSTEM para el escritorio seguro (UAC, Ctrl+Alt+Supr).
+3. **`IVirtualDisplayDriver` real**: crear y quitar N pantallas de VDD desde el agente y colocarlas en la posición que calcula el planificador.
+4. **Canal de control** (hecho): agente en cada equipo, cambio de perfil, lectura remota de monitores; cifrado y autenticación mutua.
+5. **Interfaz gráfica** (hecho): mapa con las pantallas virtuales donde quedarán, asignación y ajustes por pantalla, equipos, idioma, modo noche, actualización, bandeja del sistema y arranque con Windows.
+6. **Portapapeles y archivos** (hecho): texto e imágenes, y envío de archivos cifrado y verificado. Desactivado por defecto.
+7. **Streaming v1**: lanzar y parar instancias de Sunshine y Moonlight por pantalla, con la ventana de Moonlight sin bordes en el monitor correcto y la resolución, los Hz y el bitrate del perfil (`--resolution`, `--fps`, `--bitrate`). El sonido del equipo emisor viaja con el stream.
+8. **`IInputRouter`**: paso del ratón entre zonas, teclado y atajos para cambiar de perfil.
+9. **Micrófono y cámara**: ver [microfono-camara.md](microfono-camara.md).
+10. **Opcional**: pila de streaming propia y servicio SYSTEM para el escritorio seguro (UAC, Ctrl+Alt+Supr).

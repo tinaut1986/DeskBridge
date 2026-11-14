@@ -61,9 +61,10 @@ public partial class MainWindow : Window
         BuildLanguageMenu();
         BuildThemeMenu();
         ThemeManager.Changed += ScheduleRedraw;
+        InitTray();
         UpdateChannelMenu();
 
-        _updater = new Updater(WantsBetas, () => L.Current, () => this, beforeInstall: () => { });
+        _updater = new Updater(WantsBetas, () => L.Current, () => this, beforeInstall: () => _quitting = true);
         if (options.SnapshotDir is null)
             _updater.Start();
 
@@ -385,6 +386,7 @@ public partial class MainWindow : Window
         L.Changed -= OnLanguageChanged;
         ThemeManager.Changed -= ScheduleRedraw;
         _clipboard?.Dispose();
+        DisposeTray();
         // The agent's loops run on the thread pool, so blocking briefly here cannot deadlock.
         _agent?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
         _updater.InstallOnExit();
@@ -731,7 +733,9 @@ public partial class MainWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e) => SaveConfig();
 
-    private async void Apply_Click(object sender, RoutedEventArgs e)
+    private async void Apply_Click(object sender, RoutedEventArgs e) => await ApplySelectedProfileAsync();
+
+    private async Task ApplySelectedProfileAsync()
     {
         if (_vm.SelectedProfile is not { } profile || !SaveConfig())
             return;
@@ -740,7 +744,7 @@ public partial class MainWindow : Window
         if (local is null)
             return;
 
-        var button = (Button)sender;
+        var button = ApplyButton;
         button.IsEnabled = false;
         _vm.Status = L.T("Applying {profile}...", ("profile", profile.Name));
         try
@@ -756,6 +760,7 @@ public partial class MainWindow : Window
             _vm.Status = failed.Count == 0
                 ? L.T("Profile {profile} applied on {count} machines (simulated).", ("profile", profile.Name), ("count", results.Count))
                 : L.T("Profile {profile} failed on: {machines}. See the log in This PC.", ("profile", profile.Name), ("machines", string.Join(", ", failed)));
+            Notify(_vm.Status);
         }
         catch (Exception ex) when (ex is ControlException or ConfigException)
         {

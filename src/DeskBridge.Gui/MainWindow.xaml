@@ -63,6 +63,9 @@
                     <MenuItem x:Name="BetaMenu" Header="{l:T 'Beta'}" IsCheckable="True" Click="Beta_Click" />
                 </MenuItem>
                 <MenuItem Header="{l:T 'Check for updates now'}" Click="CheckUpdates_Click" />
+                <Separator />
+                <MenuItem x:Name="StartWithWindowsMenu" Header="{l:T 'Start with Windows'}" IsCheckable="True" Click="StartWithWindows_Click" />
+                <MenuItem x:Name="CloseToTrayMenu" Header="{l:T 'Keep running in the notification area when closed'}" IsCheckable="True" Click="CloseToTray_Click" />
             </MenuItem>
             <MenuItem Header="{l:T 'Help'}">
                 <MenuItem Header="{l:T 'About DeskBridge'}" Click="About_Click" />
@@ -83,7 +86,7 @@
                 <Button Content="{l:T 'Duplicate'}" Click="DuplicateProfile_Click" />
                 <Button Content="{l:T 'Delete'}" Click="DeleteProfile_Click" />
 
-                <Button DockPanel.Dock="Right" Content="{l:T 'Apply profile'}" Style="{StaticResource Primary}" Click="Apply_Click" Margin="0" />
+                <Button x:Name="ApplyButton" DockPanel.Dock="Right" Content="{l:T 'Apply profile'}" Style="{StaticResource Primary}" Click="Apply_Click" Margin="0" />
                 <Button DockPanel.Dock="Right" Content="{l:T 'Save'}" Click="Save_Click" />
             </DockPanel>
         </Border>
