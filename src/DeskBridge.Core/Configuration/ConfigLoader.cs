@@ -15,6 +15,7 @@ public static class ConfigLoader
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
     private static readonly JsonSerializerOptions FileOptions = new(JsonOptions) { WriteIndented = true };

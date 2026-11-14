@@ -1,7 +1,13 @@
 namespace DeskBridge.Core.Model;
 
-/// <summary>A virtual monitor that <paramref name="Machine"/> must create so it can lend it out.</summary>
-public sealed record VirtualDisplaySpec(string Key, string Machine, int Width, int Height, int RefreshHz);
+/// <summary>
+/// A virtual monitor that <paramref name="Machine"/> must create, placed at (<paramref name="X"/>, <paramref name="Y"/>)
+/// in that machine's desktop coordinates. It stands for physical display <paramref name="ForDisplay"/> of
+/// <paramref name="ForMachine"/>, which shows it.
+/// </summary>
+public sealed record VirtualDisplaySpec(
+    string Key, string Machine, int Width, int Height, int RefreshHz,
+    int X = 0, int Y = 0, string ForMachine = "", string ForDisplay = "");
 
 /// <summary>
 /// One video stream: <paramref name="SourceMachine"/> captures its virtual display

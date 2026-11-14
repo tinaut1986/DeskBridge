@@ -15,7 +15,7 @@ public static class Simulated
         public Task SetDisplaysAsync(IReadOnlyList<VirtualDisplaySpec> displays, CancellationToken ct = default)
         {
             log($"[virtual displays] keep {displays.Count}"
-                + string.Concat(displays.Select(d => $"{Environment.NewLine}    {d.Key}  {d.Width}x{d.Height}@{d.RefreshHz}")));
+                + string.Concat(displays.Select(d => $"{Environment.NewLine}    {d.Key}  {d.Width}x{d.Height}@{d.RefreshHz} at ({d.X},{d.Y}) for {d.ForMachine} display {d.ForDisplay}")));
             return Task.CompletedTask;
         }
     }

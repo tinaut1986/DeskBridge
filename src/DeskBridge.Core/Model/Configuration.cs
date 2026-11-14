@@ -31,8 +31,18 @@ public sealed record StreamSettings(int? Width = null, int? Height = null, int? 
 /// <summary>"Physical display <paramref name="Display"/> of <paramref name="Machine"/> shows a screen of <paramref name="UsedBy"/>".</summary>
 public sealed record DisplayAssignment(string Machine, string Display, string UsedBy, StreamSettings? Stream = null);
 
+/// <summary>Where a machine's borrowed (virtual) displays go, relative to the displays it keeps.</summary>
+public enum PlacementSide { Right, Left, Above, Below }
+
 /// <summary>A named layout. Displays not listed stay with their own machine.</summary>
-public sealed record ProfileConfig(string Name, IReadOnlyList<DisplayAssignment> Assignments);
+/// <param name="Placement">
+/// Per borrowing machine, where its virtual displays go relative to its own displays
+/// (default: to the right). Displays lent by the same machine keep their arrangement there.
+/// </param>
+public sealed record ProfileConfig(
+    string Name,
+    IReadOnlyList<DisplayAssignment> Assignments,
+    IReadOnlyDictionary<string, PlacementSide>? Placement = null);
 
 public sealed record DeskBridgeConfig(
     IReadOnlyList<MachineConfig> Machines,

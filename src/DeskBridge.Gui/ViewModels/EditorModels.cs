@@ -205,6 +205,19 @@ public sealed class ProfileVm : ObservableObject
 
     public ObservableCollection<AssignmentVm> Assignments { get; } = Tracked<AssignmentVm>();
 
+    /// <summary>Where each borrowing machine puts its virtual displays (absent = to the right).</summary>
+    public Dictionary<MachineVm, PlacementSide> Placement { get; } = new();
+
+    public PlacementSide PlacementOf(MachineVm machine) => Placement.GetValueOrDefault(machine, PlacementSide.Right);
+
+    public void SetPlacement(MachineVm machine, PlacementSide side)
+    {
+        if (PlacementOf(machine) == side)
+            return;
+        Placement[machine] = side;
+        NotifyAnyChanged();
+    }
+
     /// <summary>One row per physical display, in machine order; keeps existing rows (and their settings).</summary>
     public void Sync(IReadOnlyList<MachineVm> machines)
     {
@@ -224,6 +237,33 @@ public sealed class ProfileVm : ObservableObject
 
         foreach (var a in Assignments.Where(a => !machines.Contains(a.UsedBy)))
             a.UsedBy = a.Owner;
+        foreach (var gone in Placement.Keys.Where(m => !machines.Contains(m)).ToList())
+            Placement.Remove(gone);
+    }
+}
+
+public sealed record PlacementOption(PlacementSide Side, string Label)
+{
+    public static IReadOnlyList<PlacementOption> All =>
+    [
+        new(PlacementSide.Right, L.T("to the right of its physical displays")),
+        new(PlacementSide.Left, L.T("to the left of its physical displays")),
+        new(PlacementSide.Above, L.T("above its physical displays")),
+        new(PlacementSide.Below, L.T("below its physical displays")),
+    ];
+}
+
+/// <summary>One "where do the virtual displays of this machine go" choice in the Layout tab.</summary>
+public sealed class PlacementRowVm(ProfileVm profile, MachineVm machine)
+{
+    public MachineVm Machine { get; } = machine;
+    public string Label => L.T("Virtual displays of {machine}:", ("machine", Machine));
+    public IReadOnlyList<PlacementOption> Options { get; } = PlacementOption.All;
+
+    public PlacementOption Selected
+    {
+        get => Options.First(o => o.Side == profile.PlacementOf(Machine));
+        set => profile.SetPlacement(Machine, value.Side);
     }
 }
 
@@ -300,6 +340,11 @@ public sealed class EditorModel
                 row.UsedBy = model.Machines.FirstOrDefault(m => m.Id == a.UsedBy) ?? row.Owner;
                 row.Load(a.Stream);
             }
+            foreach (var (machineId, side) in p.Placement ?? new Dictionary<string, PlacementSide>())
+            {
+                if (model.Machines.FirstOrDefault(m => m.Id == machineId) is { } machine)
+                    profile.Placement[machine] = side;
+            }
             model.Profiles.Add(profile);
         }
         return model;
@@ -318,8 +363,18 @@ public sealed class EditorModel
             p.Assignments
                 .Where(a => a.IsLent)
                 .Select(a => new DisplayAssignment(a.Owner.Id.Trim(), a.Display.Id.Trim(), a.UsedBy.Id.Trim(), a.ToStreamSettings(errors)))
-                .ToList())).ToList();
+                .ToList(),
+            PlacementOf(p))).ToList();
 
         return new DeskBridgeConfig(machines, profiles, ControlPort);
+    }
+
+    /// <summary>Only non-default sides of machines still in the config; null when there are none.</summary>
+    private Dictionary<string, PlacementSide>? PlacementOf(ProfileVm profile)
+    {
+        var map = profile.Placement
+            .Where(kv => kv.Value != PlacementSide.Right && Machines.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key.Id.Trim(), kv => kv.Value);
+        return map.Count == 0 ? null : map;
     }
 }

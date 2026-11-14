@@ -256,6 +256,7 @@ public partial class MainWindow : Window
     {
         _vm.Model.Relabel();
         _vm.RaiseComputedTexts();
+        _placementRowsStale = true;
         BuildLanguageMenu();
         UpdateAgentStatus();
         _updater.LanguageChanged();
@@ -402,6 +403,25 @@ public partial class MainWindow : Window
         return MachineColors[Math.Max(index, 0) % MachineColors.Length];
     }
 
+    /// <summary>The plan of the selected profile as edited right now, or null while it has errors.</summary>
+    private LayoutPlan? CurrentPlan()
+    {
+        if (_vm.SelectedProfile is not { } profile)
+            return null;
+        var errors = new List<string>();
+        var config = _vm.Model.ToConfig(errors);
+        if (errors.Count > 0)
+            return null;
+        try
+        {
+            return LayoutPlanner.Plan(config, profile.Name.Trim());
+        }
+        catch (ConfigException)
+        {
+            return null;
+        }
+    }
+
     private void DrawLayout()
     {
         var canvas = LayoutCanvas;
@@ -411,13 +431,22 @@ public partial class MainWindow : Window
         if (width <= 0 || height <= 0 || machines.Count == 0)
             return;
 
+        // Virtual displays each machine creates in this profile, where they will sit in its desktop.
+        var plan = CurrentPlan();
+        var virtuals = machines.ToDictionary(m => m, m => plan?.VirtualDisplaysOf(m.Id.Trim()).ToList() ?? []);
+
         const double gap = 60, labelHeight = 28;
-        var boxes = machines.Select(m => (
-            Machine: m,
-            MinX: m.Displays.Min(d => d.X),
-            MinY: m.Displays.Min(d => d.Y),
-            Width: (double)(m.Displays.Max(d => d.X + d.Width) - m.Displays.Min(d => d.X)),
-            Height: (double)(m.Displays.Max(d => d.Y + d.Height) - m.Displays.Min(d => d.Y)))).ToList();
+        var boxes = machines.Select(m =>
+        {
+            var rects = m.Displays.Select(d => (d.X, d.Y, d.Width, d.Height))
+                .Concat(virtuals[m].Select(v => (v.X, v.Y, v.Width, v.Height))).ToList();
+            return (
+                Machine: m,
+                MinX: rects.Min(r => r.X),
+                MinY: rects.Min(r => r.Y),
+                Width: (double)(rects.Max(r => r.X + r.Width) - rects.Min(r => r.X)),
+                Height: (double)(rects.Max(r => r.Y + r.Height) - rects.Min(r => r.Y)));
+        }).ToList();
 
         double totalWidth = boxes.Sum(b => b.Width);
         double scale = Math.Min((width - gap * (boxes.Count - 1)) / totalWidth, (height - labelHeight) / boxes.Max(b => b.Height));
@@ -497,8 +526,59 @@ public partial class MainWindow : Window
                 canvas.Children.Add(rect);
             }
 
+            foreach (var v in virtuals[box.Machine])
+            {
+                var lender = _vm.Model.Machines.FirstOrDefault(m => m.Id.Trim() == v.ForMachine);
+                var lenderColor = lender is null ? Colors.Gray : ColorOf(lender);
+                var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                text.Children.Add(new TextBlock
+                {
+                    Text = L.T("virtual"),
+                    FontSize = 11,
+                    Foreground = InfoBrush,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+                text.Children.Add(new TextBlock
+                {
+                    Text = $"← {lender} {v.ForDisplay}",
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(lenderColor),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+                var rect = new Border
+                {
+                    Width = Math.Max(v.Width * scale - 6, 10),
+                    Height = Math.Max(v.Height * scale - 6, 10),
+                    CornerRadius = new CornerRadius(5),
+                    Background = new SolidColorBrush(Color.FromArgb(0x10, color.R, color.G, color.B)),
+                    BorderBrush = DashedBrush(color),
+                    BorderThickness = new Thickness(1.5),
+                    Child = new Viewbox { Child = text, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(4) },
+                    ToolTip = L.T("Virtual display of {machine} at ({x}, {y}): shown on display {display} of {lender}",
+                        ("machine", box.Machine), ("x", v.X), ("y", v.Y), ("display", v.ForDisplay), ("lender", lender)),
+                };
+                Canvas.SetLeft(rect, x + (v.X - box.MinX) * scale + 3);
+                Canvas.SetTop(rect, labelHeight + (v.Y - box.MinY) * scale + 3);
+                canvas.Children.Add(rect);
+            }
+
             x += box.Width * scale + gap;
         }
+    }
+
+    /// <summary>A dashed outline (Border has no dash style, so the brush draws the dashes).</summary>
+    private static Brush DashedBrush(Color color)
+    {
+        var brush = new DrawingBrush
+        {
+            Viewport = new Rect(0, 0, 8, 8),
+            ViewportUnits = BrushMappingMode.Absolute,
+            TileMode = TileMode.Tile,
+            Drawing = new GeometryDrawing(new SolidColorBrush(color), null,
+                new GeometryGroup { Children = { new RectangleGeometry(new Rect(0, 0, 4, 4)), new RectangleGeometry(new Rect(4, 4, 4, 4)) } }),
+        };
+        brush.Freeze();
+        return brush;
     }
 
     private static string StreamLabel(AssignmentVm a)
@@ -515,12 +595,14 @@ public partial class MainWindow : Window
         var profile = _vm.SelectedProfile;
         if (profile is null)
         {
+            _vm.PlacementRows = [];
             _vm.Summary = [new SummaryLine(L.T("No profile selected. Create one with New."), InfoBrush)];
             return;
         }
 
         var errors = new List<string>();
         var config = _vm.Model.ToConfig(errors);
+        UpdatePlacementRows(profile);
         if (errors.Count == 0)
         {
             try
@@ -548,6 +630,24 @@ public partial class MainWindow : Window
         _vm.Summary = lines;
     }
 
+    /// <summary>Rebuilt only when the set of borrowing machines changes, so open combo boxes are left alone.</summary>
+    private void UpdatePlacementRows(ProfileVm profile)
+    {
+        var borrowers = _vm.Model.Machines
+            .Where(m => profile.Assignments.Any(a => a.IsLent && a.UsedBy == m))
+            .ToList();
+        bool same = ReferenceEquals(_placementRowsProfile, profile)
+                    && _vm.PlacementRows.Select(r => r.Machine).SequenceEqual(borrowers);
+        if (same && !_placementRowsStale)
+            return;
+        _placementRowsProfile = profile;
+        _placementRowsStale = false;
+        _vm.PlacementRows = borrowers.Select(m => new PlacementRowVm(profile, m)).ToList();
+    }
+
+    private ProfileVm? _placementRowsProfile;
+    private bool _placementRowsStale;
+
     private void AssignmentGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => DrawLayout();
 
     // ------------------------------------------------------------------ profile bar
@@ -573,6 +673,8 @@ public partial class MainWindow : Window
             to.Refresh = from.Refresh;
             to.Bitrate = from.Bitrate;
         }
+        foreach (var (machine, side) in source.Placement)
+            copy.Placement[machine] = side;
         _vm.Model.Profiles.Add(copy);
         _vm.SelectedProfile = copy;
     }

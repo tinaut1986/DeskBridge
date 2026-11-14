@@ -75,6 +75,13 @@ public static class LayoutPlanner
             }
             foreach (var dup in profile.Assignments.GroupBy(a => (a.Machine, a.Display)).Where(g => g.Count() > 1))
                 errors.Add(L.T("Profile '{profile}': display '{display}' of '{machine}' is assigned more than once.", ("profile", profile.Name), ("display", dup.Key.Display), ("machine", dup.Key.Machine)));
+            foreach (var (machine, side) in profile.Placement ?? new Dictionary<string, PlacementSide>())
+            {
+                if (!machines.ContainsKey(machine))
+                    errors.Add(L.T("Profile '{profile}': machine '{machine}' does not exist.", ("profile", profile.Name), ("machine", machine)));
+                if (!Enum.IsDefined(side))
+                    errors.Add(L.T("Profile '{profile}': invalid placement for '{machine}'.", ("profile", profile.Name), ("machine", machine)));
+            }
         }
 
         return errors;
@@ -143,7 +150,7 @@ public static class LayoutPlanner
 
                 int index = nextVirtualIndex.GetValueOrDefault(user) + 1;
                 nextVirtualIndex[user] = index;
-                var vd = new VirtualDisplaySpec($"{user}/v{index}", user, width, height, refresh);
+                var vd = new VirtualDisplaySpec($"{user}/v{index}", user, width, height, refresh, ForMachine: machine.Id, ForDisplay: display.Id);
                 virtualDisplays.Add(vd);
                 streams.Add(new StreamSpec(
                     $"{vd.Key}->{machine.Id}/{display.Id}",
@@ -161,6 +168,65 @@ public static class LayoutPlanner
                 warnings.Add(L.T("'{machine}' has no visible display in profile '{profile}'.", ("machine", machine.Id), ("profile", profile.Name)));
         }
 
-        return new LayoutPlan(profile.Name, coordinator.Id, virtualDisplays, streams, inputRoutes, warnings);
+        var placed = Place(config, profile, assignments, virtualDisplays);
+        return new LayoutPlan(profile.Name, coordinator.Id, placed, streams, inputRoutes, warnings);
+    }
+
+    /// <summary>
+    /// Positions every virtual display in its machine's desktop: displays lent by the same machine keep
+    /// the arrangement they have there (so moving the mouse from one to the next feels natural), and each
+    /// such group goes next to the borrower's physical displays, on the side chosen in the profile.
+    /// All physical displays count, lent ones too: they stay in Windows' desktop (they show the stream).
+    /// </summary>
+    private static List<VirtualDisplaySpec> Place(
+        DeskBridgeConfig config,
+        ProfileConfig profile,
+        IReadOnlyDictionary<(string, string), DisplayAssignment> assignments,
+        List<VirtualDisplaySpec> virtualDisplays)
+    {
+        var result = new List<VirtualDisplaySpec>();
+        foreach (var borrower in config.Machines)
+        {
+            var own = borrower.Displays;
+            var bounds = own.Count == 0
+                ? (Left: 0, Top: 0, Right: 0, Bottom: 0)
+                : (Left: own.Min(d => d.X), Top: own.Min(d => d.Y), Right: own.Max(d => d.X + d.Width), Bottom: own.Max(d => d.Y + d.Height));
+            bool empty = own.Count == 0;
+            var side = profile.Placement?.GetValueOrDefault(borrower.Id) ?? PlacementSide.Right;
+
+            foreach (var lender in config.Machines)
+            {
+                var group = virtualDisplays.Where(v => v.Machine == borrower.Id && v.ForMachine == lender.Id).ToList();
+                if (group.Count == 0)
+                    continue;
+
+                // Arrangement of the lent displays on the lender, scaled to the virtual sizes.
+                var physical = group.Select(v => lender.Displays.Single(d => d.Id == v.ForDisplay)).ToList();
+                int minX = physical.Min(d => d.X), minY = physical.Min(d => d.Y);
+                var offsets = group.Zip(physical, (v, d) => (
+                    Spec: v,
+                    X: (int)Math.Round((d.X - minX) * (double)v.Width / d.Width),
+                    Y: (int)Math.Round((d.Y - minY) * (double)v.Height / d.Height))).ToList();
+                int width = offsets.Max(o => o.X + o.Spec.Width), height = offsets.Max(o => o.Y + o.Spec.Height);
+
+                var (originX, originY) = empty ? (0, 0) : side switch
+                {
+                    PlacementSide.Left => (bounds.Left - width, bounds.Top),
+                    PlacementSide.Above => (bounds.Left, bounds.Top - height),
+                    PlacementSide.Below => (bounds.Left, bounds.Bottom),
+                    _ => (bounds.Right, bounds.Top),
+                };
+                foreach (var o in offsets)
+                    result.Add(o.Spec with { X = originX + o.X, Y = originY + o.Y });
+
+                bounds = empty
+                    ? (originX, originY, originX + width, originY + height)
+                    : (Math.Min(bounds.Left, originX), Math.Min(bounds.Top, originY),
+                       Math.Max(bounds.Right, originX + width), Math.Max(bounds.Bottom, originY + height));
+                empty = false;
+            }
+        }
+        // Keep the plan's original order (by lent display).
+        return virtualDisplays.Select(v => result.Single(r => r.Key == v.Key)).ToList();
     }
 }

@@ -126,6 +126,59 @@ public class LayoutPlannerTests
     }
 
     [Fact]
+    public void Virtual_displays_keep_the_lender_arrangement_beside_all_physical_displays()
+    {
+        var plan = LayoutPlanner.Plan(Example(), "work");
+
+        // The laptop screen stays in the laptop's desktop (it shows the desktop's stream), so its two
+        // virtual displays go to its right, side by side like desktop displays 2 and 3.
+        var laptop = plan.VirtualDisplaysOf("laptop").OrderBy(v => v.X).ToList();
+        Assert.Equal([(1920, 0, "2"), (3840, 0, "3")], laptop.Select(v => (v.X, v.Y, v.ForDisplay)));
+
+        // Desktop displays 2 and 3 are lent but still in the desktop's Windows desktop: the
+        // laptop screen goes after all three.
+        var desktop = Assert.Single(plan.VirtualDisplaysOf("desktop"));
+        Assert.Equal((5760, 0), (desktop.X, desktop.Y));
+    }
+
+    [Theory]
+    [InlineData(PlacementSide.Right, 5760, 0)]
+    [InlineData(PlacementSide.Left, -1920, 0)]
+    [InlineData(PlacementSide.Above, 0, -1080)]
+    [InlineData(PlacementSide.Below, 0, 1080)]
+    public void Placement_side_is_relative_to_the_displays_the_borrower_keeps(PlacementSide side, int x, int y)
+    {
+        var config = Example();
+        config = config with
+        {
+            Profiles = [new("p", [new DisplayAssignment("laptop", "1", "desktop")], new Dictionary<string, PlacementSide> { ["desktop"] = side })],
+        };
+
+        var vd = Assert.Single(LayoutPlanner.Plan(config, "p").VirtualDisplays);
+        Assert.Equal((x, y), (vd.X, vd.Y));
+    }
+
+    [Fact]
+    public void Stacked_lent_displays_stay_stacked_and_scale_with_the_stream_resolution()
+    {
+        var config = new DeskBridgeConfig(
+            [
+                new("a", "A", "10.0.0.1", [new DisplayConfig("1", 1920, 1080), new DisplayConfig("2", 1920, 1080, 60, 0, 1080)], HasInput: true),
+                new("b", "B", "10.0.0.2", [new DisplayConfig("1", 1280, 800)]),
+            ],
+            [
+                new("p",
+                [
+                    new DisplayAssignment("a", "1", "b", new StreamSettings(1280, 720)),
+                    new DisplayAssignment("a", "2", "b", new StreamSettings(1280, 720)),
+                ]),
+            ]);
+
+        var vds = LayoutPlanner.Plan(config, "p").VirtualDisplaysOf("b").OrderBy(v => v.Y).ToList();
+        Assert.Equal([(1280, 0), (1280, 720)], vds.Select(v => (v.X, v.Y)));
+    }
+
+    [Fact]
     public void Default_bitrate_is_about_20_mbps_for_1080p60()
     {
         Assert.InRange(LayoutPlanner.DefaultBitrateMbps(1920, 1080, 60), 18, 22);

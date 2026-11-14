@@ -67,6 +67,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     public IReadOnlyList<SummaryLine> Summary { get => _summary; set => Set(ref _summary, value); }
+
+    private IReadOnlyList<PlacementRowVm> _placementRows = [];
+
+    /// <summary>One row per machine that borrows displays in the selected profile.</summary>
+    public IReadOnlyList<PlacementRowVm> PlacementRows { get => _placementRows; set => Set(ref _placementRows, value); }
     public string Status { get => _status; set => Set(ref _status, value); }
     public string AgentStatus { get => _agentStatus; set => Set(ref _agentStatus, value); }
 
