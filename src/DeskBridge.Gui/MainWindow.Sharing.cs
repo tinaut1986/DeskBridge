@@ -44,11 +44,20 @@ public partial class MainWindow
     private AgentHost CreateAgent(LocalSettings local)
     {
         var agent = new AgentHost(local, Simulated.Applier(AddLog), PlatformServices.DisplayDetector(), AddLog, _files);
-        agent.ClipboardHandler = (_, message) =>
-            Dispatcher.InvokeAsync(() => _settings.ClipboardReceive && _clipboard?.Apply(message) == true).Task;
+        agent.ClipboardHandler = (from, message) => Dispatcher.InvokeAsync(() =>
+        {
+            bool applied = _settings.ClipboardReceive && _clipboard?.Apply(message) == true;
+            if (applied)
+                AddLog(L.T("Clipboard ({kind}) received from {machine}.", ("kind", ClipboardKind(message)), ("machine", MachineName(from))));
+            return applied;
+        }).Task;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         return agent;
     }
+
+    /// <summary>What kind of content, for the log (never the content itself).</summary>
+    private static string ClipboardKind(ClipboardMessage m) =>
+        m.Text is { } text ? L.T("text, {count} characters", ("count", text.Length)) : L.T("image");
 
     private string MachineName(string id) =>
         _vm.Model.Machines.FirstOrDefault(m => m.Id == id)?.ToString() ?? id;
@@ -84,6 +93,9 @@ public partial class MainWindow
         var results = await Task.Run(() => Peers.SendClipboardAsync(context.Config, context.Local, message, directory));
         foreach (var r in results.Where(r => !r.Ok))
             AddLog(L.T("Clipboard not sent to {machine}: {error}", ("machine", MachineName(r.Machine)), ("error", r.Message)));
+        var sentTo = results.Where(r => r.Ok).Select(r => MachineName(r.Machine)).ToList();
+        if (sentTo.Count > 0)
+            AddLog(L.T("Clipboard ({kind}) sent to {machines}.", ("kind", ClipboardKind(message)), ("machines", string.Join(", ", sentTo))));
     }
 
     private void Sharing_Click(object sender, RoutedEventArgs e)

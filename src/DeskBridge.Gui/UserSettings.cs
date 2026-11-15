@@ -35,6 +35,7 @@ public sealed record UserSettings(
     public static string DefaultFilesFolder =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "DeskBridge");
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public string EffectiveFilesFolder => string.IsNullOrWhiteSpace(FilesFolder) ? DefaultFilesFolder : FilesFolder;
 
     public static UserSettings Load(string path)
