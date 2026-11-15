@@ -1,349 +1,364 @@
-<Window x:Class="DeskBridge.Gui.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:l="clr-namespace:DeskBridge.Gui.Localization"
-        Title="DeskBridge" Width="1180" Height="820" MinWidth="900" MinHeight="600"
-        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
-        Background="{DynamicResource AppBackground}" FontFamily="Segoe UI" FontSize="13">
-
-    <Window.Resources>
-        <!-- Implicit styles extend the theme's (Fluent) ones instead of replacing them. -->
-        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Padding" Value="12,5" />
-            <Setter Property="Margin" Value="0,0,6,0" />
-            <Setter Property="MinWidth" Value="70" />
-        </Style>
-        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#2563EB" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="BorderBrush" Value="#1D4ED8" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <Style TargetType="GroupBox" BasedOn="{StaticResource {x:Type GroupBox}}">
-            <Setter Property="Padding" Value="8" />
-            <Setter Property="Margin" Value="0,0,0,10" />
-            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
-        </Style>
-        <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
-            <Setter Property="AutoGenerateColumns" Value="False" />
-            <Setter Property="RowBackground" Value="{DynamicResource CardBackground}" />
-            <Setter Property="AlternatingRowBackground" Value="{DynamicResource CardBackground}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
-            <Setter Property="CanUserAddRows" Value="False" />
-            <Setter Property="CanUserDeleteRows" Value="False" />
-            <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="GridLinesVisibility" Value="Horizontal" />
-            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource CardBorder}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
-            <Setter Property="RowHeight" Value="30" />
-            <Setter Property="SelectionMode" Value="Single" />
-        </Style>
-        <Style x:Key="Hint" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-    </Window.Resources>
-
-    <!-- Own background: the Fluent window itself is transparent (Mica). -->
-    <DockPanel Background="{DynamicResource AppBackground}">
-        <!-- Menu -->
-        <Menu DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" Padding="6,2">
-            <MenuItem Header="{l:T 'File'}" SubmenuOpened="FileMenu_SubmenuOpened">
-                <MenuItem x:Name="SendFilesMenu" Header="{l:T 'Send files to'}" />
-                <MenuItem Header="{l:T 'Open received files folder'}" Click="OpenFilesFolder_Click" />
-                <Separator />
-                <MenuItem Header="{l:T 'Quit'}" Click="Quit_Click" />
-            </MenuItem>
-            <MenuItem Header="{l:T 'Settings'}">
-                <MenuItem x:Name="LanguageMenu" Header="{l:T 'Language'}" />
-                <MenuItem x:Name="ThemeMenu" Header="{l:T 'Theme'}" />
-                <Separator />
-                <MenuItem Header="{l:T 'Update channel'}">
-                    <MenuItem x:Name="StableMenu" Header="{l:T 'Stable'}" IsCheckable="True" Click="Stable_Click" />
-                    <MenuItem x:Name="BetaMenu" Header="{l:T 'Beta'}" IsCheckable="True" Click="Beta_Click" />
-                </MenuItem>
-                <MenuItem Header="{l:T 'Check for updates now'}" Click="CheckUpdates_Click" />
-                <Separator />
-                <MenuItem x:Name="StartWithWindowsMenu" Header="{l:T 'Start with Windows'}" IsCheckable="True" Click="StartWithWindows_Click" />
-                <MenuItem x:Name="CloseToTrayMenu" Header="{l:T 'Keep running in the notification area when closed'}" IsCheckable="True" Click="CloseToTray_Click" />
-            </MenuItem>
-            <MenuItem Header="{l:T 'Help'}">
-                <MenuItem Header="{l:T 'About DeskBridge'}" Click="About_Click" />
-                <MenuItem Header="{l:T 'Project page'}" Click="ProjectPage_Click" />
-                <MenuItem Header="{l:T 'Open settings folder'}" Click="OpenSettingsFolder_Click" />
-                <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
-                <MenuItem Header="{l:T 'Collect diagnostics from all machines'}" Click="CollectDiagnostics_Click" />
-            </MenuItem>
-        </Menu>
-
-        <!-- Profile bar -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1" Padding="12,10">
-            <DockPanel LastChildFill="False">
-                <TextBlock Text="{l:T 'Profile'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
-                <ComboBox Width="200" ItemsSource="{Binding Model.Profiles}" DisplayMemberPath="Name"
-                          SelectedItem="{Binding SelectedProfile}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
-                <TextBlock Text="{l:T 'Name'}" VerticalAlignment="Center" Margin="4,0,6,0" Foreground="{DynamicResource MutedText}" />
-                <TextBox Width="150" Text="{Binding SelectedProfile.Name, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
-                <Button Content="{l:T 'New'}" Click="NewProfile_Click" />
-                <Button Content="{l:T 'Duplicate'}" Click="DuplicateProfile_Click" />
-                <Button Content="{l:T 'Delete'}" Click="DeleteProfile_Click" />
-
-                <Button x:Name="ApplyButton" DockPanel.Dock="Right" Content="{l:T 'Apply profile'}" Style="{StaticResource Primary}" Click="Apply_Click" Margin="0" />
-                <Button DockPanel.Dock="Right" Content="{l:T 'Save'}" Click="Save_Click" />
-            </DockPanel>
-        </Border>
-
-        <!-- Status bar -->
-        <Border DockPanel.Dock="Bottom" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="12,6">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding AgentStatus}" Foreground="{DynamicResource MutedText}" />
-                <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
-            </DockPanel>
-        </Border>
-
-        <TabControl x:Name="Tabs" Margin="10" Padding="10" Background="{DynamicResource AppBackground}">
-            <!-- ============ Layout ============ -->
-            <TabItem Header="{l:T 'Layout'}" Padding="14,3">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="2*" MinHeight="180" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="3*" MinHeight="160" />
-                    </Grid.RowDefinitions>
-
-                    <Border Grid.Row="0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="6" Padding="10">
-                        <Canvas x:Name="LayoutCanvas" ClipToBounds="True" SizeChanged="LayoutCanvas_SizeChanged" />
-                    </Border>
-
-                    <StackPanel Grid.Row="1" Margin="0,10">
-                        <ItemsControl ItemsSource="{Binding PlacementRows}" Margin="0,0,0,6">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="0,2">
-                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                        <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" DisplayMemberPath="Label" MinWidth="220" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <ItemsControl ItemsSource="{Binding Summary}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="Wrap" Margin="0,1" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-
-                    <DataGrid Grid.Row="2" x:Name="AssignmentGrid" ItemsSource="{Binding SelectedProfile.Assignments}"
-                              SelectionChanged="AssignmentGrid_SelectionChanged">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="{l:T 'Physical display'}" Binding="{Binding DisplayLabel}" IsReadOnly="True" Width="120" />
-                            <DataGridTextColumn Header="{l:T 'Owner'}" Binding="{Binding Owner.Name}" IsReadOnly="True" Width="150" />
-                            <DataGridTextColumn Header="{l:T 'Native mode'}" Binding="{Binding Display.Summary}" IsReadOnly="True" Width="150" />
-                            <DataGridTemplateColumn Header="{l:T 'Used by'}" Width="170">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding DataContext.Model.Machines, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  SelectedItem="{Binding UsedBy, UpdateSourceTrigger=PropertyChanged}" Margin="2" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="{l:T 'Stream resolution'}" Width="190">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
-                                                  ItemsSource="{Binding DataContext.ResolutionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  Text="{Binding Resolution, UpdateSourceTrigger=LostFocus}" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="{l:T 'Refresh (Hz)'}" Width="110">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
-                                                  ItemsSource="{Binding DataContext.RefreshOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  Text="{Binding Refresh, UpdateSourceTrigger=LostFocus}" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="{l:T 'Bitrate (Mbps)'}" Width="120">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
-                                                  ItemsSource="{Binding DataContext.BitrateOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  Text="{Binding Bitrate, UpdateSourceTrigger=LostFocus}" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
-            </TabItem>
-
-            <!-- ============ Machines ============ -->
-            <TabItem Header="{l:T 'Machines'}" Padding="14,3">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="5*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="4*" />
-                    </Grid.ColumnDefinitions>
-
-                    <DockPanel Grid.Column="0">
-                        <TextBlock DockPanel.Dock="Top" Text="{l:T 'Machines'}" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" />
-                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,8"
-                                   Text="{l:T 'The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.'}" />
-                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="{l:T 'Add machine'}" Click="AddMachine_Click" />
-                            <Button Content="{l:T 'Remove'}" Click="RemoveMachine_Click" />
-                        </StackPanel>
-                        <DataGrid x:Name="MachineGrid" ItemsSource="{Binding Model.Machines}" SelectedItem="{Binding SelectedMachine}">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="{l:T 'Id'}" Binding="{Binding Id}" Width="100" IsReadOnly="True" />
-                                <DataGridTextColumn Header="{l:T 'Name'}" Binding="{Binding Name, UpdateSourceTrigger=LostFocus}" Width="*" />
-                                <DataGridTextColumn Header="{l:T 'Address'}" Binding="{Binding Address, UpdateSourceTrigger=LostFocus}" Width="130" />
-                                <DataGridTextColumn Header="{l:T 'Port'}" Binding="{Binding ControlPort, TargetNullValue=''}" Width="70" />
-                                <DataGridCheckBoxColumn Header="{l:T 'Keyboard and mouse'}" Binding="{Binding HasInput, UpdateSourceTrigger=PropertyChanged}" Width="140" />
-                                <DataGridTemplateColumn Header="{l:T 'Mouse side'}" Width="110">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox Margin="2" DisplayMemberPath="Label" SelectedValuePath="Side"
-                                                      ToolTip="{l:T 'On which side of the coordinator this machine is: the cursor goes to it past that edge.'}"
-                                                      ItemsSource="{Binding DataContext.InputSideOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                      SelectedValue="{Binding InputSide, UpdateSourceTrigger=PropertyChanged}" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </DockPanel>
-
-                    <DockPanel Grid.Column="2">
-                        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" Text="{Binding DisplaysTitle}" />
-                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,8"
-                                   Text="{l:T 'Detect reads them from Windows on this PC, or asks the machine’s agent over the network. X and Y are the arrangement in the Windows display settings: displays can be side by side, stacked or in any other layout.'}" />
-                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="{l:T 'Detect'}" Style="{StaticResource Primary}" Click="DetectDisplays_Click" />
-                            <Button Content="{l:T 'Add display'}" Click="AddDisplay_Click" />
-                            <Button Content="{l:T 'Remove'}" Click="RemoveDisplay_Click" />
-                        </StackPanel>
-                        <DataGrid x:Name="DisplayGrid" ItemsSource="{Binding SelectedMachine.Displays}">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="{l:T 'Id'}" Binding="{Binding Id, UpdateSourceTrigger=LostFocus}" Width="50" />
-                                <DataGridTextColumn Header="{l:T 'Width'}" Binding="{Binding Width}" Width="*" />
-                                <DataGridTextColumn Header="{l:T 'Height'}" Binding="{Binding Height}" Width="*" />
-                                <DataGridTextColumn Header="Hz" Binding="{Binding RefreshHz}" Width="50" />
-                                <DataGridTextColumn Header="X" Binding="{Binding X}" Width="60" />
-                                <DataGridTextColumn Header="Y" Binding="{Binding Y}" Width="60" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </DockPanel>
-                </Grid>
-            </TabItem>
-
-            <!-- ============ This PC ============ -->
-            <TabItem Header="{l:T 'This PC'}" Padding="14,3">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <GroupBox Grid.Row="0" Grid.Column="1" Header="{l:T 'Sharing'}" Margin="10,0,0,10">
-                        <StackPanel>
-                            <CheckBox x:Name="ClipboardSendBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Send what I copy on this PC to the other machines'}" />
-                            </CheckBox>
-                            <CheckBox x:Name="ClipboardReceiveBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Put in this PC’s clipboard what is copied on the other machines'}" />
-                            </CheckBox>
-                            <CheckBox x:Name="ShareInputBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Coordinator: move the keyboard and mouse to another machine past the edge of the screens (Ctrl+Alt+Home brings them back)'}" />
-                            </CheckBox>
-                            <CheckBox x:Name="AcceptInputBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Let the coordinator control this PC with its keyboard and mouse'}" />
-                            </CheckBox>
-                            <CheckBox x:Name="AcceptFilesBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Accept files sent from the other machines'}" />
-                            </CheckBox>
-                            <DockPanel Margin="22,4,0,0">
-                                <TextBlock Text="{l:T 'Save them in'}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                <Button DockPanel.Dock="Right" Content="{l:T 'Open'}" Click="OpenFilesFolder_Click" Margin="6,0,0,0" />
-                                <Button DockPanel.Dock="Right" Content="{l:T 'Choose…'}" Click="ChooseFilesFolder_Click" Margin="6,0,0,0" />
-                                <TextBox x:Name="FilesFolderBox" IsReadOnly="True" VerticalContentAlignment="Center" />
-                            </DockPanel>
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
-                                       Text="{l:T 'To send files, drop them on this window or use File, Send files to. Everything travels encrypted. On a work computer, check your company’s rules before sharing its clipboard or files.'}" />
-                        </StackPanel>
-                    </GroupBox>
-
-                    <GroupBox Grid.Row="0" Grid.Column="0" Header="{l:T 'This machine'}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="150" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Text="{l:T 'This PC'}" VerticalAlignment="Center" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,8" FontWeight="SemiBold" Text="{Binding LocalMachine}"
-                                       ToolTip="{l:T 'Machines are identified by their computer name.'}" />
-
-                            <TextBlock Grid.Row="1" Text="{l:T 'Shared key'}" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" FontFamily="Consolas" VerticalContentAlignment="Center"
-                                     Text="{Binding LocalKey, UpdateSourceTrigger=PropertyChanged}" />
-                            <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="8,4,0,4">
-                                <Button Content="{l:T 'Generate'}" Click="GenerateKey_Click" />
-                                <Button Content="{l:T 'Copy'}" Click="CopyKey_Click" Margin="0" />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="2" Text="{l:T 'Control port'}" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" Width="90" HorizontalAlignment="Left" VerticalContentAlignment="Center"
-                                     Text="{Binding LocalPort, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <TextBlock Grid.Row="3" Text="{l:T 'Connect to'}" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4" VerticalContentAlignment="Center"
-                                     ToolTip="{l:T 'Address of the coordinator, e.g. 192.168.1.52. Only on a machine that cannot accept connections (a firewall you cannot change): it connects to the coordinator instead. Leave empty on the coordinator.'}"
-                                     Text="{Binding LocalConnectTo, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Style="{StaticResource Hint}" Margin="0,6"
-                                       Text="{l:T 'Every machine needs the same shared key: copy it here and paste it on the others. A machine that cannot accept connections also needs the coordinator’s address in Connect to. Machines are identified by their computer name and appear on the coordinator by themselves when they connect. The layout is only edited on the coordinator.'}" />
-
-                            <StackPanel Grid.Row="5" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
-                                <Button Content="{l:T 'Save and restart agent'}" Style="{StaticResource Primary}" Click="SaveLocal_Click" />
-                                <TextBlock Text="{Binding AgentStatus}" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}" Margin="6,0" />
-                            </StackPanel>
-                        </Grid>
-                    </GroupBox>
-
-                    <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="{l:T 'Log'}" Margin="0">
-                        <ListBox x:Name="LogList" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="12" BorderThickness="0"
-                                 SelectionMode="Extended" KeyDown="LogList_KeyDown">
-                            <ListBox.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="{l:T 'Copy'}" Click="CopyLogSelection_Click" />
-                                    <MenuItem Header="{l:T 'Copy all'}" Click="CopyLogAll_Click" />
-                                    <Separator />
-                                    <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
-                                </ContextMenu>
-                            </ListBox.ContextMenu>
-                        </ListBox>
-                    </GroupBox>
-                </Grid>
-            </TabItem>
-        </TabControl>
-    </DockPanel>
-</Window>
+<Window x:Class="DeskBridge.Gui.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:DeskBridge.Gui.Localization"
+        Title="DeskBridge" Width="1180" Height="820" MinWidth="900" MinHeight="600"
+        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
+        Background="{DynamicResource AppBackground}" FontFamily="Segoe UI" FontSize="13">
+
+    <Window.Resources>
+        <!-- Implicit styles extend the theme's (Fluent) ones instead of replacing them. -->
+        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="MinWidth" Value="70" />
+        </Style>
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#2563EB" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#1D4ED8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style TargetType="GroupBox" BasedOn="{StaticResource {x:Type GroupBox}}">
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+        </Style>
+        <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="RowBackground" Value="{DynamicResource CardBackground}" />
+            <Setter Property="AlternatingRowBackground" Value="{DynamicResource CardBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="CanUserDeleteRows" Value="False" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+            <Setter Property="RowHeight" Value="30" />
+            <Setter Property="SelectionMode" Value="Single" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </Window.Resources>
+
+    <!-- Own background: the Fluent window itself is transparent (Mica). -->
+    <DockPanel Background="{DynamicResource AppBackground}">
+        <!-- Menu -->
+        <Menu DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" Padding="6,2">
+            <MenuItem Header="{l:T 'File'}" SubmenuOpened="FileMenu_SubmenuOpened">
+                <MenuItem x:Name="SendFilesMenu" Header="{l:T 'Send files to'}" />
+                <MenuItem Header="{l:T 'Open received files folder'}" Click="OpenFilesFolder_Click" />
+                <Separator />
+                <MenuItem Header="{l:T 'Quit'}" Click="Quit_Click" />
+            </MenuItem>
+            <MenuItem Header="{l:T 'Settings'}">
+                <MenuItem x:Name="LanguageMenu" Header="{l:T 'Language'}" />
+                <MenuItem x:Name="ThemeMenu" Header="{l:T 'Theme'}" />
+                <Separator />
+                <MenuItem Header="{l:T 'Update channel'}">
+                    <MenuItem x:Name="StableMenu" Header="{l:T 'Stable'}" IsCheckable="True" Click="Stable_Click" />
+                    <MenuItem x:Name="BetaMenu" Header="{l:T 'Beta'}" IsCheckable="True" Click="Beta_Click" />
+                </MenuItem>
+                <MenuItem Header="{l:T 'Check for updates now'}" Click="CheckUpdates_Click" />
+                <Separator />
+                <MenuItem x:Name="StartWithWindowsMenu" Header="{l:T 'Start with Windows'}" IsCheckable="True" Click="StartWithWindows_Click" />
+                <MenuItem x:Name="CloseToTrayMenu" Header="{l:T 'Keep running in the notification area when closed'}" IsCheckable="True" Click="CloseToTray_Click" />
+            </MenuItem>
+            <MenuItem Header="{l:T 'Help'}">
+                <MenuItem Header="{l:T 'About DeskBridge'}" Click="About_Click" />
+                <MenuItem Header="{l:T 'Project page'}" Click="ProjectPage_Click" />
+                <MenuItem Header="{l:T 'Open settings folder'}" Click="OpenSettingsFolder_Click" />
+                <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
+                <MenuItem Header="{l:T 'Collect diagnostics from all machines'}" Click="CollectDiagnostics_Click" />
+            </MenuItem>
+        </Menu>
+
+        <!-- Profile bar -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1" Padding="12,10">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="{l:T 'Profile'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
+                <ComboBox Width="200" ItemsSource="{Binding Model.Profiles}" DisplayMemberPath="Name"
+                          SelectedItem="{Binding SelectedProfile}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock Text="{l:T 'Name'}" VerticalAlignment="Center" Margin="4,0,6,0" Foreground="{DynamicResource MutedText}" />
+                <TextBox Width="150" Text="{Binding SelectedProfile.Name, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
+                <Button Content="{l:T 'New'}" Click="NewProfile_Click" />
+                <Button Content="{l:T 'Duplicate'}" Click="DuplicateProfile_Click" />
+                <Button Content="{l:T 'Delete'}" Click="DeleteProfile_Click" />
+
+                <Button x:Name="ApplyButton" DockPanel.Dock="Right" Content="{l:T 'Apply profile'}" Style="{StaticResource Primary}" Click="Apply_Click" Margin="0" />
+                <Button DockPanel.Dock="Right" Content="{l:T 'Save'}" Click="Save_Click" />
+            </DockPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="12,6">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding AgentStatus}" Foreground="{DynamicResource MutedText}" />
+                <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+        </Border>
+
+        <TabControl x:Name="Tabs" Margin="10" Padding="10" Background="{DynamicResource AppBackground}">
+            <!-- ============ Layout ============ -->
+            <TabItem Header="{l:T 'Layout'}" Padding="14,3">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="2*" MinHeight="180" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="3*" MinHeight="160" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="6" Padding="10">
+                        <Canvas x:Name="LayoutCanvas" ClipToBounds="True" SizeChanged="LayoutCanvas_SizeChanged" />
+                    </Border>
+
+                    <StackPanel Grid.Row="1" Margin="0,10">
+                        <ItemsControl ItemsSource="{Binding PlacementRows}" Margin="0,0,0,6">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" DisplayMemberPath="Label" MinWidth="220" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ItemsControl ItemsSource="{Binding Summary}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="Wrap" Margin="0,1" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="2" x:Name="AssignmentGrid" ItemsSource="{Binding SelectedProfile.Assignments}"
+                              SelectionChanged="AssignmentGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="{l:T 'Physical display'}" Binding="{Binding DisplayLabel}" IsReadOnly="True" Width="120" />
+                            <DataGridTextColumn Header="{l:T 'Owner'}" Binding="{Binding Owner.Name}" IsReadOnly="True" Width="150" />
+                            <DataGridTextColumn Header="{l:T 'Native mode'}" Binding="{Binding Display.Summary}" IsReadOnly="True" Width="150" />
+                            <DataGridTemplateColumn Header="{l:T 'Used by'}" Width="170">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding DataContext.Model.Machines, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  SelectedItem="{Binding UsedBy, UpdateSourceTrigger=PropertyChanged}" Margin="2" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="{l:T 'Stream resolution'}" Width="190">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
+                                                  ItemsSource="{Binding DataContext.ResolutionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Text="{Binding Resolution, UpdateSourceTrigger=LostFocus}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="{l:T 'Refresh (Hz)'}" Width="110">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
+                                                  ItemsSource="{Binding DataContext.RefreshOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Text="{Binding Refresh, UpdateSourceTrigger=LostFocus}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="{l:T 'Bitrate (Mbps)'}" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
+                                                  ItemsSource="{Binding DataContext.BitrateOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Text="{Binding Bitrate, UpdateSourceTrigger=LostFocus}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- ============ Machines ============ -->
+            <TabItem Header="{l:T 'Machines'}" Padding="14,3">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="240" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="5*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="4*" />
+                    </Grid.ColumnDefinitions>
+
+                    <DockPanel Grid.Column="0">
+                        <TextBlock DockPanel.Dock="Top" Text="{l:T 'Machines'}" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" />
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,8"
+                                   Text="{l:T 'The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.'}" />
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="{l:T 'Add machine'}" Click="AddMachine_Click" />
+                            <Button Content="{l:T 'Remove'}" Click="RemoveMachine_Click" />
+                        </StackPanel>
+                        <DataGrid x:Name="MachineGrid" ItemsSource="{Binding Model.Machines}" SelectedItem="{Binding SelectedMachine}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="{l:T 'Id'}" Binding="{Binding Id}" Width="100" IsReadOnly="True" />
+                                <DataGridTextColumn Header="{l:T 'Name'}" Binding="{Binding Name, UpdateSourceTrigger=LostFocus}" Width="*" />
+                                <DataGridTextColumn Header="{l:T 'Address'}" Binding="{Binding Address, UpdateSourceTrigger=LostFocus}" Width="130" />
+                                <DataGridTextColumn Header="{l:T 'Port'}" Binding="{Binding ControlPort, TargetNullValue=''}" Width="70" />
+                                <DataGridCheckBoxColumn Header="{l:T 'Keyboard and mouse'}" Binding="{Binding HasInput, UpdateSourceTrigger=PropertyChanged}" Width="140" />
+                                <DataGridTemplateColumn Header="{l:T 'Mouse side'}" Width="110">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox Margin="2" DisplayMemberPath="Label" SelectedValuePath="Side"
+                                                      ToolTip="{l:T 'On which side of the coordinator this machine is: the cursor goes to it past that edge.'}"
+                                                      ItemsSource="{Binding DataContext.InputSideOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      SelectedValue="{Binding InputSide, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+
+                    <DockPanel Grid.Column="2">
+                        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" Text="{Binding DisplaysTitle}" />
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,8"
+                                   Text="{l:T 'Detect reads them from Windows on this PC, or asks the machine’s agent over the network. X and Y are the arrangement in the Windows display settings: displays can be side by side, stacked or in any other layout.'}" />
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="{l:T 'Detect'}" Style="{StaticResource Primary}" Click="DetectDisplays_Click" />
+                            <Button Content="{l:T 'Add display'}" Click="AddDisplay_Click" />
+                            <Button Content="{l:T 'Remove'}" Click="RemoveDisplay_Click" />
+                        </StackPanel>
+                        <DataGrid x:Name="DisplayGrid" ItemsSource="{Binding SelectedMachine.Displays}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="{l:T 'Id'}" Binding="{Binding Id, UpdateSourceTrigger=LostFocus}" Width="50" />
+                                <DataGridTextColumn Header="{l:T 'Width'}" Binding="{Binding Width}" Width="*" />
+                                <DataGridTextColumn Header="{l:T 'Height'}" Binding="{Binding Height}" Width="*" />
+                                <DataGridTextColumn Header="Hz" Binding="{Binding RefreshHz}" Width="50" />
+                                <DataGridTextColumn Header="X" Binding="{Binding X}" Width="60" />
+                                <DataGridTextColumn Header="Y" Binding="{Binding Y}" Width="60" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,14,0,6">
+                        <TextBlock Text="{l:T 'Mouse map'}" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                   Text="{l:T 'Where the displays of each machine are next to the coordinator’s, for keyboard and mouse sharing: drag them anywhere (below, above, to one side), and the cursor goes to that machine past the edge where they touch. Right-click to place one again on its side.'}" />
+                    </StackPanel>
+                    <Border Grid.Row="2" Grid.ColumnSpan="3" BorderThickness="1" CornerRadius="6"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                        <Canvas x:Name="MouseCanvas" ClipToBounds="True" SizeChanged="MouseCanvas_SizeChanged" />
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ============ This PC ============ -->
+            <TabItem Header="{l:T 'This PC'}" Padding="14,3">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <GroupBox Grid.Row="0" Grid.Column="1" Header="{l:T 'Sharing'}" Margin="10,0,0,10">
+                        <StackPanel>
+                            <CheckBox x:Name="ClipboardSendBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Send what I copy on this PC to the other machines'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="ClipboardReceiveBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Put in this PC’s clipboard what is copied on the other machines'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="ShareInputBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Coordinator: move the keyboard and mouse to another machine past the edge of the screens (Ctrl+Alt+Home brings them back)'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="AcceptInputBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Let the coordinator control this PC with its keyboard and mouse'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="AcceptFilesBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Accept files sent from the other machines'}" />
+                            </CheckBox>
+                            <DockPanel Margin="22,4,0,0">
+                                <TextBlock Text="{l:T 'Save them in'}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <Button DockPanel.Dock="Right" Content="{l:T 'Open'}" Click="OpenFilesFolder_Click" Margin="6,0,0,0" />
+                                <Button DockPanel.Dock="Right" Content="{l:T 'Choose…'}" Click="ChooseFilesFolder_Click" Margin="6,0,0,0" />
+                                <TextBox x:Name="FilesFolderBox" IsReadOnly="True" VerticalContentAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                                       Text="{l:T 'To send files, drop them on this window or use File, Send files to. Everything travels encrypted. On a work computer, check your company’s rules before sharing its clipboard or files.'}" />
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Grid.Row="0" Grid.Column="0" Header="{l:T 'This machine'}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Text="{l:T 'This PC'}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,8" FontWeight="SemiBold" Text="{Binding LocalMachine}"
+                                       ToolTip="{l:T 'Machines are identified by their computer name.'}" />
+
+                            <TextBlock Grid.Row="1" Text="{l:T 'Shared key'}" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" FontFamily="Consolas" VerticalContentAlignment="Center"
+                                     Text="{Binding LocalKey, UpdateSourceTrigger=PropertyChanged}" />
+                            <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="8,4,0,4">
+                                <Button Content="{l:T 'Generate'}" Click="GenerateKey_Click" />
+                                <Button Content="{l:T 'Copy'}" Click="CopyKey_Click" Margin="0" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="2" Text="{l:T 'Control port'}" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" Width="90" HorizontalAlignment="Left" VerticalContentAlignment="Center"
+                                     Text="{Binding LocalPort, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="3" Text="{l:T 'Connect to'}" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4" VerticalContentAlignment="Center"
+                                     ToolTip="{l:T 'Address of the coordinator, e.g. 192.168.1.52. Only on a machine that cannot accept connections (a firewall you cannot change): it connects to the coordinator instead. Leave empty on the coordinator.'}"
+                                     Text="{Binding LocalConnectTo, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Style="{StaticResource Hint}" Margin="0,6"
+                                       Text="{l:T 'Every machine needs the same shared key: copy it here and paste it on the others. A machine that cannot accept connections also needs the coordinator’s address in Connect to. Machines are identified by their computer name and appear on the coordinator by themselves when they connect. The layout is only edited on the coordinator.'}" />
+
+                            <StackPanel Grid.Row="5" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button Content="{l:T 'Save and restart agent'}" Style="{StaticResource Primary}" Click="SaveLocal_Click" />
+                                <TextBlock Text="{Binding AgentStatus}" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}" Margin="6,0" />
+                            </StackPanel>
+                        </Grid>
+                    </GroupBox>
+
+                    <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="{l:T 'Log'}" Margin="0">
+                        <ListBox x:Name="LogList" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="12" BorderThickness="0"
+                                 SelectionMode="Extended" KeyDown="LogList_KeyDown">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="{l:T 'Copy'}" Click="CopyLogSelection_Click" />
+                                    <MenuItem Header="{l:T 'Copy all'}" Click="CopyLogAll_Click" />
+                                    <Separator />
+                                    <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

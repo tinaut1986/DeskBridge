@@ -95,7 +95,20 @@ public sealed class MachineVm : ObservableObject
     private PlacementSide _inputSide = PlacementSide.Right;
 
     /// <summary>On which side of the coordinator this machine is, for keyboard and mouse sharing.</summary>
-    public PlacementSide InputSide { get => _inputSide; set => Set(ref _inputSide, value); }
+    public PlacementSide InputSide
+    {
+        get => _inputSide;
+        set
+        {
+            if (Set(ref _inputSide, value))
+                InputPosition = null; // choosing a side places it there again
+        }
+    }
+
+    private VirtualPosition? _inputPosition;
+
+    /// <summary>Placed by hand in the mouse map: top-left corner of its displays in the coordinator's desktop.</summary>
+    public VirtualPosition? InputPosition { get => _inputPosition; set => Set(ref _inputPosition, value); }
 
     public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Id : Name;
 }
@@ -335,6 +348,7 @@ public sealed class EditorModel
         foreach (var m in config.Machines)
         {
             var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort, InputSide = m.InputSide ?? PlacementSide.Right };
+            vm.InputPosition = m.InputPosition;
             foreach (var d in m.Displays)
                 vm.Displays.Add(DisplayVm.From(d));
             model.Machines.Add(vm);
@@ -370,7 +384,7 @@ public sealed class EditorModel
         var machines = Machines.Select(m => new MachineConfig(
             m.Id.Trim(), m.Name.Trim(), m.Address.Trim(),
             m.Displays.Select(d => d.ToConfig()).ToList(),
-            m.HasInput, m.ControlPort, m.InputSide == PlacementSide.Right ? null : m.InputSide)).ToList();
+            m.HasInput, m.ControlPort, m.InputSide == PlacementSide.Right ? null : m.InputSide, m.InputPosition)).ToList();
 
         var profiles = Profiles.Select(p => new ProfileConfig(
             p.Name.Trim(),

@@ -21,11 +21,12 @@ public sealed class InputReceiver(
     private string? _from;
     private PlacementSide _side;
     private IReadOnlyList<DisplayRect> _displays = [];
+    private IReadOnlyList<DisplayRect>? _peers; // the coordinator's displays here (null: older coordinator, by side)
     private int _x, _y;
 
     public async Task HandleAsync(string from, ControlMessage message)
     {
-        double? leave = null;
+        InputLeaveMessage? leave = null;
         lock (_gate)
         {
             switch (message)
@@ -36,7 +37,10 @@ public sealed class InputReceiver(
                         return;
                     _from = from;
                     _side = enter.Side;
-                    (_x, _y) = ClientHandover.Enter(_displays, enter.Side, enter.Fraction);
+                    _peers = enter.Peers;
+                    (_x, _y) = enter is { X: { } ex, Y: { } ey, Peers: not null }
+                        ? EdgeGeometry.ClampToDisplays(_displays, ex, ey)
+                        : ClientHandover.Enter(_displays, enter.Side, enter.Fraction);
                     InputInjector.MoveTo(_x, _y);
                     break;
 
@@ -50,10 +54,12 @@ public sealed class InputReceiver(
                             _injector.Play(e);
                             continue;
                         }
-                        var move = ClientHandover.Move(_displays, _side, _x, _y, e.X, e.Y);
+                        var move = _peers is { } peers
+                            ? ClientHandover.Move(_displays, peers, _x, _y, e.X, e.Y)
+                            : ClientHandover.Move(_displays, _side, _x, _y, e.X, e.Y);
                         if (move.Left)
                         {
-                            leave = move.Fraction;
+                            leave = _peers is null ? new InputLeaveMessage(move.Fraction) : new InputLeaveMessage(move.Fraction, move.X, move.Y);
                             _injector.ReleaseAll();
                             _from = null;
                             break;
@@ -74,11 +80,11 @@ public sealed class InputReceiver(
         }
 
         activeChanged(_from);
-        if (leave is { } fraction && sessionOf(from) is { } session)
+        if (leave is not null && sessionOf(from) is { } session)
         {
             try
             {
-                await session.NotifyAsync(new InputLeaveMessage(fraction));
+                await session.NotifyAsync(leave);
             }
             catch (ControlException)
             {

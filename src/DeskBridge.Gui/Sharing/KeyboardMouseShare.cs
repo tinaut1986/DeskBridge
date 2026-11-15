@@ -39,7 +39,7 @@ public sealed class KeyboardMouseShare : IDisposable
 
     public KeyboardMouseShare(
         IReadOnlyList<DisplayRect> displays,
-        IReadOnlyList<(string Machine, PlacementSide Side)> targets,
+        IReadOnlyList<InputTarget> targets,
         Func<string, ControlSession?> sessionOf,
         Action<string> log,
         Action<string?> remoteChanged)
@@ -53,7 +53,7 @@ public sealed class KeyboardMouseShare : IDisposable
     }
 
     /// <summary>New displays or machines (called periodically).</summary>
-    public void Update(IReadOnlyList<DisplayRect> displays, IReadOnlyList<(string Machine, PlacementSide Side)> targets)
+    public void Update(IReadOnlyList<DisplayRect> displays, IReadOnlyList<InputTarget> targets)
     {
         string? lost = null;
         lock (_gate)
@@ -80,7 +80,7 @@ public sealed class KeyboardMouseShare : IDisposable
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
                         _target = enter.Machine;
-                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction)));
+                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers)));
                         _remoteChanged(enter.Machine);
                         return true;
                     case MouseDecision.Forward forward:
@@ -140,7 +140,7 @@ public sealed class KeyboardMouseShare : IDisposable
             if (k.Down && k.VirtualKey == VkHome && ctrl && alt)
             {
                 cameBack = _logic.Remote;
-                var (x, y) = _logic.Return(0.5);
+                var (x, y) = _logic.ReturnHere();
                 InputInjector.SetCursor(x, y);
                 Enqueue(new ReleaseItem());
             }
@@ -160,13 +160,13 @@ public sealed class KeyboardMouseShare : IDisposable
     }
 
     /// <summary>The machine that had the cursor sent it back (it reached the edge facing this PC).</summary>
-    public void OnLeave(string from, double fraction)
+    public void OnLeave(string from, InputLeaveMessage leave)
     {
         lock (_gate)
         {
             if (_logic.Remote != from)
                 return;
-            var (x, y) = _logic.Return(fraction);
+            var (x, y) = _logic.Return(leave.Fraction, leave.X, leave.Y);
             InputInjector.SetCursor(x, y);
         }
         _remoteChanged(null);

@@ -9,94 +9,165 @@ public abstract record MouseDecision
     /// <summary>Let it through: the cursor stays on this PC.</summary>
     public sealed record Pass : MouseDecision;
 
-    /// <summary>The cursor crossed to <paramref name="Machine"/>: swallow, keep the local cursor parked there.</summary>
-    public sealed record Enter(string Machine, PlacementSide Side, double Fraction, int ParkX, int ParkY) : MouseDecision;
+    /// <summary>
+    /// The cursor crossed to <paramref name="Machine"/> at (<paramref name="X"/>, <paramref name="Y"/>) in that
+    /// machine's own coordinates; <paramref name="Peers"/> are this PC's displays in those coordinates (where
+    /// the cursor comes back). Swallow, and keep the local cursor parked at (ParkX, ParkY).
+    /// </summary>
+    /// <param name="Side">The direction it crossed in, and <paramref name="Fraction"/> along that edge (for older versions).</param>
+    public sealed record Enter(string Machine, int X, int Y, IReadOnlyList<DisplayRect> Peers,
+        PlacementSide Side, double Fraction, int ParkX, int ParkY) : MouseDecision;
 
     /// <summary>The cursor is on another machine: swallow and send this relative move.</summary>
     public sealed record Forward(string Machine, int Dx, int Dy) : MouseDecision;
 }
 
 /// <summary>
-/// The coordinator's side of keyboard and mouse sharing, without any OS calls: decides when the cursor
-/// leaves this PC (touching the edge on the side where another machine is), turns mouse moves into
-/// relative moves while it is away, and where it comes back.
+/// The coordinator's side of keyboard and mouse sharing, without any OS calls. Every machine's displays are
+/// placed somewhere around this PC's (<see cref="InputLayout"/>); the cursor leaves this PC when it is pushed
+/// past the edge of a display into another machine's, turns into relative moves while it is away, and comes
+/// back at the point where it crosses into this PC's displays over there.
 /// </summary>
 public sealed class CoordinatorHandover
 {
     private IReadOnlyList<DisplayRect> _displays;
-    private IReadOnlyList<(string Machine, PlacementSide Side)> _targets;
+    private IReadOnlyList<InputTarget> _targets;
+    private InputTarget? _remote;
     private int _parkX, _parkY;
 
     /// <param name="displays">This PC's displays (physical pixels).</param>
-    /// <param name="targets">Machines that can get the cursor, and on which side of this PC each one is.</param>
-    public CoordinatorHandover(IReadOnlyList<DisplayRect> displays, IReadOnlyList<(string Machine, PlacementSide Side)> targets)
+    /// <param name="targets">Machines that can get the cursor, and where their displays are around this PC's.</param>
+    public CoordinatorHandover(IReadOnlyList<DisplayRect> displays, IReadOnlyList<InputTarget> targets)
     {
         _displays = displays;
         _targets = targets;
     }
 
     /// <summary>The machine that has the cursor, or null while it is on this PC.</summary>
-    public string? Remote { get; private set; }
+    public string? Remote => _remote?.Machine;
 
     public PlacementSide RemoteSide { get; private set; }
 
-    public void Update(IReadOnlyList<DisplayRect> displays, IReadOnlyList<(string Machine, PlacementSide Side)> targets)
+    public void Update(IReadOnlyList<DisplayRect> displays, IReadOnlyList<InputTarget> targets)
     {
         _displays = displays;
         _targets = targets;
-        if (Remote is not null && targets.All(t => t.Machine != Remote))
-            Remote = null; // that machine is gone: the cursor is back here
+        if (_remote is not null)
+            _remote = targets.FirstOrDefault(t => t.Machine == _remote.Machine); // gone: the cursor is back here
     }
 
     public MouseDecision OnMouseMove(int x, int y)
     {
-        if (Remote is { } remote)
+        if (_remote is { } remote)
         {
             int dx = x - _parkX, dy = y - _parkY;
-            return dx == 0 && dy == 0 ? new MouseDecision.Pass() : new MouseDecision.Forward(remote, dx, dy);
+            return dx == 0 && dy == 0 ? new MouseDecision.Pass() : new MouseDecision.Forward(remote.Machine, dx, dy);
         }
-        if (_displays.Count == 0)
+        if (_displays.Count == 0 || _targets.Count == 0)
             return new MouseDecision.Pass();
 
-        foreach (var (machine, side) in _targets)
+        foreach (var (cx, cy) in Beyond(x, y))
         {
-            if (!EdgeGeometry.AtEdge(_displays, side, x, y))
+            if (InputLayout.Contains(_displays, cx, cy) || _targets.FirstOrDefault(t => t.Contains(cx, cy)) is not { } target)
                 continue;
-            var fraction = EdgeGeometry.Fraction(_displays, side, x, y);
+
+            // Where the cursor is on this PC, and the direction it is going out in.
+            var (px, py) = EdgeGeometry.ClampToDisplays(_displays, x, y);
+            int sx = Math.Sign(cx - px), sy = Math.Sign(cy - py);
+            var side = sx > 0 ? PlacementSide.Right : sx < 0 ? PlacementSide.Left : sy < 0 ? PlacementSide.Above : PlacementSide.Below;
             // Parked just inside the edge, so the next moves outwards are still seen as moves.
-            (_parkX, _parkY) = EdgeGeometry.PointOnEdge(_displays, side, fraction, inset: 1);
-            Remote = machine;
+            (_parkX, _parkY) = EdgeGeometry.ClampToDisplays(_displays, px - sx, py - sy);
+            _remote = target;
             RemoteSide = side;
-            return new MouseDecision.Enter(machine, side, fraction, _parkX, _parkY);
+
+            var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, cx - target.OffsetX, cy - target.OffsetY);
+            var peers = _displays.Select(d => d with { X = d.X - target.OffsetX, Y = d.Y - target.OffsetY }).ToList();
+            double fraction = EdgeGeometry.AtEdge(_displays, side, px, py) ? EdgeGeometry.Fraction(_displays, side, px, py) : 0.5;
+            return new MouseDecision.Enter(target.Machine, ex, ey, peers, side, fraction, _parkX, _parkY);
         }
         return new MouseDecision.Pass();
     }
 
-    /// <summary>The other machine sent the cursor back at <paramref name="fraction"/> along the edge: where to put it here.</summary>
-    public (int X, int Y) Return(double fraction)
+    /// <summary>
+    /// The points just past the cursor that are not on this PC's displays: the cursor itself if the hook saw it
+    /// off them, otherwise the next pixel out of each display edge it is touching.
+    /// </summary>
+    private IEnumerable<(int X, int Y)> Beyond(int x, int y)
     {
-        var side = RemoteSide;
-        Remote = null;
-        return EdgeGeometry.PointOnEdge(_displays, side, fraction, inset: 2);
+        var display = _displays.FirstOrDefault(d => x >= d.X && x < d.Right && y >= d.Y && y < d.Bottom);
+        if (display == default)
+        {
+            yield return (x, y);
+            yield break;
+        }
+        if (x == display.Right - 1) yield return (x + 1, y);
+        if (x == display.X) yield return (x - 1, y);
+        if (y == display.Bottom - 1) yield return (x, y + 1);
+        if (y == display.Y) yield return (x, y - 1);
     }
 
-    /// <summary>Takes the cursor back without the other machine (hotkey, connection lost).</summary>
-    public void ForceLocal() => Remote = null;
+    /// <summary>
+    /// The other machine sent the cursor back at (<paramref name="x"/>, <paramref name="y"/>) in its own
+    /// coordinates (or, from older versions, at <paramref name="fraction"/> along the edge): where to put it here.
+    /// </summary>
+    public (int X, int Y) Return(double fraction, int? x = null, int? y = null)
+    {
+        var remote = _remote;
+        _remote = null;
+        if (remote is not null && x is { } rx && y is { } ry)
+            return EdgeGeometry.ClampToDisplays(_displays, rx + remote.OffsetX, ry + remote.OffsetY);
+        return EdgeGeometry.PointOnEdge(_displays, RemoteSide, fraction, inset: 2);
+    }
+
+    /// <summary>Takes the cursor back by hand (hotkey): it reappears where it left.</summary>
+    public (int X, int Y) ReturnHere()
+    {
+        _remote = null;
+        return (_parkX, _parkY);
+    }
+
+    /// <summary>Takes the cursor back without the other machine (connection lost).</summary>
+    public void ForceLocal() => _remote = null;
 }
 
 /// <summary>What the machine that gets the cursor does with a relative move.</summary>
+/// <param name="X">Where the cursor goes (or, when it <paramref name="Left"/>, where it crossed, in this machine's coordinates).</param>
 public readonly record struct ClientMove(int X, int Y, bool Left, double Fraction);
 
 /// <summary>
-/// The other side: where the cursor enters (the edge facing the coordinator), where each relative move takes
-/// it (kept on the displays), and when it leaves back through that edge.
+/// The other side: where the cursor enters, where each relative move takes it (kept on the displays), and
+/// when it leaves back into the coordinator's displays.
 /// </summary>
 public static class ClientHandover
 {
+    /// <summary>Older coordinators: enters through the edge facing the coordinator.</summary>
     /// <param name="side">Where this machine is relative to the coordinator; the cursor enters through the opposite edge.</param>
     public static (int X, int Y) Enter(IReadOnlyList<DisplayRect> displays, PlacementSide side, double fraction) =>
         EdgeGeometry.PointOnEdge(displays, EdgeGeometry.Opposite(side), fraction, inset: 1);
 
+    /// <summary>
+    /// A relative move when the coordinator's displays are known in this machine's coordinates
+    /// (<paramref name="peers"/>): the cursor leaves when it is pushed into one of them.
+    /// </summary>
+    public static ClientMove Move(IReadOnlyList<DisplayRect> displays, IReadOnlyList<DisplayRect> peers, int fromX, int fromY, int dx, int dy)
+    {
+        int x = fromX + dx, y = fromY + dy;
+        if (InputLayout.Contains(displays, x, y))
+            return new ClientMove(x, y, false, 0);
+        if (InputLayout.Contains(peers, x, y))
+            return new ClientMove(x, y, true, 0.5);
+
+        // Off both: stopped at the edge here, unless one direction of the move alone reaches the coordinator
+        // (going diagonally past a corner).
+        var (nx, ny) = EdgeGeometry.ClampToDisplays(displays, x, y);
+        if (nx != x && InputLayout.Contains(peers, x, ny))
+            return new ClientMove(x, ny, true, 0.5);
+        if (ny != y && InputLayout.Contains(peers, nx, y))
+            return new ClientMove(nx, y, true, 0.5);
+        return new ClientMove(nx, ny, false, 0);
+    }
+
+    /// <summary>Older coordinators: leaves back through the edge facing the coordinator.</summary>
     public static ClientMove Move(IReadOnlyList<DisplayRect> displays, PlacementSide side, int fromX, int fromY, int dx, int dy)
     {
         int x = fromX + dx, y = fromY + dy;

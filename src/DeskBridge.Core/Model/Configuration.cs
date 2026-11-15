@@ -15,6 +15,10 @@ public sealed record DisplayConfig(string Id, int Width, int Height, int Refresh
 /// For keyboard and mouse sharing: on which side of the coordinator's displays this machine is (the cursor
 /// moves to it past that edge). Null = to the right. Ignored on the coordinator itself.
 /// </param>
+/// <param name="InputPosition">
+/// For keyboard and mouse sharing, placed by hand: where the top-left corner of this machine's displays goes in
+/// the coordinator's desktop (e.g. below its displays). Overrides <paramref name="InputSide"/>.
+/// </param>
 public sealed record MachineConfig(
     string Id,
     string Name,
@@ -22,7 +26,8 @@ public sealed record MachineConfig(
     IReadOnlyList<DisplayConfig> Displays,
     bool HasInput = false,
     int? ControlPort = null,
-    PlacementSide? InputSide = null);
+    PlacementSide? InputSide = null,
+    VirtualPosition? InputPosition = null);
 
 /// <summary>
 /// How a lent display is streamed. Every value is optional: by default the virtual display

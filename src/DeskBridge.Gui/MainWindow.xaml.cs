@@ -496,6 +496,7 @@ public partial class MainWindow : Window
         {
             _redrawPending = false;
             DrawLayout();
+            DrawMouseMap();
             UpdateSummary();
             _vm.RaiseDisplaysTitle(); // the selected machine may have been renamed
         });

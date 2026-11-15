@@ -1,5 +1,6 @@
 using System.Windows.Threading;
 using DeskBridge.Core.Control;
+using DeskBridge.Core.Input;
 using DeskBridge.Core.Localization;
 using DeskBridge.Core.Model;
 using DeskBridge.Core.Planning;
@@ -25,15 +26,16 @@ public partial class MainWindow
 
     private ControlSession? SessionOf(string machine) => _agent?.Directory.Find(machine);
 
-    /// <summary>Connected machines that can get the cursor, with the side of this PC where each one is.</summary>
-    private IReadOnlyList<(string Machine, PlacementSide Side)> InputTargets()
+    /// <summary>Connected machines that can get the cursor, with where their displays are around this PC's.</summary>
+    private IReadOnlyList<InputTarget> InputTargets(IReadOnlyList<DisplayRect> local)
     {
-        if (_agent is null)
+        if (_agent is null || local.Count == 0)
             return [];
         var connected = _agent.Directory.Connected.ToHashSet();
         return _vm.Model.Machines
-            .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()))
-            .Select(m => (m.Id.Trim(), m.InputSide))
+            .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()) && m.Displays.Count > 0)
+            .Select(m => InputLayout.Target(m.Id.Trim(), local,
+                m.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList(), m.InputSide, m.InputPosition))
             .ToList();
     }
 
@@ -52,7 +54,7 @@ public partial class MainWindow
     {
         if (message is InputLeaveMessage leave)
         {
-            _share?.OnLeave(from, leave.Fraction);
+            _share?.OnLeave(from, leave);
             return Task.CompletedTask;
         }
         return Receiver().HandleAsync(from, message);
@@ -71,7 +73,8 @@ public partial class MainWindow
         {
             try
             {
-                _share = new KeyboardMouseShare(LocalDisplays(), InputTargets(), SessionOf, AddLog,
+                var local = LocalDisplays();
+                _share = new KeyboardMouseShare(local, InputTargets(local), SessionOf, AddLog,
                     machine => Dispatcher.BeginInvoke(() =>
                     {
                         _inputRemote = machine;
@@ -84,13 +87,19 @@ public partial class MainWindow
                 return;
             }
             _inputTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-            _inputTimer.Tick += (_, _) => _share?.Update(LocalDisplays(), InputTargets());
+            _inputTimer.Tick += (_, _) => RefreshInputTargets();
             _inputTimer.Start();
         }
         else
         {
-            _share.Update(LocalDisplays(), InputTargets());
+            RefreshInputTargets();
         }
+    }
+
+    private void RefreshInputTargets()
+    {
+        var local = LocalDisplays();
+        _share?.Update(local, InputTargets(local));
     }
 
     private void StopInputSharing()

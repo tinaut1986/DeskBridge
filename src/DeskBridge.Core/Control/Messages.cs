@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using DeskBridge.Core.Model;
+using DeskBridge.Core.Planning;
 
 namespace DeskBridge.Core.Control;
 
@@ -63,16 +64,20 @@ public enum InputKind { MouseMove, MouseButton, Wheel, Key }
 /// </summary>
 public sealed record InputEvent(InputKind Kind, int X = 0, int Y = 0, int Code = 0, bool Down = false, bool Extended = false);
 
-/// <summary>The coordinator hands the cursor over: it enters this machine through the edge facing the coordinator.</summary>
-/// <param name="Side">Where this machine is relative to the coordinator (it enters through the opposite edge).</param>
+/// <summary>The coordinator hands the cursor over.</summary>
+/// <param name="Side">Where this machine is relative to the coordinator (versions before 0.2.1 enter through the opposite edge).</param>
 /// <param name="Fraction">Position along that edge, 0 to 1 (top to bottom, or left to right).</param>
-public sealed record InputEnterMessage(PlacementSide Side, double Fraction) : ControlMessage;
+/// <param name="X">Where the cursor enters, in this machine's desktop coordinates (0.2.1 and later).</param>
+/// <param name="Peers">The coordinator's displays in this machine's coordinates: the cursor goes back when pushed into them.</param>
+public sealed record InputEnterMessage(PlacementSide Side, double Fraction, int? X = null, int? Y = null,
+    IReadOnlyList<DisplayRect>? Peers = null) : ControlMessage;
 
 /// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
 public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events) : ControlMessage;
 
-/// <summary>The cursor went back past the edge facing the coordinator, at this position along it.</summary>
-public sealed record InputLeaveMessage(double Fraction) : ControlMessage;
+/// <summary>The cursor went back to the coordinator, at this position along the edge facing it.</summary>
+/// <param name="X">Where it crossed, in this machine's coordinates (when the coordinator sent its displays).</param>
+public sealed record InputLeaveMessage(double Fraction, int? X = null, int? Y = null) : ControlMessage;
 
 /// <summary>The coordinator took the cursor back: release every key and button still held here.</summary>
 public sealed record InputReleaseMessage() : ControlMessage;
