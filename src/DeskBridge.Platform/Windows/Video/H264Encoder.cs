@@ -30,6 +30,8 @@ public sealed class H264Encoder : IDisposable
     private readonly int _outputSize;
     private volatile bool _stopping;
     private int _next;
+    private int _refused;
+    private const int NotAccepting = unchecked((int)0xC00D36B5); // MF_E_NOTACCEPTING
     private bool _forceKey;
 
     public string Name { get; }
@@ -170,7 +172,19 @@ public sealed class H264Encoder : IDisposable
         sample.AddBuffer(buffer);
         sample.SampleTime = time100ns;
         sample.SampleDuration = 166_667;
-        _transform.ProcessInput(0, sample, 0);
+        try
+        {
+            _transform.ProcessInput(0, sample, 0);
+        }
+        catch (SharpGen.Runtime.SharpGenException ex) when (ex.HResult == NotAccepting)
+        {
+            // Some encoders (Intel Quick Sync) ask for input before they can take it: drop this frame, the
+            // next request comes with the next event. Only a long run of refusals is a real failure.
+            if (++_refused >= 300)
+                throw new InvalidOperationException("The H.264 encoder keeps refusing frames.", ex);
+            return false;
+        }
+        _refused = 0;
         return true;
     }
 

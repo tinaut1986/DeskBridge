@@ -20,7 +20,13 @@ public sealed class VideoWindow : IDisposable
     private readonly VideoDevice _video;
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _ready = new();
-    private readonly WndProc _proc; // kept alive: Windows calls it
+    /// <summary>
+    /// One window class for the whole process, with one window procedure that lives as long as the process
+    /// (a per-window delegate could be collected while Windows still calls it) and finds the window by handle.
+    /// </summary>
+    private static readonly WndProc Proc = StaticWindowProc;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<nint, VideoWindow> Windows = new();
+    private static readonly Lazy<string> ClassName = new(RegisterClass);
     private readonly object _drawLock = new();
     private readonly string _title;
     private readonly (int X, int Y, int W, int H)? _monitor;
@@ -40,7 +46,6 @@ public sealed class VideoWindow : IDisposable
         _video = video;
         _title = title;
         _monitor = monitor;
-        _proc = WindowProc;
         _thread = new Thread(Run) { IsBackground = true, Name = "Video window" };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
@@ -52,16 +57,7 @@ public sealed class VideoWindow : IDisposable
     private void Run()
     {
         var instance = GetModuleHandleW(null);
-        string className = "DeskBridgeVideo" + Environment.CurrentManagedThreadId;
-        var wc = new WndClassEx
-        {
-            Size = (uint)Marshal.SizeOf<WndClassEx>(),
-            WndProc = Marshal.GetFunctionPointerForDelegate(_proc),
-            Instance = instance,
-            Cursor = LoadCursorW(0, 32512 /* IDC_ARROW */),
-            ClassName = className,
-        };
-        RegisterClassExW(ref wc);
+        string className = ClassName.Value;
 
         if (_monitor is { } m)
         {
@@ -80,6 +76,7 @@ public sealed class VideoWindow : IDisposable
 
         if (_hwnd != 0)
         {
+            Windows[_hwnd] = this;
             using var factory = _video.Adapter.GetParent<IDXGIFactory2>();
             _swapChain = factory.CreateSwapChainForHwnd(_video.Device, _hwnd, new SwapChainDescription1
             {
@@ -103,6 +100,35 @@ public sealed class VideoWindow : IDisposable
         }
     }
 
+    private static string RegisterClass()
+    {
+        const string name = "DeskBridgeVideoWindow";
+        var wc = new WndClassEx
+        {
+            Size = (uint)Marshal.SizeOf<WndClassEx>(),
+            WndProc = Marshal.GetFunctionPointerForDelegate(Proc),
+            Instance = GetModuleHandleW(null),
+            Cursor = LoadCursorW(0, 32512 /* IDC_ARROW */),
+            ClassName = name,
+        };
+        RegisterClassExW(ref wc);
+        return name;
+    }
+
+    private static nint StaticWindowProc(nint hwnd, uint message, nint wParam, nint lParam)
+    {
+        try
+        {
+            if (Windows.TryGetValue(hwnd, out var window))
+                return window.WindowProc(hwnd, message, wParam, lParam);
+        }
+        catch (Exception)
+        {
+            // never let an exception cross into Windows (it would end the process)
+        }
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
     private nint WindowProc(nint hwnd, uint message, nint wParam, nint lParam)
     {
         switch (message)
@@ -117,6 +143,7 @@ public sealed class VideoWindow : IDisposable
                 DestroyWindow(hwnd);
                 return 0;
             case WmDestroy:
+                Windows.TryRemove(hwnd, out _);
                 Closed?.Invoke();
                 PostQuitMessage(0);
                 return 0;
