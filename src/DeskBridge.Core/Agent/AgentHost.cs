@@ -5,6 +5,7 @@ using DeskBridge.Core.Localization;
 using DeskBridge.Core.Model;
 using DeskBridge.Core.Planning;
 using DeskBridge.Core.Transfer;
+using DeskBridge.Core.Video;
 
 namespace DeskBridge.Core.Agent;
 
@@ -58,6 +59,14 @@ public sealed class AgentHost : IAsyncDisposable
         Directory.Add(session);
     }
 
+    private void OnVideoOpened(VideoChannel channel)
+    {
+        if (VideoOpened is { } handler)
+            handler(channel);
+        else
+            _ = channel.DisposeAsync().AsTask();
+    }
+
     private readonly SemaphoreSlim _applyLock = new(1, 1);
     private ControlServer? _server;
     private ReverseLink? _reverse;
@@ -102,6 +111,19 @@ public sealed class AgentHost : IAsyncDisposable
     /// </summary>
     public Func<string, ControlMessage, Task>? InputHandler { get; set; }
 
+    /// <summary>
+    /// Video streams: start/stop requests from the coordinator (<see cref="StartVideoMessage"/>,
+    /// <see cref="StopVideoMessage"/>). Unset: refused.
+    /// </summary>
+    public Func<string, ControlMessage, CancellationToken, Task<ControlMessage>>? VideoHandler { get; set; }
+
+    /// <summary>Raised (on a thread-pool thread) for every video connection another machine opens to this one; the handler owns it.</summary>
+    public event Action<VideoChannel>? VideoOpened;
+
+    /// <summary>Host and port of the coordinator this machine connects to (for its video connections).</summary>
+    public (string Host, int Port)? CoordinatorEndpoint =>
+        string.IsNullOrWhiteSpace(local.ConnectTo) ? null : ReverseLink.ParseAddress(local.ConnectTo, local.ControlPort);
+
     /// <summary>This machine's state for another machine troubleshooting it (set by the GUI; basic otherwise).</summary>
     public Func<DiagnosticsMessage>? DiagnosticsProvider { get; set; }
 
@@ -118,6 +140,7 @@ public sealed class AgentHost : IAsyncDisposable
         {
             var server = new ControlServer(local.Machine, ControlAuth.DecodeKey(local.SharedKey), HandleAsync, local.ControlPort, log: log);
             server.SessionOpened += OnSessionOpened;
+            server.VideoOpened += OnVideoOpened;
             try
             {
                 server.Start();
@@ -166,6 +189,11 @@ public sealed class AgentHost : IAsyncDisposable
                 ProfileApplied?.Invoke(plan.Profile);
                 return new AppliedMessage(local.Machine, plan.Profile, plan.Warnings);
             }
+            case StartVideoMessage or StopVideoMessage:
+                return VideoHandler is { } video
+                    ? await video(from, request, ct)
+                    : new ErrorMessage(L.T("This machine cannot stream video."));
+
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
 

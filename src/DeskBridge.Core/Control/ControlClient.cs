@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using System.Text.Json;
 using DeskBridge.Core.Localization;
+using DeskBridge.Core.Video;
 
 namespace DeskBridge.Core.Control;
 
@@ -24,6 +25,24 @@ public static class ControlClient
         Action<string>? log = null,
         CancellationToken ct = default,
         bool asLink = false)
+    {
+        var (tcp, channel, machine, clientToServer, serverToClient) = await HandshakeAsync(host, port, localMachine, expectedMachine, key, asLink, video: null, ct);
+        channel.Encrypt(sendKey: clientToServer, receiveKey: serverToClient);
+        var session = new ControlSession(channel, tcp, machine, host, handler, log, peerIsLink: false);
+        session.Start();
+        return session;
+    }
+
+    /// <summary>Opens a video connection for stream <paramref name="streamKey"/> (same authentication, then binary packets).</summary>
+    public static async Task<VideoChannel> OpenVideoAsync(
+        string host, int port, string localMachine, string? expectedMachine, byte[] key, string streamKey, CancellationToken ct = default)
+    {
+        var (tcp, _, machine, clientToServer, serverToClient) = await HandshakeAsync(host, port, localMachine, expectedMachine, key, false, streamKey, ct);
+        return new VideoChannel(tcp, tcp.GetStream(), machine, streamKey, sendKey: clientToServer, receiveKey: serverToClient);
+    }
+
+    private static async Task<(TcpClient Tcp, LineChannel Channel, string Machine, byte[] ClientToServer, byte[] ServerToClient)> HandshakeAsync(
+        string host, int port, string localMachine, string? expectedMachine, byte[] key, bool asLink, string? video, CancellationToken ct)
     {
         var tcp = new TcpClient();
         try
@@ -56,7 +75,7 @@ public static class ControlClient
 
             var clientNonce = ControlAuth.NewNonce();
             var proof = ControlAuth.ClientProof(key, challenge.Nonce, clientNonce, localMachine, challenge.Machine);
-            await channel.SendAsync(new AuthMessage(localMachine, clientNonce, proof, asLink), ct);
+            await channel.SendAsync(new AuthMessage(localMachine, clientNonce, proof, asLink, video), ct);
 
             switch (await channel.ReceiveAsync(ct))
             {
@@ -72,10 +91,7 @@ public static class ControlClient
             }
 
             var (clientToServer, serverToClient) = ControlAuth.SessionKeys(key, challenge.Nonce, clientNonce);
-            channel.Encrypt(sendKey: clientToServer, receiveKey: serverToClient);
-            var session = new ControlSession(channel, tcp, challenge.Machine, host, handler, log, peerIsLink: false);
-            session.Start();
-            return session;
+            return (tcp, channel, challenge.Machine, clientToServer, serverToClient);
         }
         catch (Exception ex) when (ex is IOException or SocketException or JsonException or InvalidDataException)
         {

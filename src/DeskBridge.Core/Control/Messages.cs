@@ -23,6 +23,8 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(InputEventsMessage), "inputEvents")]
 [JsonDerivedType(typeof(InputLeaveMessage), "inputLeave")]
 [JsonDerivedType(typeof(InputReleaseMessage), "inputRelease")]
+[JsonDerivedType(typeof(StartVideoMessage), "startVideo")]
+[JsonDerivedType(typeof(StopVideoMessage), "stopVideo")]
 [JsonDerivedType(typeof(ConfigSyncMessage), "configSync")]
 [JsonDerivedType(typeof(GetDiagnosticsMessage), "getDiagnostics")]
 [JsonDerivedType(typeof(DiagnosticsMessage), "diagnostics")]
@@ -47,7 +49,8 @@ public sealed record PingMessage() : ControlMessage;
 public sealed record ChallengeMessage(int Version, string Machine, string Nonce) : ControlMessage;
 
 /// <param name="Link">The client keeps this session open as its link to a coordinator (it is that coordinator's client).</param>
-public sealed record AuthMessage(string Machine, string Nonce, string Proof, bool Link = false) : ControlMessage;
+/// <param name="Video">Not a control session but a video connection for this stream (binary packets after the welcome).</param>
+public sealed record AuthMessage(string Machine, string Nonce, string Proof, bool Link = false, string? Video = null) : ControlMessage;
 
 public sealed record WelcomeMessage(string Proof) : ControlMessage;
 
@@ -81,6 +84,16 @@ public sealed record InputLeaveMessage(double Fraction, int? X = null, int? Y = 
 
 /// <summary>The coordinator took the cursor back: release every key and button still held here.</summary>
 public sealed record InputReleaseMessage() : ControlMessage;
+
+/// <summary>
+/// The coordinator asks a machine (that connects to it) to open a video connection for a stream: it captures
+/// and sends <paramref name="Display"/> ("" = its main display) when <paramref name="Send"/>, otherwise it
+/// receives and shows the stream there. Answered once the connection is open.
+/// </summary>
+public sealed record StartVideoMessage(string Key, bool Send, string Display, int Fps, int BitrateMbps) : ControlMessage;
+
+/// <summary>Stops a stream started with <see cref="StartVideoMessage"/> (or every stream when Key is null).</summary>
+public sealed record StopVideoMessage(string? Key) : ControlMessage;
 
 /// <summary>Asks a machine for its state, to troubleshoot it from another one.</summary>
 public sealed record GetDiagnosticsMessage() : ControlMessage;

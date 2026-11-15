@@ -391,6 +391,7 @@ public partial class MainWindow : Window
         StopInputSharing();
         if (_agent is not null)
         {
+            await StopAllVideoAsync();
             await _agent.DisposeAsync();
             _agent = null;
         }
@@ -468,6 +469,9 @@ public partial class MainWindow : Window
             button.ToolTip = reason;
             ToolTipService.SetShowOnDisabled(button, true);
         }
+        VideoTestMenu.IsEnabled = !client;
+        VideoTestMenu.ToolTip = client ? L.T("Only the coordinator can show another machine's screen.") : null;
+        ToolTipService.SetShowOnDisabled(VideoTestMenu, true);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -479,6 +483,7 @@ public partial class MainWindow : Window
         StopInputSharing();
         DisposeTray();
         // The agent's loops run on the thread pool, so blocking briefly here cannot deadlock.
+        StopAllVideoAsync().Wait(TimeSpan.FromSeconds(2));
         _agent?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
         _updater.InstallOnExit();
         base.OnClosed(e);

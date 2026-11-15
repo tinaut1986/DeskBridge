@@ -111,6 +111,34 @@ try
             return 0;
         }
 
+        case ("video-net-test", >= 1) when OperatingSystem.IsWindows():
+        {
+            // Sender and receiver on this PC over a real (loopback) video connection: handshake, encryption, decoding.
+            int x = argList.Count > 2 ? int.Parse(argList[1]) : 0, y = argList.Count > 2 ? int.Parse(argList[2]) : 0;
+            double seconds = argList.Count > 3 ? double.Parse(argList[3], System.Globalization.CultureInfo.InvariantCulture) : 5;
+            bool show = argList.Contains("--show");
+            SetProcessDpiAwarenessContext(-4);
+            var key = ControlAuth.NewKey();
+            var keyBytes = ControlAuth.DecodeKey(key);
+            DeskBridge.Platform.Windows.Video.VideoReceiver? receiver = null;
+            await using var server = new ControlServer("receiver", keyBytes, (_, _, _) => Task.FromResult<ControlMessage>(new OkMessage()), 0,
+                System.Net.IPAddress.Loopback, Console.WriteLine);
+            server.VideoOpened += channel => receiver = !OperatingSystem.IsWindows() ? null : new DeskBridge.Platform.Windows.Video.VideoReceiver(
+                channel, show ? "DeskBridge video test" : null, null, Console.WriteLine);
+            server.Start();
+            var channel = await ControlClient.OpenVideoAsync("127.0.0.1", server.Port, "sender", "receiver", keyBytes, "test");
+            var sender = new DeskBridge.Platform.Windows.Video.VideoSender(channel, x, y, 60, 20, Console.WriteLine);
+            await Task.Delay(TimeSpan.FromSeconds(seconds));
+            var stats = receiver?.Stats;
+            await sender.DisposeAsync();
+            if (receiver is not null)
+                await receiver.DisposeAsync();
+            Console.WriteLine(stats is { } s
+                ? $"Received {s.Frames} frames ({s.Frames / seconds:F1} fps), {s.Bytes * 8 / 1e6 / seconds:F1} Mbps, failure: {sender.Failure ?? "none"}"
+                : "No video connection arrived.");
+            return 0;
+        }
+
         case ("keygen", 1):
             Console.WriteLine(ControlAuth.NewKey());
             Console.Error.WriteLine("Put this same key in \"sharedKey\" of deskbridge.local.json on every machine.");

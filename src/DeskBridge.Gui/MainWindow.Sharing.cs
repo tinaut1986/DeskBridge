@@ -55,6 +55,8 @@ public partial class MainWindow
         }).Task;
         agent.DiagnosticsProvider = OwnDiagnostics;
         agent.InputHandler = HandleInputAsync;
+        agent.VideoHandler = HandleVideoAsync;
+        agent.VideoOpened += OnVideoOpened;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not
         // the coordinator (reached directly) takes them from the coordinator named in the profile.

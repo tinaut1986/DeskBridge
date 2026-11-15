@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using DeskBridge.Core.Localization;
+using DeskBridge.Core.Video;
 
 namespace DeskBridge.Core.Control;
 
@@ -43,6 +44,9 @@ public sealed class ControlServer : IAsyncDisposable
 
     /// <summary>Raised (on a thread-pool thread) for every authenticated incoming session.</summary>
     public event Action<ControlSession>? SessionOpened;
+
+    /// <summary>Raised (on a thread-pool thread) for every authenticated incoming video connection; the handler owns it.</summary>
+    public event Action<VideoChannel>? VideoOpened;
 
     public void Start()
     {
@@ -110,6 +114,15 @@ public sealed class ControlServer : IAsyncDisposable
             }
             await channel.SendAsync(new WelcomeMessage(ControlAuth.ServerProof(_key, serverNonce, auth.Nonce, auth.Machine, _machine)), ct);
             var (clientToServer, serverToClient) = ControlAuth.SessionKeys(_key, serverNonce, auth.Nonce);
+            if (auth.Video is { } streamKey)
+            {
+                var video = new VideoChannel(client, client.GetStream(), auth.Machine, streamKey, sendKey: serverToClient, receiveKey: clientToServer);
+                if (VideoOpened is { } handler)
+                    handler(video);
+                else
+                    await video.DisposeAsync();
+                return;
+            }
             channel.Encrypt(sendKey: serverToClient, receiveKey: clientToServer);
 
             var host = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? remote;

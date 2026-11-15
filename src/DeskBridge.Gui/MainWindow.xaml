@@ -91,6 +91,9 @@
                 <MenuItem Header="{l:T 'Open settings folder'}" Click="OpenSettingsFolder_Click" />
                 <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
                 <MenuItem Header="{l:T 'Collect diagnostics from all machines'}" Click="CollectDiagnostics_Click" />
+                    <MenuItem x:Name="VideoTestMenu" Header="{l:T 'Video test: show the screen of'}" SubmenuOpened="VideoTestMenu_SubmenuOpened">
+                        <MenuItem Header="…" IsEnabled="False" />
+                    </MenuItem>
             </MenuItem>
         </Menu>
 
