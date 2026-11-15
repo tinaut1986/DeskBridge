@@ -146,9 +146,11 @@ public partial class MainWindow
     private void FileMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
         SendFilesMenu.Items.Clear();
+        bool ready = PeerContext() is not null;
         foreach (var machine in OtherMachines())
         {
             var item = new MenuItem { Header = machine.ToString() };
+            DisableUnlessReady(item, ready);
             item.Click += async (_, _) =>
             {
                 var dialog = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = L.T("Send files to {machine}", ("machine", machine)) };
@@ -180,9 +182,11 @@ public partial class MainWindow
 
         var menu = new ContextMenu();
         menu.Items.Add(new MenuItem { Header = L.T("Send {count} files to:", ("count", files.Length)), IsEnabled = false });
+        bool ready = PeerContext() is not null;
         foreach (var machine in OtherMachines())
         {
             var item = new MenuItem { Header = machine.ToString() };
+            DisableUnlessReady(item, ready);
             item.Click += async (_, _) => await SendFilesAsync(machine, files);
             menu.Items.Add(item);
         }
@@ -191,13 +195,20 @@ public partial class MainWindow
         menu.IsOpen = true;
     }
 
+    /// <summary>Files cannot be sent before This PC is set up: shown disabled, with the reason.</summary>
+    private static void DisableUnlessReady(MenuItem item, bool ready)
+    {
+        if (ready)
+            return;
+        item.IsEnabled = false;
+        item.ToolTip = L.T("Set up This PC first.");
+        ToolTipService.SetShowOnDisabled(item, true);
+    }
+
     private async Task SendFilesAsync(MachineVm machine, IReadOnlyList<string> files)
     {
         if (PeerContext() is not { } context)
-        {
-            MessageBox.Show(this, L.T("Set up This PC first."), "DeskBridge", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+            return; // the menus offer it disabled
         var progress = new Progress<(string File, long Done, long Total)>(p =>
             _vm.Status = L.T("Sending {file} to {machine}: {percent}%",
                 ("file", p.File), ("machine", machine), ("percent", p.Total == 0 ? 100 : p.Done * 100 / p.Total)));

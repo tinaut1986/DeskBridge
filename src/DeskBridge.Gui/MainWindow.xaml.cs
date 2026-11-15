@@ -425,6 +425,7 @@ public partial class MainWindow : Window
 
     private void UpdateAgentStatus(int? failedPort = null)
     {
+        UpdateRoleUi();
         if (_agent is null)
         {
             _vm.AgentStatus = failedPort is { } port
@@ -448,6 +449,25 @@ public partial class MainWindow : Window
         if (InputStatus() is { } input)
             parts.Add(input);
         _vm.AgentStatus = string.Join(" · ", parts);
+    }
+
+    /// <summary>This PC connects to a coordinator: profiles and machines are edited and applied there.</summary>
+    private bool IsClientHere() => !string.IsNullOrWhiteSpace(_vm.LocalConnectTo);
+
+    /// <summary>
+    /// On a client, what only the coordinator can do is disabled (with the reason as a tooltip) instead of
+    /// answering with a message after the click.
+    /// </summary>
+    private void UpdateRoleUi()
+    {
+        bool client = IsClientHere();
+        string? reason = client ? L.T("This PC connects to a coordinator: profiles and machines are edited and applied there.") : null;
+        foreach (var button in new[] { NewProfileButton, DuplicateProfileButton, DeleteProfileButton, SaveButton, ApplyButton, AddMachineButton, RemoveMachineButton })
+        {
+            button.IsEnabled = !client;
+            button.ToolTip = reason;
+            ToolTipService.SetShowOnDisabled(button, true);
+        }
     }
 
     protected override void OnClosed(EventArgs e)
@@ -827,12 +847,8 @@ public partial class MainWindow : Window
 
     private async Task ApplySelectedProfileAsync()
     {
-        if (!string.IsNullOrWhiteSpace(_vm.LocalConnectTo))
-        {
-            MessageBox.Show(this, L.T("This PC connects to a coordinator: profiles are applied from there."), "DeskBridge",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
+        if (IsClientHere())
+            return; // the buttons are disabled: profiles are applied from the coordinator
         if (_vm.SelectedProfile is not { } profile || !SaveConfig())
             return;
         var config = CurrentConfig(showErrors: false)!;

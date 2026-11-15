@@ -199,7 +199,7 @@
   "Theme": "テーマ",
   "There are no other machines": "他のマシンはありません",
   "This PC": "このPC",
-  "This PC connects to a coordinator: profiles are applied from there.": "この PC はコーディネーターに接続しています。プロファイルはコーディネーターから適用します。",
+  "This PC connects to a coordinator: profiles and machines are edited and applied there.": "この PC はコーディネーターに接続しています。プロファイルとマシンはそちらで編集・適用します。",
   "This PC is now identified by its computer name, {machine} (it was {old}).": "この PC はコンピューター名 {machine} で識別されるようになりました (以前は {old})。",
   "This machine": "このマシン",
   "This machine does not accept files from other machines. It can be enabled in its This PC tab.": "このマシンは他のマシンからのファイルを受け付けません。「このPC」タブで有効にできます。",

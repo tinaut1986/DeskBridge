@@ -58,6 +58,7 @@ public static class ThemeManager
         r["MutedText"] = Brush(dark ? "#9CA0AA" : "#6B7280");
         r["WarningText"] = Brush(dark ? "#F5B651" : "#B45309");
         r["ErrorText"] = Brush(dark ? "#FF7B7B" : "#DC2626");
+        r["SelectedRow"] = Brush(dark ? "#2F4A73" : "#DBEAFE");
         r["ChipBackground"] = Brush(dark ? "#3A3D46" : "#E5E7EB");
         r["BetaChipBackground"] = Brush(dark ? "#5A4A2D" : "#FEF3C7");
         r["OkChipBackground"] = Brush(dark ? "#2D5A3A" : "#D1FAE5");

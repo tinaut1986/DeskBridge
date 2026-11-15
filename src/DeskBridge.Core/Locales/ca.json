@@ -199,7 +199,7 @@
   "Theme": "Tema",
   "There are no other machines": "No hi ha cap altre equip",
   "This PC": "Aquest PC",
-  "This PC connects to a coordinator: profiles are applied from there.": "Aquest PC es connecta a un coordinador: els perfils s'apliquen des d'allà.",
+  "This PC connects to a coordinator: profiles and machines are edited and applied there.": "Aquest PC es connecta a un coordinador: els perfils i els equips s'editen i s'apliquen allà.",
   "This PC is now identified by its computer name, {machine} (it was {old}).": "Aquest PC ara s'identifica pel seu nom de Windows, {machine} (abans era {old}).",
   "This machine": "Aquest equip",
   "This machine does not accept files from other machines. It can be enabled in its This PC tab.": "Aquest equip no accepta fitxers d'altres equips. Es pot activar a la seva pestanya Aquest PC.",

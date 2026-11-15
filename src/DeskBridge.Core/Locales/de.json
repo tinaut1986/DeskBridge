@@ -199,7 +199,7 @@
   "Theme": "Design",
   "There are no other machines": "Es gibt keine anderen Rechner",
   "This PC": "Dieser PC",
-  "This PC connects to a coordinator: profiles are applied from there.": "Dieser PC verbindet sich mit einem Koordinator: Profile werden dort angewendet.",
+  "This PC connects to a coordinator: profiles and machines are edited and applied there.": "Dieser PC verbindet sich mit einem Koordinator: Profile und Rechner werden dort bearbeitet und angewendet.",
   "This PC is now identified by its computer name, {machine} (it was {old}).": "Dieser PC wird jetzt über seinen Computernamen erkannt: {machine} (vorher {old}).",
   "This machine": "Dieser Rechner",
   "This machine does not accept files from other machines. It can be enabled in its This PC tab.": "Dieser Rechner akzeptiert keine Dateien von anderen Rechnern. Das lässt sich in seinem Tab Dieser PC aktivieren.",

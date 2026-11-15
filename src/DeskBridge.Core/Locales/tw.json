@@ -199,7 +199,7 @@
   "Theme": "主題",
   "There are no other machines": "沒有其他電腦",
   "This PC": "本機",
-  "This PC connects to a coordinator: profiles are applied from there.": "本機連線到協調端：方案需要在協調端上套用。",
+  "This PC connects to a coordinator: profiles and machines are edited and applied there.": "此電腦連線到協調器：設定檔和電腦在那邊編輯和套用。",
   "This PC is now identified by its computer name, {machine} (it was {old}).": "本機現在以電腦名稱 {machine} 識別（原為 {old}）。",
   "This machine": "這台電腦",
   "This machine does not accept files from other machines. It can be enabled in its This PC tab.": "這台電腦不接受其他電腦傳來的檔案。可在其「本機」索引標籤中啟用。",

@@ -45,7 +45,7 @@ public partial class MainWindow
         menu.Items[0].Font = new Drawing.Font(menu.Items[0].Font, Drawing.FontStyle.Bold);
 
         // Profiles are applied from the coordinator only.
-        if (_vm.Model.Machines.FirstOrDefault(m => m.HasInput)?.Id.Trim() == _vm.LocalMachine.Trim() && _vm.Model.Profiles.Count > 0)
+        if (IsCoordinatorHere() && _vm.Model.Profiles.Count > 0)
         {
             var apply = new Forms.ToolStripMenuItem(L.T("Apply profile"));
             foreach (var profile in _vm.Model.Profiles)
@@ -61,15 +61,18 @@ public partial class MainWindow
         }
 
         var send = new Forms.ToolStripMenuItem(L.T("Send files to"));
+        bool ready = PeerContext() is not null;
         foreach (var machine in OtherMachines())
         {
             var m = machine;
-            send.DropDownItems.Add(m.ToString(), null, async (_, _) =>
+            var item = send.DropDownItems.Add(m.ToString(), null, async (_, _) =>
             {
                 var dialog = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = L.T("Send files to {machine}", ("machine", m)) };
                 if (dialog.ShowDialog() == true)
                     await SendFilesAsync(m, dialog.FileNames);
             });
+            item.Enabled = ready;
+            item.ToolTipText = ready ? null : L.T("Set up This PC first.");
         }
         send.Enabled = send.DropDownItems.Count > 0;
         menu.Items.Add(send);
