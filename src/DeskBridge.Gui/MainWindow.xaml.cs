@@ -821,6 +821,12 @@ public partial class MainWindow : Window
 
     private async Task ApplySelectedProfileAsync()
     {
+        if (!string.IsNullOrWhiteSpace(_vm.LocalConnectTo))
+        {
+            MessageBox.Show(this, L.T("This PC connects to a coordinator: profiles are applied from there."), "DeskBridge",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         if (_vm.SelectedProfile is not { } profile || !SaveConfig())
             return;
         var config = CurrentConfig(showErrors: false)!;

@@ -64,7 +64,7 @@ public sealed class ReverseLink : IAsyncDisposable
         {
             try
             {
-                await using var session = await ControlClient.OpenAsync(_host, _port, _local.Machine, expectedMachine: null, key, _handler, _log, ct);
+                await using var session = await ControlClient.OpenAsync(_host, _port, _local.Machine, expectedMachine: null, key, _handler, _log, ct, asLink: true);
                 _directory.Add(session);
                 ConnectedTo = session.RemoteMachine;
                 _lastError = null;

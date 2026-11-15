@@ -112,7 +112,7 @@ public sealed class ControlServer : IAsyncDisposable
             channel.Encrypt(sendKey: serverToClient, receiveKey: clientToServer);
 
             var host = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? remote;
-            var session = new ControlSession(channel, client, auth.Machine, host, (from, request, token) => _onRequest(from, request, token), _log);
+            var session = new ControlSession(channel, client, auth.Machine, host, (from, request, token) => _onRequest(from, request, token), _log, peerIsLink: auth.Link);
             lock (_sessions)
                 _sessions.Add(session);
             session.Closed += s =>

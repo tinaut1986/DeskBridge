@@ -140,6 +140,34 @@ public class ReverseLinkTests
         await s.WaitConnectedAsync();
     }
 
+    [Fact]
+    public async Task Only_the_coordinator_the_laptop_connects_to_can_replace_configurations()
+    {
+        await using var s = new Setup();
+        await s.WaitConnectedAsync();
+        DeskBridgeConfig? laptopGot = null, desktopGot = null;
+        s.LaptopAgent.ConfigReceived += c => laptopGot = c;
+        s.DesktopAgent.ConfigReceived += c => desktopGot = c;
+
+        // The laptop's own first-run config names itself as the coordinator; it must not impose it on the desktop.
+        var laptopAsCoordinator = s.Config with
+        {
+            Machines = s.Config.Machines.Select(m => m with { HasInput = m.Id == "laptop" }).ToList(),
+        };
+        await using (var toDesktop = await Peers.ConnectAsync(s.Config, s.Laptop, "desktop", s.LaptopAgent.Directory))
+        {
+            Assert.IsType<ErrorMessage>(await toDesktop.RequestAsync(new ConfigSyncMessage(laptopAsCoordinator)));
+            Assert.IsType<ErrorMessage>(await toDesktop.RequestAsync(new ApplyProfileMessage(laptopAsCoordinator, "personal")));
+        }
+        Assert.Null(desktopGot);
+
+        // The coordinator the laptop connects to can.
+        await Coordinator.SyncConfigAsync(s.Config, s.DesktopAgent.Directory);
+        for (int i = 0; i < 50 && laptopGot is null; i++)
+            await Task.Delay(20);
+        Assert.Equal(s.Config.Machines.Count, laptopGot?.Machines.Count);
+    }
+
     [Theory]
     [InlineData("192.168.1.52", "192.168.1.52", 47900)]
     [InlineData("192.168.1.52:5000", "192.168.1.52", 5000)]

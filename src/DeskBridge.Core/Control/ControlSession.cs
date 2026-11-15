@@ -28,8 +28,9 @@ public sealed class ControlSession : IAsyncDisposable
     private int _closedFlag;
 
     internal ControlSession(LineChannel channel, IDisposable transport, string remoteMachine, string remoteHost,
-        ControlRequestHandler? handler, Action<string>? log)
+        ControlRequestHandler? handler, Action<string>? log, bool peerIsLink)
     {
+        PeerIsLink = peerIsLink;
         _channel = channel;
         _transport = transport;
         _handler = handler;
@@ -42,6 +43,9 @@ public sealed class ControlSession : IAsyncDisposable
     public string RemoteMachine { get; }
 
     public string RemoteHost { get; }
+
+    /// <summary>The other machine opened this session as its link to us: it is our client, never our coordinator.</summary>
+    public bool PeerIsLink { get; }
 
     public bool IsOpen => Volatile.Read(ref _closedFlag) == 0;
 

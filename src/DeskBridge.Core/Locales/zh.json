@@ -185,6 +185,7 @@
   "Theme": "主题",
   "There are no other machines": "没有其他电脑",
   "This PC": "本机",
+  "This PC connects to a coordinator: profiles are applied from there.": "本机连接到协调端：方案需要在协调端上应用。",
   "This PC is now identified by its computer name, {machine} (it was {old}).": "本机现在以计算机名 {machine} 识别（原为 {old}）。",
   "This machine": "这台电脑",
   "This machine does not accept files from other machines. It can be enabled in its This PC tab.": "这台电脑不接受其他电脑发来的文件。可在其“本机”选项卡中启用。",

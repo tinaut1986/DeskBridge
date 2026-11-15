@@ -226,7 +226,8 @@ public class ControlChannelTests
         Assert.All(results, r => Assert.True(r.Ok, r.Message));
         Assert.Equal("work", m.DesktopAgent.ActiveProfile);
         Assert.Equal("work", m.LaptopAgent.ActiveProfile);
-        Assert.Equal(m.Config.Machines.Count, laptopGot?.Machines.Count);
+        // An agent that connects to no coordinator keeps its own configuration (it is set up by hand).
+        Assert.Null(laptopGot);
 
         var displays = await Coordinator.GetDisplaysAsync(m.Config, m.Desktop, "laptop");
         Assert.Equal((2560, 1440, 75, 1920), (displays[1].Width, displays[1].Height, displays[1].RefreshHz, displays[1].X));

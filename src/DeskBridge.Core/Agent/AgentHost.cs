@@ -13,13 +13,41 @@ namespace DeskBridge.Core.Agent;
 /// a connection open to the coordinator) and does what the other machines ask: apply a profile, list
 /// displays, take a clipboard or a file. Hosted by the GUI (normal use) or by 'deskbridge agent' (CLI).
 /// </summary>
-public sealed class AgentHost(
-    LocalSettings local,
-    PlanApplier applier,
-    IDisplayDetector detector,
-    Action<string> log,
-    FileReceiver? files = null) : IAsyncDisposable
+public sealed class AgentHost : IAsyncDisposable
 {
+    private readonly LocalSettings local;
+    private readonly PlanApplier applier;
+    private readonly IDisplayDetector detector;
+    private readonly Action<string> log;
+    private readonly FileReceiver? files;
+
+    public AgentHost(LocalSettings local, PlanApplier applier, IDisplayDetector detector, Action<string> log, FileReceiver? files = null)
+    {
+        this.local = local;
+        this.applier = applier;
+        this.detector = detector;
+        this.log = log;
+        this.files = files;
+        AcceptConfigFrom = ConnectsTo;
+        AcceptProfilesFrom = from => from == local.Machine || ConnectsTo(from)
+                                     || (string.IsNullOrWhiteSpace(local.ConnectTo) && !IsLinkedClient(from));
+    }
+
+    /// <summary>Machines holding a link session to this one: our clients, never our coordinator.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ControlSession, string> _linkedClients = new();
+
+    private bool IsLinkedClient(string machine) => _linkedClients.Values.Contains(machine);
+
+    private void OnSessionOpened(ControlSession session)
+    {
+        if (session.PeerIsLink)
+        {
+            _linkedClients[session] = session.RemoteMachine;
+            session.Closed += s => _linkedClients.TryRemove(s, out _);
+        }
+        Directory.Add(session);
+    }
+
     private readonly SemaphoreSlim _applyLock = new(1, 1);
     private ControlServer? _server;
     private ReverseLink? _reverse;
@@ -43,6 +71,21 @@ public sealed class AgentHost(
     /// <summary>Takes a clipboard from another machine; false (or unset) refuses it.</summary>
     public Func<string, ClipboardMessage, Task<bool>>? ClipboardHandler { get; set; }
 
+    /// <summary>
+    /// Whether a machine may replace this one's configuration (configSync, or the config carried by a
+    /// profile). Default: only the coordinator this agent connects to; an agent that connects to
+    /// nobody keeps its own configuration (it is the coordinator, or is set up by hand).
+    /// </summary>
+    public Func<string, bool> AcceptConfigFrom { get; set; }
+
+    /// <summary>
+    /// Whether a machine may apply profiles here. Default: this machine itself, or the coordinator it
+    /// connects to; without a coordinator to connect to, the one named in the profile's config.
+    /// </summary>
+    public Func<string, bool> AcceptProfilesFrom { get; set; }
+
+    private bool ConnectsTo(string machine) => _reverse?.ConnectedTo == machine;
+
     /// <param name="listen">
     /// Accept incoming connections. Off is fine on a machine that only connects out; if the port is
     /// taken and <see cref="LocalSettings.ConnectTo"/> is set, the agent carries on without listening.
@@ -55,7 +98,7 @@ public sealed class AgentHost(
         if (listen)
         {
             var server = new ControlServer(local.Machine, ControlAuth.DecodeKey(local.SharedKey), HandleAsync, local.ControlPort, log: log);
-            server.SessionOpened += Directory.Add;
+            server.SessionOpened += OnSessionOpened;
             try
             {
                 server.Start();
@@ -84,7 +127,7 @@ public sealed class AgentHost(
             case ApplyProfileMessage apply:
             {
                 var plan = LayoutPlanner.Plan(apply.Config, apply.Profile);
-                if (plan.Coordinator != from)
+                if (plan.Coordinator != from || !AcceptProfilesFrom(from))
                     return new ErrorMessage(L.T("Only the coordinator ({coordinator}) can apply profiles.", ("coordinator", plan.Coordinator)));
 
                 await _applyLock.WaitAsync(ct);
@@ -99,7 +142,8 @@ public sealed class AgentHost(
                     _applyLock.Release();
                 }
                 log(L.T("Profile '{profile}' applied.", ("profile", plan.Profile)));
-                ConfigReceived?.Invoke(apply.Config);
+                if (AcceptConfigFrom(from))
+                    ConfigReceived?.Invoke(apply.Config);
                 ProfileApplied?.Invoke(plan.Profile);
                 return new AppliedMessage(local.Machine, plan.Profile, plan.Warnings);
             }
@@ -107,8 +151,10 @@ public sealed class AgentHost(
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
 
             case ConfigSyncMessage sync:
-                // Only the coordinator named in that config may replace it (it is the one place it is edited).
-                if (sync.Config.Machines.FirstOrDefault(m => m.HasInput)?.Id != from)
+                // Only the coordinator this machine connects to may replace its configuration, and only
+                // with one that names that coordinator (a machine that wrongly thinks it is the
+                // coordinator must not overwrite the real one's configuration).
+                if (!AcceptConfigFrom(from) || sync.Config.Machines.FirstOrDefault(m => m.HasInput)?.Id != from)
                     return new ErrorMessage(L.T("Only the coordinator can change the configuration."));
                 ConfigReceived?.Invoke(sync.Config);
                 return new OkMessage();

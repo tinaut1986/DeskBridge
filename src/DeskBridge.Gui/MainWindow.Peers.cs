@@ -16,8 +16,13 @@ public partial class MainWindow
     /// <summary>Sessions already welcomed (a reconnection is a new session and is welcomed again).</summary>
     private readonly HashSet<ControlSession> _welcomed = [];
 
+    /// <summary>
+    /// This PC is the coordinator: the configuration says so and it does not connect to another machine
+    /// (a machine with Connect to is a client, whatever its own first-run configuration said).
+    /// </summary>
     private bool IsCoordinatorHere() =>
-        _vm.Model.Machines.FirstOrDefault(m => m.HasInput)?.Id.Trim() == _vm.LocalMachine.Trim();
+        string.IsNullOrWhiteSpace(_vm.LocalConnectTo)
+        && _vm.Model.Machines.FirstOrDefault(m => m.HasInput)?.Id.Trim() == _vm.LocalMachine.Trim();
 
     /// <summary>On the UI thread, whenever a machine connects or disconnects.</summary>
     private void OnPeersChanged()

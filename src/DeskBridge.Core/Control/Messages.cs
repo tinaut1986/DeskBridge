@@ -39,7 +39,8 @@ public sealed record PingMessage() : ControlMessage;
 /// <param name="Machine">Id of the agent the client has reached.</param>
 public sealed record ChallengeMessage(int Version, string Machine, string Nonce) : ControlMessage;
 
-public sealed record AuthMessage(string Machine, string Nonce, string Proof) : ControlMessage;
+/// <param name="Link">The client keeps this session open as its link to a coordinator (it is that coordinator's client).</param>
+public sealed record AuthMessage(string Machine, string Nonce, string Proof, bool Link = false) : ControlMessage;
 
 public sealed record WelcomeMessage(string Proof) : ControlMessage;
 

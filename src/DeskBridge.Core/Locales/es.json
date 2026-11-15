@@ -185,6 +185,7 @@
   "Theme": "Tema",
   "There are no other machines": "No hay otros equipos",
   "This PC": "Este PC",
+  "This PC connects to a coordinator: profiles are applied from there.": "Este PC se conecta a un coordinador: los perfiles se aplican desde allí.",
   "This PC is now identified by its computer name, {machine} (it was {old}).": "Este PC se identifica ahora por su nombre de Windows, {machine} (antes era {old}).",
   "This machine": "Este equipo",
   "This machine does not accept files from other machines. It can be enabled in its This PC tab.": "Este equipo no acepta archivos de otros equipos. Se puede activar en su pestaña Este PC.",

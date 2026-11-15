@@ -22,7 +22,8 @@ public static class ControlClient
         byte[] key,
         ControlRequestHandler? handler = null,
         Action<string>? log = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool asLink = false)
     {
         var tcp = new TcpClient();
         try
@@ -54,7 +55,7 @@ public static class ControlClient
 
             var clientNonce = ControlAuth.NewNonce();
             var proof = ControlAuth.ClientProof(key, challenge.Nonce, clientNonce, localMachine, challenge.Machine);
-            await channel.SendAsync(new AuthMessage(localMachine, clientNonce, proof), ct);
+            await channel.SendAsync(new AuthMessage(localMachine, clientNonce, proof, asLink), ct);
 
             switch (await channel.ReceiveAsync(ct))
             {
@@ -71,7 +72,7 @@ public static class ControlClient
 
             var (clientToServer, serverToClient) = ControlAuth.SessionKeys(key, challenge.Nonce, clientNonce);
             channel.Encrypt(sendKey: clientToServer, receiveKey: serverToClient);
-            var session = new ControlSession(channel, tcp, challenge.Machine, host, handler, log);
+            var session = new ControlSession(channel, tcp, challenge.Machine, host, handler, log, peerIsLink: false);
             session.Start();
             return session;
         }
