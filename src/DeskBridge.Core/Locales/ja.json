@@ -236,6 +236,7 @@
   "{machine} and this PC both have Connect to set to each other. Only the client should; clear it on the coordinator.": "{machine} とこの PC の「接続先」が互いを指しています。設定するのはクライアントだけです。コーディネーターでは空欄にしてください。",
   "{machine} connected and was added to Machines.": "{machine} が接続し、マシンに追加されました。",
   "{machine} connected from {host}.": "{machine} が {host} から接続しました。",
+  "{machine} connects to this PC as a client, so it cannot be the coordinator: this PC is the coordinator again.": "{machine} はクライアントとしてこの PC に接続しているため、コーディネーターにはなれません。この PC が再びコーディネーターになります。",
   "{machine} disconnected.": "{machine} が切断しました。",
   "{machine}, display {display}": "{machine}、ディスプレイ {display}",
   "{machine}: virtual displays to create and send: {created} · streams shown from other machines: {shown}": "{machine}：作成して送信する仮想ディスプレイ：{created} · 他のマシンから表示中のストリーム：{shown}",

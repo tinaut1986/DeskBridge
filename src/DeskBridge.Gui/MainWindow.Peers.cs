@@ -29,6 +29,7 @@ public partial class MainWindow
     {
         UpdateAgentStatus();
         CollectNewDiagnostics();
+        FixCoordinatorIfAClientIsMarkedAsIt();
         if (_agent is null || !IsCoordinatorHere())
             return;
 
@@ -39,6 +40,25 @@ public partial class MainWindow
                 continue;
             _ = WelcomeAsync(id, session);
         }
+    }
+
+    /// <summary>
+    /// A machine that connects to this one as its client cannot be the coordinator: if the configuration says
+    /// it is (left over from older versions, or set by mistake), this PC, which connects to no one, takes over.
+    /// </summary>
+    private void FixCoordinatorIfAClientIsMarkedAsIt()
+    {
+        if (_agent is null || !string.IsNullOrWhiteSpace(_vm.LocalConnectTo))
+            return;
+        var marked = _vm.Model.Machines.FirstOrDefault(m => m.HasInput);
+        var self = _vm.Model.Machines.FirstOrDefault(m => m.Id.Trim() == _vm.LocalMachine.Trim());
+        if (marked is null || self is null || marked == self || !_agent.IsLinkedClient(marked.Id.Trim()))
+            return;
+        self.HasInput = true; // clears it on the others
+        AddLog(L.T("{machine} connects to this PC as a client, so it cannot be the coordinator: this PC is the coordinator again.",
+            ("machine", marked.Id)));
+        if (_options.SnapshotDir is null && CurrentConfig(showErrors: false) is { } fixedConfig)
+            ConfigLoader.Save(_options.ConfigPath, fixedConfig);
     }
 
     private async Task WelcomeAsync(string id, ControlSession session)

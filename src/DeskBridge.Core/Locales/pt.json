@@ -236,6 +236,7 @@
   "{machine} and this PC both have Connect to set to each other. Only the client should; clear it on the coordinator.": "{machine} e este PC têm Conectar a apontando um para o outro. Só o cliente deve ter; deixe vazio no coordenador.",
   "{machine} connected and was added to Machines.": "{machine} se conectou e foi adicionado aos computadores.",
   "{machine} connected from {host}.": "{machine} se conectou de {host}.",
+  "{machine} connects to this PC as a client, so it cannot be the coordinator: this PC is the coordinator again.": "{machine} se conecta a este PC como cliente, então não pode ser o coordenador: este PC volta a ser o coordenador.",
   "{machine} disconnected.": "{machine} se desconectou.",
   "{machine}, display {display}": "{machine}, tela {display}",
   "{machine}: virtual displays to create and send: {created} · streams shown from other machines: {shown}": "{machine}: telas virtuais a criar e enviar: {created} · fluxos exibidos de outros computadores: {shown}",

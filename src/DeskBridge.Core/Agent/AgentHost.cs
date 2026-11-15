@@ -36,7 +36,8 @@ public sealed class AgentHost : IAsyncDisposable
     /// <summary>Machines holding a link session to this one: our clients, never our coordinator.</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<ControlSession, string> _linkedClients = new();
 
-    private bool IsLinkedClient(string machine) => _linkedClients.Values.Contains(machine);
+    /// <summary>The machine holds a link session to this one: it is our client, never our coordinator.</summary>
+    public bool IsLinkedClient(string machine) => _linkedClients.Values.Contains(machine);
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _warnedMutual = new();
 

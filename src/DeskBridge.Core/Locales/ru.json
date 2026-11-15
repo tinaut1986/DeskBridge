@@ -236,6 +236,7 @@
   "{machine} and this PC both have Connect to set to each other. Only the client should; clear it on the coordinator.": "У {machine} и этого ПК в поле «Подключаться к» указаны друг друга. Оно должно быть только у клиента; очистите его на координаторе.",
   "{machine} connected and was added to Machines.": "{machine} подключился и добавлен в список компьютеров.",
   "{machine} connected from {host}.": "{machine} подключился с {host}.",
+  "{machine} connects to this PC as a client, so it cannot be the coordinator: this PC is the coordinator again.": "{machine} подключается к этому ПК как клиент, поэтому не может быть координатором: этот ПК снова координатор.",
   "{machine} disconnected.": "{machine} отключился.",
   "{machine}, display {display}": "{machine}, дисплей {display}",
   "{machine}: virtual displays to create and send: {created} · streams shown from other machines: {shown}": "{machine}: виртуальных дисплеев для создания и отправки: {created} · потоков с других компьютеров на экране: {shown}",

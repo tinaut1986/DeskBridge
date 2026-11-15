@@ -236,6 +236,7 @@
   "{machine} and this PC both have Connect to set to each other. Only the client should; clear it on the coordinator.": "{machine} 和本机的“连接到”互相指向对方。只有客户端应该设置；请在协调端上清空。",
   "{machine} connected and was added to Machines.": "{machine} 已连接并已添加到电脑列表。",
   "{machine} connected from {host}.": "{machine} 已从 {host} 连接。",
+  "{machine} connects to this PC as a client, so it cannot be the coordinator: this PC is the coordinator again.": "{machine} 以客户端身份连接到本机，因此不能作为协调端：本机重新成为协调端。",
   "{machine} disconnected.": "{machine} 已断开连接。",
   "{machine}, display {display}": "{machine}，显示器 {display}",
   "{machine}: virtual displays to create and send: {created} · streams shown from other machines: {shown}": "{machine}：需创建并发送的虚拟显示器：{created} · 显示来自其他电脑的串流：{shown}",
