@@ -51,6 +51,7 @@ public partial class MainWindow
                 AddLog(L.T("Clipboard ({kind}) received from {machine}.", ("kind", ClipboardKind(message)), ("machine", MachineName(from))));
             return applied;
         }).Task;
+        agent.DiagnosticsProvider = OwnDiagnostics;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not
         // the coordinator (reached directly) takes them from the coordinator named in the profile.

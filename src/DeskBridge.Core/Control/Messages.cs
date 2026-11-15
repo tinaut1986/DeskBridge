@@ -19,6 +19,8 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(OkMessage), "ok")]
 [JsonDerivedType(typeof(ErrorMessage), "error")]
 [JsonDerivedType(typeof(ConfigSyncMessage), "configSync")]
+[JsonDerivedType(typeof(GetDiagnosticsMessage), "getDiagnostics")]
+[JsonDerivedType(typeof(DiagnosticsMessage), "diagnostics")]
 [JsonDerivedType(typeof(ApplyProfileMessage), "applyProfile")]
 [JsonDerivedType(typeof(AppliedMessage), "applied")]
 [JsonDerivedType(typeof(GetDisplaysMessage), "getDisplays")]
@@ -47,6 +49,19 @@ public sealed record WelcomeMessage(string Proof) : ControlMessage;
 public sealed record OkMessage() : ControlMessage;
 
 public sealed record ErrorMessage(string Message) : ControlMessage;
+
+/// <summary>Asks a machine for its state, to troubleshoot it from another one.</summary>
+public sealed record GetDiagnosticsMessage() : ControlMessage;
+
+/// <summary>A machine's state for troubleshooting: version, settings (never the shared key), configuration, recent log.</summary>
+public sealed record DiagnosticsMessage(
+    string Machine,
+    string Version,
+    string? ConnectTo,
+    int ControlPort,
+    bool IsCoordinator,
+    DeskBridgeConfig? Config,
+    IReadOnlyList<string> Log) : ControlMessage;
 
 /// <summary>The coordinator's current configuration, sent when a machine connects and whenever it is saved.</summary>
 public sealed record ConfigSyncMessage(DeskBridgeConfig Config) : ControlMessage;

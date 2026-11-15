@@ -72,6 +72,7 @@
                 <MenuItem Header="{l:T 'Project page'}" Click="ProjectPage_Click" />
                 <MenuItem Header="{l:T 'Open settings folder'}" Click="OpenSettingsFolder_Click" />
                 <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
+                <MenuItem Header="{l:T 'Collect diagnostics from all machines'}" Click="CollectDiagnostics_Click" />
             </MenuItem>
         </Menu>
 

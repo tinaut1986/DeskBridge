@@ -28,6 +28,7 @@ public partial class MainWindow
     private void OnPeersChanged()
     {
         UpdateAgentStatus();
+        CollectNewDiagnostics();
         if (_agent is null || !IsCoordinatorHere())
             return;
 

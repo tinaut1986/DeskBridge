@@ -38,8 +38,17 @@ public sealed class AgentHost : IAsyncDisposable
 
     private bool IsLinkedClient(string machine) => _linkedClients.Values.Contains(machine);
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _warnedMutual = new();
+
     private void OnSessionOpened(ControlSession session)
     {
+        if (session.PeerIsLink && _reverse is { } reverse && reverse.ConnectedTo == session.RemoteMachine
+            && _warnedMutual.TryAdd(session.RemoteMachine, 0))
+        {
+            // Both machines have Connect to pointing at each other: each new session replaces the other's.
+            log(L.T("{machine} and this PC both have Connect to set to each other. Only the client should; clear it on the coordinator.",
+                ("machine", session.RemoteMachine)));
+        }
         if (session.PeerIsLink)
         {
             _linkedClients[session] = session.RemoteMachine;
@@ -85,6 +94,9 @@ public sealed class AgentHost : IAsyncDisposable
     public Func<string, bool> AcceptProfilesFrom { get; set; }
 
     private bool ConnectsTo(string machine) => _reverse?.ConnectedTo == machine;
+
+    /// <summary>This machine's state for another machine troubleshooting it (set by the GUI; basic otherwise).</summary>
+    public Func<DiagnosticsMessage>? DiagnosticsProvider { get; set; }
 
     /// <param name="listen">
     /// Accept incoming connections. Off is fine on a machine that only connects out; if the port is
@@ -149,6 +161,10 @@ public sealed class AgentHost : IAsyncDisposable
             }
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
+
+            case GetDiagnosticsMessage:
+                return DiagnosticsProvider?.Invoke()
+                    ?? new DiagnosticsMessage(local.Machine, "?", local.ConnectTo, local.ControlPort, false, null, []);
 
             case ConfigSyncMessage sync:
                 // Only the coordinator this machine connects to may replace its configuration, and only
