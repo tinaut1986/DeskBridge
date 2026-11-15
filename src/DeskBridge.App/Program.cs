@@ -21,6 +21,8 @@ string usage = $"""
       deskbridge displays [<machine>]         List this PC's monitors, or ask a machine's agent
 
       deskbridge keygen                       Generate a new shared key
+      deskbridge video-test [<x> <y>] [<seconds>] [<bmp>]
+                                              Capture the monitor at (x, y), encode and decode it on the GPU, report
       deskbridge agent                        Run this machine's agent and wait for orders
       deskbridge switch <profile>             (coordinator) Apply a profile on every machine
 
@@ -93,6 +95,21 @@ try
             foreach (var d in await Coordinator.GetDisplaysAsync(LoadConfig(configPath), LoadLocal(localPath), argList[1]))
                 Console.WriteLine($"{d.Id,-3} {d.Width}x{d.Height}@{d.RefreshHz}  at ({d.X},{d.Y})");
             return 0;
+
+        case ("video-test", >= 1) when OperatingSystem.IsWindows():
+        {
+            int x = argList.Count > 2 ? int.Parse(argList[1]) : 0, y = argList.Count > 2 ? int.Parse(argList[2]) : 0;
+            double seconds = argList.Count > 3 ? double.Parse(argList[3], System.Globalization.CultureInfo.InvariantCulture) : 5;
+            string? bmp = argList.Count > 4 ? argList[4] : null;
+            SetProcessDpiAwarenessContext(-4); // per-monitor v2: physical pixels, as desktop duplication needs
+            int fps = int.TryParse(Environment.GetEnvironmentVariable("DESKBRIDGE_FPS"), out int f) ? f : 60;
+            var r = DeskBridge.Platform.Windows.Video.LoopbackTest.Run(x, y, seconds, fps, 20, bmp, Console.WriteLine);
+            Console.WriteLine($"{r.Width}x{r.Height}: {r.Encoded / r.Seconds:F1} fps encoded ({r.Captured} screen changes), {r.Decoded} decoded, "
+                + $"{r.AverageKiB:F1} KiB/frame, {r.Mbps:F1} Mbps, {r.KeyFrames} key frames, encode {r.EncodeMs:F1} ms, decode {r.DecodeMs:F1} ms");
+            if (r.Picture is not null)
+                Console.WriteLine($"Last decoded picture: {r.Picture}");
+            return 0;
+        }
 
         case ("keygen", 1):
             Console.WriteLine(ControlAuth.NewKey());
@@ -202,6 +219,9 @@ static void PrintPlan(DeskBridgeConfig config, LayoutPlan plan)
 }
 
 static void Log(string message) => Console.WriteLine($"{DateTime.Now:HH:mm:ss} {message}");
+
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+static extern bool SetProcessDpiAwarenessContext(nint context);
 
 static int Fail(string message)
 {
