@@ -107,10 +107,23 @@ public partial class MainWindow
         }
         var receiver = new VideoReceiver(channel, target.Title, target.Monitor, AddLog);
         _videoReceivers[channel.StreamKey] = receiver;
+        _ = Task.Run(async () =>
+        {
+            // No picture after a few seconds: fetch the sender's log right away, to see why.
+            await Task.Delay(TimeSpan.FromSeconds(6));
+            if (!receiver.Completion.IsCompleted && receiver.Stats.Frames == 0 && SessionOf(target.Machine) is { } session)
+            {
+                AddLog($"[video] no picture from {target.Machine} after 6 s");
+                if (await SaveDiagnosticsAsync(session) is { } path)
+                    AddLog($"[video] diagnostics of {target.Machine} saved: {path}");
+            }
+        });
         _ = receiver.Completion.ContinueWith(async _ =>
         {
             _videoReceivers.TryRemove(channel.StreamKey, out var _);
             await receiver.DisposeAsync();
+            if (SessionOf(target.Machine) is { } diagnosed)
+                await SaveDiagnosticsAsync(diagnosed); // the sender's side of the story, for troubleshooting
             // The window was closed here: the other machine stops sending.
             if (SessionOf(target.Machine) is { } session)
             {

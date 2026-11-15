@@ -32,6 +32,16 @@ public sealed class H264Encoder : IDisposable
     private int _next;
     private int _refused;
     private const int NotAccepting = unchecked((int)0xC00D36B5); // MF_E_NOTACCEPTING
+    private const int StreamChange = unchecked((int)0xC00D6D61); // MF_E_TRANSFORM_STREAM_CHANGE
+    private const int NeedMoreInput = unchecked((int)0xC00D6D72); // MF_E_TRANSFORM_NEED_MORE_INPUT
+    private int _statNeedInput, _statHaveOutput, _statInputs, _statOutputs, _statRefused, _statWaits, _statFormatChanges;
+    private string? _lastOtherEvent;
+
+    /// <summary>What the encoder has done so far, for logs when something goes wrong.</summary>
+    public string Stats =>
+        $"input requests {_statNeedInput}, frames in {_statInputs}, refused {_statRefused}, waits {_statWaits}, "
+        + $"output events {_statHaveOutput}, frames out {_statOutputs}, format changes {_statFormatChanges}"
+        + (_lastOtherEvent is { } other ? $", other event {other}" : "");
     private bool _forceKey;
 
     public string Name { get; }
@@ -155,7 +165,10 @@ public sealed class H264Encoder : IDisposable
         if (Error is { } error)
             throw new InvalidOperationException("The H.264 encoder stopped.", error);
         if (!_needInput.Wait(wait))
+        {
+            Interlocked.Increment(ref _statWaits);
             return false; // the encoder is behind: drop this frame
+        }
 
         var texture = _pool[_next];
         _next = (_next + 1) % PoolSize;
@@ -178,13 +191,16 @@ public sealed class H264Encoder : IDisposable
         }
         catch (SharpGen.Runtime.SharpGenException ex) when (ex.HResult == NotAccepting)
         {
-            // Some encoders (Intel Quick Sync) ask for input before they can take it: drop this frame, the
-            // next request comes with the next event. Only a long run of refusals is a real failure.
+            // Some encoders (Intel Quick Sync) ask for input before they can take it. Their request still
+            // stands (no new event will come for it), so keep it and try again with the next frame.
+            Interlocked.Increment(ref _statRefused);
+            _needInput.Release();
             if (++_refused >= 300)
-                throw new InvalidOperationException("The H.264 encoder keeps refusing frames.", ex);
+                throw new InvalidOperationException($"The H.264 encoder keeps refusing frames ({Stats}).", ex);
             return false;
         }
         _refused = 0;
+        Interlocked.Increment(ref _statInputs);
         return true;
     }
 
@@ -198,10 +214,17 @@ public sealed class H264Encoder : IDisposable
                 switch (ev.EventType)
                 {
                     case MediaEventTypes.TransformNeedInput:
+                        Interlocked.Increment(ref _statNeedInput);
                         _needInput.Release();
                         break;
                     case MediaEventTypes.TransformHaveOutput:
+                        Interlocked.Increment(ref _statHaveOutput);
                         ReadOutput();
+                        break;
+                    case MediaEventTypes.TransformDrainComplete:
+                        break;
+                    default:
+                        _lastOtherEvent = ev.EventType.ToString();
                         break;
                 }
             }
@@ -227,11 +250,27 @@ public sealed class H264Encoder : IDisposable
             own.AddBuffer(memory);
         }
         var buffers = new OutputDataBuffer { StreamID = 0, Sample = own };
-        _transform.ProcessOutput(ProcessOutputFlags.None, 1, ref buffers, out _).CheckError();
-        using var sample = buffers.Sample;
+        var result = _transform.ProcessOutput(ProcessOutputFlags.None, 1, ref buffers, out _);
         buffers.Events?.Dispose();
+        if (result.Code == StreamChange)
+        {
+            // The encoder changed its output type (e.g. to add the sequence header): take the new one.
+            buffers.Sample?.Dispose();
+            using var type = _transform.GetOutputAvailableType(0, 0);
+            _transform.SetOutputType(0, type, 0);
+            Interlocked.Increment(ref _statFormatChanges);
+            return;
+        }
+        if (result.Code == NeedMoreInput)
+        {
+            buffers.Sample?.Dispose();
+            return;
+        }
+        result.CheckError();
+        using var sample = buffers.Sample;
         if (sample is null)
             return;
+        Interlocked.Increment(ref _statOutputs);
 
         using var contiguous = sample.ConvertToContiguousBuffer();
         contiguous.Lock(out nint data, out _, out int size);

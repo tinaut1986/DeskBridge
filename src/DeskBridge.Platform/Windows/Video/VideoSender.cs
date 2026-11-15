@@ -72,9 +72,15 @@ public sealed class VideoSender : IAsyncDisposable
             using var pacer = new FramePacer(_fps);
             var clock = System.Diagnostics.Stopwatch.StartNew();
             (int, int, bool) pointer = default;
+            var nextReport = TimeSpan.FromSeconds(3);
             while (!_stop.IsCancellationRequested)
             {
                 pacer.Wait();
+                if (clock.Elapsed >= nextReport)
+                {
+                    _log($"[video] encoder: {encoder.Stats}");
+                    nextReport = clock.Elapsed + TimeSpan.FromSeconds(30);
+                }
                 capture.TryAcquire(0); // never wait inside it: it holds the device lock
                 if (capture.Pointer != pointer)
                 {
@@ -96,7 +102,7 @@ public sealed class VideoSender : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _log($"[video] capture/encode failed: {ex.Message}");
+            _log($"[video] capture/encode failed: {ex.Message}" + (_encoder is { } e ? $" ({e.Stats})" : ""));
             Fail(ex.Message);
         }
         finally
