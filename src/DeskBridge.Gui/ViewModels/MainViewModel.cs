@@ -49,6 +49,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ? L.T("Physical displays")
         : L.T("Physical displays of {machine}", ("machine", SelectedMachine));
 
+    public IReadOnlyList<PlacementOption> InputSideOptions =>
+    [
+        new(DeskBridge.Core.Model.PlacementSide.Right, L.T("Right")),
+        new(DeskBridge.Core.Model.PlacementSide.Left, L.T("Left")),
+        new(DeskBridge.Core.Model.PlacementSide.Above, L.T("Above")),
+        new(DeskBridge.Core.Model.PlacementSide.Below, L.T("Below")),
+    ];
+
     public IReadOnlyList<string> ResolutionOptions => EditorModel.ResolutionOptions;
     public IReadOnlyList<string> RefreshOptions => EditorModel.RefreshOptions;
     public IReadOnlyList<string> BitrateOptions => EditorModel.BitrateOptions;
@@ -60,6 +68,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         Raise(nameof(DisplaysTitle));
         Raise(nameof(ResolutionOptions));
+        Raise(nameof(InputSideOptions));
         Raise(nameof(RefreshOptions));
         Raise(nameof(BitrateOptions));
     }

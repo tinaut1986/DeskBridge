@@ -205,6 +205,16 @@
                                 <DataGridTextColumn Header="{l:T 'Address'}" Binding="{Binding Address, UpdateSourceTrigger=LostFocus}" Width="130" />
                                 <DataGridTextColumn Header="{l:T 'Port'}" Binding="{Binding ControlPort, TargetNullValue=''}" Width="70" />
                                 <DataGridCheckBoxColumn Header="{l:T 'Keyboard and mouse'}" Binding="{Binding HasInput, UpdateSourceTrigger=PropertyChanged}" Width="140" />
+                                <DataGridTemplateColumn Header="{l:T 'Mouse side'}" Width="110">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox Margin="2" DisplayMemberPath="Label" SelectedValuePath="Side"
+                                                      ToolTip="{l:T 'On which side of the coordinator this machine is: the cursor goes to it past that edge.'}"
+                                                      ItemsSource="{Binding DataContext.InputSideOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      SelectedValue="{Binding InputSide, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
@@ -246,12 +256,21 @@
 
                     <GroupBox Grid.Row="0" Grid.Column="1" Header="{l:T 'Sharing'}" Margin="10,0,0,10">
                         <StackPanel>
-                            <CheckBox x:Name="ClipboardSendBox" Margin="0,3" Click="Sharing_Click"
-                                      Content="{l:T 'Send what I copy on this PC to the other machines'}" />
-                            <CheckBox x:Name="ClipboardReceiveBox" Margin="0,3" Click="Sharing_Click"
-                                      Content="{l:T 'Put in this PC’s clipboard what is copied on the other machines'}" />
-                            <CheckBox x:Name="AcceptFilesBox" Margin="0,3" Click="Sharing_Click"
-                                      Content="{l:T 'Accept files sent from the other machines'}" />
+                            <CheckBox x:Name="ClipboardSendBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Send what I copy on this PC to the other machines'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="ClipboardReceiveBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Put in this PC’s clipboard what is copied on the other machines'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="ShareInputBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Coordinator: move the keyboard and mouse to another machine past the edge of the screens (Ctrl+Alt+Home brings them back)'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="AcceptInputBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Let the coordinator control this PC with its keyboard and mouse'}" />
+                            </CheckBox>
+                            <CheckBox x:Name="AcceptFilesBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Accept files sent from the other machines'}" />
+                            </CheckBox>
                             <DockPanel Margin="22,4,0,0">
                                 <TextBlock Text="{l:T 'Save them in'}" VerticalAlignment="Center" Margin="0,0,8,0" />
                                 <Button DockPanel.Dock="Right" Content="{l:T 'Open'}" Click="OpenFilesFolder_Click" Margin="6,0,0,0" />

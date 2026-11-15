@@ -11,13 +11,18 @@ public sealed record DisplayConfig(string Id, int Width, int Height, int Refresh
 /// <param name="Address">Host name or IP the coordinator uses to reach its agent.</param>
 /// <param name="HasInput">True for the machine whose keyboard and mouse drive everything (the coordinator).</param>
 /// <param name="ControlPort">Overrides <see cref="DeskBridgeConfig.ControlPort"/> for this machine (e.g. two agents on one PC for testing).</param>
+/// <param name="InputSide">
+/// For keyboard and mouse sharing: on which side of the coordinator's displays this machine is (the cursor
+/// moves to it past that edge). Null = to the right. Ignored on the coordinator itself.
+/// </param>
 public sealed record MachineConfig(
     string Id,
     string Name,
     string Address,
     IReadOnlyList<DisplayConfig> Displays,
     bool HasInput = false,
-    int? ControlPort = null);
+    int? ControlPort = null,
+    PlacementSide? InputSide = null);
 
 /// <summary>
 /// How a lent display is streamed. Every value is optional: by default the virtual display

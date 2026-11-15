@@ -388,6 +388,7 @@ public partial class MainWindow : Window
 
     private async Task RestartAgentAsync(LocalSettings? local)
     {
+        StopInputSharing();
         if (_agent is not null)
         {
             await _agent.DisposeAsync();
@@ -419,6 +420,7 @@ public partial class MainWindow : Window
             AddLog(L.T("Could not start the agent on port {port}: {error}", ("port", local.ControlPort), ("error", ex.Message)));
         }
         UpdateAgentStatus(local.ControlPort);
+        UpdateInputSharing();
     }
 
     private void UpdateAgentStatus(int? failedPort = null)
@@ -443,6 +445,8 @@ public partial class MainWindow : Window
         if (incoming.Count > 0)
             parts.Add(L.T("connected: {machines}", ("machines", string.Join(", ", incoming.Select(MachineName)))));
         parts.Add(_activeProfile is null ? L.T("simulated") : L.T("active: {profile}", ("profile", _activeProfile)));
+        if (InputStatus() is { } input)
+            parts.Add(input);
         _vm.AgentStatus = string.Join(" · ", parts);
     }
 
@@ -452,6 +456,7 @@ public partial class MainWindow : Window
         L.Changed -= OnLanguageChanged;
         ThemeManager.Changed -= ScheduleRedraw;
         _clipboard?.Dispose();
+        StopInputSharing();
         DisposeTray();
         // The agent's loops run on the thread pool, so blocking briefly here cannot deadlock.
         _agent?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));

@@ -18,6 +18,10 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(WelcomeMessage), "welcome")]
 [JsonDerivedType(typeof(OkMessage), "ok")]
 [JsonDerivedType(typeof(ErrorMessage), "error")]
+[JsonDerivedType(typeof(InputEnterMessage), "inputEnter")]
+[JsonDerivedType(typeof(InputEventsMessage), "inputEvents")]
+[JsonDerivedType(typeof(InputLeaveMessage), "inputLeave")]
+[JsonDerivedType(typeof(InputReleaseMessage), "inputRelease")]
 [JsonDerivedType(typeof(ConfigSyncMessage), "configSync")]
 [JsonDerivedType(typeof(GetDiagnosticsMessage), "getDiagnostics")]
 [JsonDerivedType(typeof(DiagnosticsMessage), "diagnostics")]
@@ -49,6 +53,29 @@ public sealed record WelcomeMessage(string Proof) : ControlMessage;
 public sealed record OkMessage() : ControlMessage;
 
 public sealed record ErrorMessage(string Message) : ControlMessage;
+
+public enum InputKind { MouseMove, MouseButton, Wheel, Key }
+
+/// <summary>
+/// One keyboard or mouse event forwarded from the coordinator. MouseMove: X/Y are a relative move in
+/// pixels. MouseButton: Code 0 left, 1 right, 2 middle, 3 X1, 4 X2. Wheel: X is the delta (120 per
+/// notch), Extended = horizontal. Key: Code is the scan code, Extended the E0 prefix.
+/// </summary>
+public sealed record InputEvent(InputKind Kind, int X = 0, int Y = 0, int Code = 0, bool Down = false, bool Extended = false);
+
+/// <summary>The coordinator hands the cursor over: it enters this machine through the edge facing the coordinator.</summary>
+/// <param name="Side">Where this machine is relative to the coordinator (it enters through the opposite edge).</param>
+/// <param name="Fraction">Position along that edge, 0 to 1 (top to bottom, or left to right).</param>
+public sealed record InputEnterMessage(PlacementSide Side, double Fraction) : ControlMessage;
+
+/// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
+public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events) : ControlMessage;
+
+/// <summary>The cursor went back past the edge facing the coordinator, at this position along it.</summary>
+public sealed record InputLeaveMessage(double Fraction) : ControlMessage;
+
+/// <summary>The coordinator took the cursor back: release every key and button still held here.</summary>
+public sealed record InputReleaseMessage() : ControlMessage;
 
 /// <summary>Asks a machine for its state, to troubleshoot it from another one.</summary>
 public sealed record GetDiagnosticsMessage() : ControlMessage;

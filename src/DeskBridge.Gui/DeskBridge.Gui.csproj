@@ -7,6 +7,9 @@
     <!-- Only for the notification area icon (NotifyIcon); WPF has none. -->
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>DeskBridge</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WinForms' advice for WinForms apps; this is a WPF app (WinForms only for the tray icon), where the manifest is the place. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <RootNamespace>DeskBridge.Gui</RootNamespace>
   </PropertyGroup>
 

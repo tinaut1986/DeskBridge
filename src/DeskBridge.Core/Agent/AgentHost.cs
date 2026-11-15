@@ -96,6 +96,12 @@ public sealed class AgentHost : IAsyncDisposable
 
     private bool ConnectsTo(string machine) => _reverse?.ConnectedTo == machine;
 
+    /// <summary>
+    /// Keyboard and mouse sharing messages (enter, events, release on the machine that gets the cursor;
+    /// leave on the coordinator). Unset: they are ignored.
+    /// </summary>
+    public Func<string, ControlMessage, Task>? InputHandler { get; set; }
+
     /// <summary>This machine's state for another machine troubleshooting it (set by the GUI; basic otherwise).</summary>
     public Func<DiagnosticsMessage>? DiagnosticsProvider { get; set; }
 
@@ -162,6 +168,11 @@ public sealed class AgentHost : IAsyncDisposable
             }
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
+
+            case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage:
+                if (InputHandler is { } input)
+                    await input(from, request);
+                return new OkMessage();
 
             case GetDiagnosticsMessage:
                 return DiagnosticsProvider?.Invoke()

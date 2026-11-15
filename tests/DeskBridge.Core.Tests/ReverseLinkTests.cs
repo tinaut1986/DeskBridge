@@ -168,6 +168,45 @@ public class ReverseLinkTests
         Assert.Equal(s.Config.Machines.Count, laptopGot?.Machines.Count);
     }
 
+    [Fact]
+    public async Task Input_notifications_arrive_in_order_and_the_leave_comes_back()
+    {
+        await using var s = new Setup();
+        await s.WaitConnectedAsync();
+        var received = new List<int>();
+        var allIn = new TaskCompletionSource();
+        s.LaptopAgent.InputHandler = async (from, message) =>
+        {
+            if (message is InputEventsMessage events)
+            {
+                lock (received)
+                {
+                    received.AddRange(events.Events.Select(e => e.Code));
+                    if (received.Count == 500)
+                        allIn.TrySetResult();
+                }
+                // The laptop gives the cursor back over the same session, as a notification too.
+                if (received.Count == 500 && s.LaptopAgent.Directory.Find(from) is { } back)
+                    await back.NotifyAsync(new InputLeaveMessage(0.25));
+            }
+        };
+        var leave = new TaskCompletionSource<double>();
+        s.DesktopAgent.InputHandler = (_, message) =>
+        {
+            if (message is InputLeaveMessage l)
+                leave.TrySetResult(l.Fraction);
+            return Task.CompletedTask;
+        };
+
+        var session = s.DesktopAgent.Directory.Find("laptop")!;
+        for (int i = 0; i < 500; i++)
+            await session.NotifyAsync(new InputEventsMessage([new InputEvent(InputKind.Key, Code: i, Down: true)]));
+
+        await allIn.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(Enumerable.Range(0, 500), received);
+        Assert.Equal(0.25, await leave.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
     [Theory]
     [InlineData("192.168.1.52", "192.168.1.52", 47900)]
     [InlineData("192.168.1.52:5000", "192.168.1.52", 5000)]

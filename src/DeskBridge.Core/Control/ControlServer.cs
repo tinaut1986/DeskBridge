@@ -75,6 +75,7 @@ public sealed class ControlServer : IAsyncDisposable
         try
         {
             client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            client.NoDelay = true; // small, frequent messages (mouse moves) must not wait for more data
             var channel = new LineChannel(client.GetStream());
             var serverNonce = ControlAuth.NewNonce();
             await channel.SendAsync(new ChallengeMessage(ControlProtocol.Version, _machine, serverNonce), ct);

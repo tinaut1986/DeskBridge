@@ -83,6 +83,25 @@ public sealed class ControlSession : IAsyncDisposable
         return await reply.Task;
     }
 
+    /// <summary>
+    /// Sends a message that gets no reply (frame id 0), for a stream of events where waiting for each answer
+    /// would add a round trip per mouse move. Notifications are handled in the order they are sent.
+    /// </summary>
+    public async Task NotifyAsync(ControlMessage message, CancellationToken ct = default)
+    {
+        if (!IsOpen)
+            throw Lost();
+        try
+        {
+            await SendAsync(new SessionFrame(0, IsReply: false, message), ct);
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+        {
+            Close();
+            throw Lost();
+        }
+    }
+
     private async Task SendAsync(SessionFrame frame, CancellationToken ct)
     {
         // The channel's encryption counters need one frame at a time.
@@ -112,6 +131,21 @@ public sealed class ControlSession : IAsyncDisposable
                             pending.TrySetResult(body);
                         else
                             pending.TrySetException(new ControlException(Unknown(frame.Type)));
+                    }
+                }
+                else if (frame.Id == 0)
+                {
+                    // A notification: handled here, in order (input events), and never answered.
+                    if (frame.Body is { } notification && _handler is not null)
+                    {
+                        try
+                        {
+                            await _handler(RemoteMachine, notification, _closing.Token);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            _log(L.T("Request {request} failed: {error}", ("request", notification.GetType().Name), ("error", ex.Message)));
+                        }
                     }
                 }
                 else if (frame.Body is { } request)

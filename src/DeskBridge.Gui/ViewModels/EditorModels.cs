@@ -92,6 +92,11 @@ public sealed class MachineVm : ObservableObject
 
     public ObservableCollection<DisplayVm> Displays { get; } = Tracked<DisplayVm>();
 
+    private PlacementSide _inputSide = PlacementSide.Right;
+
+    /// <summary>On which side of the coordinator this machine is, for keyboard and mouse sharing.</summary>
+    public PlacementSide InputSide { get => _inputSide; set => Set(ref _inputSide, value); }
+
     public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Id : Name;
 }
 
@@ -329,7 +334,7 @@ public sealed class EditorModel
         var model = new EditorModel { ControlPort = config.ControlPort };
         foreach (var m in config.Machines)
         {
-            var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort };
+            var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort, InputSide = m.InputSide ?? PlacementSide.Right };
             foreach (var d in m.Displays)
                 vm.Displays.Add(DisplayVm.From(d));
             model.Machines.Add(vm);
@@ -365,7 +370,7 @@ public sealed class EditorModel
         var machines = Machines.Select(m => new MachineConfig(
             m.Id.Trim(), m.Name.Trim(), m.Address.Trim(),
             m.Displays.Select(d => d.ToConfig()).ToList(),
-            m.HasInput, m.ControlPort)).ToList();
+            m.HasInput, m.ControlPort, m.InputSide == PlacementSide.Right ? null : m.InputSide)).ToList();
 
         var profiles = Profiles.Select(p => new ProfileConfig(
             p.Name.Trim(),

@@ -35,6 +35,8 @@ public partial class MainWindow
         ClipboardSendBox.IsChecked = _settings.ClipboardSend;
         ClipboardReceiveBox.IsChecked = _settings.ClipboardReceive;
         AcceptFilesBox.IsChecked = _settings.AcceptFiles;
+        ShareInputBox.IsChecked = _settings.ShareInput;
+        AcceptInputBox.IsChecked = _settings.AcceptInput;
         FilesFolderBox.Text = _settings.EffectiveFilesFolder;
 
         if (_options.SnapshotDir is null)
@@ -52,6 +54,7 @@ public partial class MainWindow
             return applied;
         }).Task;
         agent.DiagnosticsProvider = OwnDiagnostics;
+        agent.InputHandler = HandleInputAsync;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not
         // the coordinator (reached directly) takes them from the coordinator named in the profile.
@@ -111,7 +114,10 @@ public partial class MainWindow
             ClipboardSend = ClipboardSendBox.IsChecked == true,
             ClipboardReceive = ClipboardReceiveBox.IsChecked == true,
             AcceptFiles = AcceptFilesBox.IsChecked == true,
+            ShareInput = ShareInputBox.IsChecked == true,
+            AcceptInput = AcceptInputBox.IsChecked == true,
         });
+        UpdateInputSharing();
         if (_clipboard is not null)
             _clipboard.SendEnabled = _settings.ClipboardSend;
     }

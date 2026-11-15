@@ -30,6 +30,7 @@ public partial class MainWindow
         UpdateAgentStatus();
         CollectNewDiagnostics();
         FixCoordinatorIfAClientIsMarkedAsIt();
+        UpdateInputSharing();
         if (_agent is null || !IsCoordinatorHere())
             return;
 

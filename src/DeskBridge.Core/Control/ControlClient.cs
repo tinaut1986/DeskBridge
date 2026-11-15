@@ -42,6 +42,7 @@ public static class ControlClient
         try
         {
             tcp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            tcp.NoDelay = true; // small, frequent messages (mouse moves) must not wait for more data
             var channel = new LineChannel(tcp.GetStream());
 
             if (await channel.ReceiveAsync(ct) is not ChallengeMessage challenge)

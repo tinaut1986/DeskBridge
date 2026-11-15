@@ -19,6 +19,8 @@ public enum ThemeChoice { System, Light, Dark }
 /// <param name="ClipboardReceive">Put here what is copied on the other machines.</param>
 /// <param name="AcceptFiles">Accept files sent by the other machines.</param>
 /// <param name="FilesFolder">Where received files go; null = Downloads\DeskBridge.</param>
+/// <param name="ShareInput">On the coordinator: its keyboard and mouse move to another machine past the edge.</param>
+/// <param name="AcceptInput">On a client: the coordinator's keyboard and mouse may control this PC.</param>
 /// <param name="CloseToTray">Closing the window keeps DeskBridge running in the notification area.</param>
 public sealed record UserSettings(
     string Language = L.System,
@@ -28,7 +30,9 @@ public sealed record UserSettings(
     bool AcceptFiles = false,
     string? FilesFolder = null,
     ThemeChoice Theme = ThemeChoice.System,
-    bool CloseToTray = true)
+    bool CloseToTray = true,
+    bool ShareInput = false,
+    bool AcceptInput = false)
 {
     public static string DefaultPath => Path.Combine(AppPaths.Directory, "settings.json");
 
