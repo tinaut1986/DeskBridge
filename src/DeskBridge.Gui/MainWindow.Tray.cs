@@ -78,7 +78,7 @@ public partial class MainWindow
         menu.Items.Add(L.T("Quit"), null, (_, _) => Quit());
     }
 
-    private void ShowFromTray()
+    public void ShowFromTray()
     {
         Show();
         if (WindowState == WindowState.Minimized)
