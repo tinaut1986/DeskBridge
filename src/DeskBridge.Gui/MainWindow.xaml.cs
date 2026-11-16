@@ -532,6 +532,7 @@ public partial class MainWindow : Window
         DisposeTray();
         // The agent's loops run on the thread pool, so blocking briefly here cannot deadlock.
         StopAllVideoAsync().Wait(TimeSpan.FromSeconds(2));
+        CloseFrames();
         RestorePrimary(); // the displays show this PC again
         _agent?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
         _updater.InstallOnExit();

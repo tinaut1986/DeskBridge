@@ -47,6 +47,8 @@ public partial class MainWindow
 
         if (_options.SnapshotDir is null)
             WatchSession();
+        ShowFramesBox.IsChecked = _settings.ShowFrames;
+        StartFrames();
         if (_options.SnapshotDir is null)
             SourceInitialized += (_, _) => _clipboard = new ClipboardSync(this, SendClipboardAsync, AddLog) { SendEnabled = _settings.ClipboardSend };
     }

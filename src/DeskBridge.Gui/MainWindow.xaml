@@ -728,6 +728,14 @@
                             </DockPanel>
                         </Border>
                         <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="ShowFramesBox" Style="{StaticResource Switch}" Click="ShowFrames_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Mark each display with the colour of its machine'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'A thin border, in the colours of the Layout map: you can tell which machine each display shows. It does not take clicks and is left out of screenshots and screen sharing.'}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
                             <CheckBox x:Name="StartWithWindowsMenu" Style="{StaticResource Switch}" Click="StartWithWindows_Click">
                                 <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Start with Windows'}" />
                             </CheckBox>
