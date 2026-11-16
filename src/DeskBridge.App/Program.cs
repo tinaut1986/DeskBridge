@@ -174,6 +174,27 @@ try
                         Console.WriteLine($"{d.Id}: {d.Width}x{d.Height}@{d.RefreshHz} at ({d.X},{d.Y}) scale {d.Scale}%");
                     return 0;
                 }
+                case "ui" when argList.Count >= 4:
+                {
+                    // Snapshots of DeskBridge's own window there, one PNG per tab.
+                    var reply = await session.RequestAsync(Via(new ProbeMessage("ui")));
+                    if (reply is not ReportMessage report)
+                        return Fail(reply is ErrorMessage e ? e.Message : reply.GetType().Name);
+                    Directory.CreateDirectory(argList[3]);
+                    foreach (var line in report.Text.Split('\n'))
+                    {
+                        int colon = line.IndexOf(':');
+                        if (!line.StartsWith("tab", StringComparison.Ordinal) || colon < 0)
+                        {
+                            Console.WriteLine(line);
+                            continue;
+                        }
+                        var path = Path.Combine(argList[3], $"{target}-{line[..colon]}.png");
+                        await File.WriteAllBytesAsync(path, Convert.FromBase64String(line[(colon + 1)..]));
+                        Console.WriteLine(path);
+                    }
+                    return 0;
+                }
                 case "probe-vdd":
                 {
                     var reply = await session.RequestAsync(Via(new ProbeMessage("vdd")));

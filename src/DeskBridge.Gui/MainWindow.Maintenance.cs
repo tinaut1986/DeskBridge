@@ -44,6 +44,9 @@ public partial class MainWindow
                 return HandleUpdate(from, message);
             }
 
+            case ProbeMessage { What: "ui" }:
+                return new ReportMessage(await Dispatcher.InvokeAsync(SnapshotTabsForProbe));
+
             case ProbeMessage { What: "vdd" }:
                 return new ReportMessage(await Task.Run(Platform.Windows.VirtualDisplays.MttVirtualDisplays.Report, ct));
 
@@ -185,6 +188,41 @@ public partial class MainWindow
                 Microsoft.Win32.SessionSwitchReason.ConsoleDisconnect => "[session] left this PC's own screen (console)",
                 var other => $"[session] {other}",
             });
+    }
+
+    /// <summary>
+    /// Each tab of this window drawn as a PNG (only DeskBridge's own window, nothing else on the screen), one per
+    /// line as "tabN:base64"; the tab that was open is selected again afterwards.
+    /// </summary>
+    private string SnapshotTabsForProbe()
+    {
+        if (!IsVisible || WindowState == WindowState.Minimized || Content is not FrameworkElement root || root.ActualWidth < 1)
+            return "window not open (in the notification area): open DeskBridge on that machine to take snapshots";
+        int open = Tabs.SelectedIndex;
+        var lines = new List<string>();
+        try
+        {
+            for (int i = 0; i < Tabs.Items.Count; i++)
+            {
+                Tabs.SelectedIndex = i;
+                UpdateLayout();
+                Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () => { DrawLayout(); UpdateSummary(); });
+                Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () => { });
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)root.ActualWidth, (int)root.ActualHeight, 96, 96,
+                    System.Windows.Media.PixelFormats.Pbgra32);
+                bitmap.Render(root);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var stream = new MemoryStream();
+                encoder.Save(stream);
+                lines.Add($"tab{i}:{Convert.ToBase64String(stream.ToArray())}");
+            }
+        }
+        finally
+        {
+            Tabs.SelectedIndex = open;
+        }
+        return string.Join("\n", lines);
     }
 
     private static bool TryDelete(string path)
