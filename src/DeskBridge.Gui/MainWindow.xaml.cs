@@ -525,7 +525,6 @@ public partial class MainWindow : Window
         {
             _redrawPending = false;
             DrawLayout();
-            DrawMouseMap();
             UpdateAppliedIndicator();
             UpdateSummary();
             _vm.RaiseDisplaysTitle(); // the selected machine may have been renamed
@@ -556,160 +555,6 @@ public partial class MainWindow : Window
         catch (ConfigException)
         {
             return null;
-        }
-    }
-
-    private void DrawLayout()
-    {
-        var canvas = LayoutCanvas;
-        canvas.Children.Clear();
-        double width = canvas.ActualWidth, height = canvas.ActualHeight;
-        var machines = _vm.Model.Machines.Where(m => m.Displays.Count > 0).ToList();
-        if (width <= 0 || height <= 0 || machines.Count == 0)
-            return;
-
-        // Virtual displays each machine creates in this profile, where they will sit in its desktop.
-        var plan = CurrentPlan();
-        var virtuals = machines.ToDictionary(m => m, m => plan?.VirtualDisplaysOf(m.Id.Trim()).ToList() ?? []);
-
-        const double gap = 60, labelHeight = 28;
-        var boxes = machines.Select(m =>
-        {
-            var rects = m.Displays.Select(d => (d.X, d.Y, d.Width, d.Height))
-                .Concat(virtuals[m].Select(v => (v.X, v.Y, v.Width, v.Height))).ToList();
-            return (
-                Machine: m,
-                MinX: rects.Min(r => r.X),
-                MinY: rects.Min(r => r.Y),
-                Width: (double)(rects.Max(r => r.X + r.Width) - rects.Min(r => r.X)),
-                Height: (double)(rects.Max(r => r.Y + r.Height) - rects.Min(r => r.Y)));
-        }).ToList();
-
-        double totalWidth = boxes.Sum(b => b.Width);
-        double scale = Math.Min((width - gap * (boxes.Count - 1)) / totalWidth, (height - labelHeight) / boxes.Max(b => b.Height));
-        if (scale <= 0)
-            return;
-        double x = (width - totalWidth * scale - gap * (boxes.Count - 1)) / 2;
-        var selected = AssignmentGrid.SelectedItem as AssignmentVm;
-
-        foreach (var box in boxes)
-        {
-            var color = ColorOf(box.Machine);
-            var label = new TextBlock
-            {
-                Text = box.Machine + (box.Machine.HasInput ? "   (" + L.T("keyboard and mouse") + ")" : ""),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(color),
-            };
-            Canvas.SetLeft(label, x);
-            Canvas.SetTop(label, 2);
-            canvas.Children.Add(label);
-
-            foreach (var display in box.Machine.Displays)
-            {
-                var assignment = _vm.SelectedProfile?.Assignments.FirstOrDefault(a => a.Owner == box.Machine && a.Display == display);
-                var user = assignment?.UsedBy ?? box.Machine;
-                var userColor = ColorOf(user);
-                bool lent = user != box.Machine;
-                bool isSelected = assignment is not null && assignment == selected;
-
-                var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                text.Children.Add(new TextBlock
-                {
-                    Text = display.Id,
-                    FontSize = 22,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(userColor),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                });
-                text.Children.Add(new TextBlock
-                {
-                    Text = lent ? $"→ {user}" : L.T("own"),
-                    FontWeight = lent ? FontWeights.SemiBold : FontWeights.Normal,
-                    Foreground = lent ? new SolidColorBrush(userColor) : InfoBrush,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                });
-                text.Children.Add(new TextBlock
-                {
-                    Text = lent && assignment is not null ? StreamLabel(assignment) : $"{display.Width}x{display.Height}",
-                    FontSize = 11,
-                    Foreground = InfoBrush,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                });
-
-                var rect = new Border
-                {
-                    Width = Math.Max(display.Width * scale - 6, 10),
-                    Height = Math.Max(display.Height * scale - 6, 10),
-                    CornerRadius = new CornerRadius(5),
-                    Background = new SolidColorBrush(Color.FromArgb(lent ? (byte)0x55 : (byte)0x22, userColor.R, userColor.G, userColor.B)),
-                    BorderBrush = new SolidColorBrush(isSelected ? Colors.Black : color),
-                    BorderThickness = new Thickness(isSelected ? 3 : 1.5),
-                    Child = new Viewbox { Child = text, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(4) },
-                    Cursor = Cursors.Hand,
-                    ToolTip = L.T("Display {display} of {machine}: {mode}", ("display", display.Id), ("machine", box.Machine), ("mode", display.Summary))
-                              + "\n" + L.T("Used by {machine}", ("machine", user)),
-                };
-                rect.MouseLeftButtonDown += (_, _) =>
-                {
-                    if (assignment is null)
-                        return;
-                    AssignmentGrid.SelectedItem = assignment;
-                    AssignmentGrid.ScrollIntoView(assignment);
-                };
-                Canvas.SetLeft(rect, x + (display.X - box.MinX) * scale + 3);
-                Canvas.SetTop(rect, labelHeight + (display.Y - box.MinY) * scale + 3);
-                canvas.Children.Add(rect);
-            }
-
-            foreach (var v in virtuals[box.Machine])
-            {
-                var lender = _vm.Model.Machines.FirstOrDefault(m => m.Id.Trim() == v.ForMachine);
-                var lenderColor = lender is null ? Colors.Gray : ColorOf(lender);
-                var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                text.Children.Add(new TextBlock
-                {
-                    Text = L.T("virtual"),
-                    FontSize = 11,
-                    Foreground = InfoBrush,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                });
-                text.Children.Add(new TextBlock
-                {
-                    Text = $"← {lender} {v.ForDisplay}",
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(lenderColor),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                });
-                var rect = new Border
-                {
-                    Width = Math.Max(v.Width * scale - 6, 10),
-                    Height = Math.Max(v.Height * scale - 6, 10),
-                    CornerRadius = new CornerRadius(5),
-                    Background = new SolidColorBrush(Color.FromArgb(0x10, color.R, color.G, color.B)),
-                    BorderBrush = DashedBrush(color),
-                    BorderThickness = new Thickness(1.5),
-                    Child = new Viewbox { Child = text, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(4) },
-                    ToolTip = L.T("Virtual display of {machine} at ({x}, {y}): shown on display {display} of {lender}",
-                        ("machine", box.Machine), ("x", v.X), ("y", v.Y), ("display", v.ForDisplay), ("lender", lender)),
-                };
-                Canvas.SetLeft(rect, x + (v.X - box.MinX) * scale + 3);
-                Canvas.SetTop(rect, labelHeight + (v.Y - box.MinY) * scale + 3);
-                canvas.Children.Add(rect);
-
-                var assignment = _vm.SelectedProfile?.Assignments.FirstOrDefault(a =>
-                    a.Owner.Id.Trim() == v.ForMachine && a.Display.Id.Trim() == v.ForDisplay);
-                if (assignment is not null)
-                {
-                    var others = box.Machine.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height))
-                        .Concat(virtuals[box.Machine].Where(o => o.Key != v.Key).Select(o => new DisplayRect(o.X, o.Y, o.Width, o.Height)))
-                        .ToList();
-                    MakeDraggable(rect, assignment, v, others, new DragFrame(x, labelHeight, box.MinX, box.MinY, scale));
-                }
-            }
-
-            x += box.Width * scale + gap;
         }
     }
 
@@ -767,8 +612,6 @@ public partial class MainWindow : Window
                 if (plan.Streams.Count > 0)
                 {
                     lines.Add(new SummaryLine(L.T("Network: about {mbps} Mbps in total.", ("mbps", plan.Streams.Sum(s => s.BitrateMbps))), InfoBrush));
-                    lines.Add(new SummaryLine(L.T("Drag a dashed (virtual) display on the map to place it by hand; right-click it to place it automatically again."),
-                        ThemeManager.Resource("MutedText")));
                 }
                 lines.AddRange(plan.Warnings.Select(w => new SummaryLine("⚠ " + w, WarningBrush)));
             }

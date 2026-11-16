@@ -168,9 +168,21 @@ public sealed class KeyboardMouseShare : IDisposable
         {
             if (_logic.Remote != from)
                 return;
-            var (x, y) = _logic.Return(leave.Fraction, leave.X, leave.Y);
-            Task.Run(() => _log($"[input] keyboard and mouse back from {from}, at ({x}, {y})"));
-            InputInjector.SetCursor(x, y);
+            switch (_logic.Back(leave.Fraction, leave.X, leave.Y))
+            {
+                case MouseDecision.Enter next:
+                    // Straight on to another display placed on the desk (maybe of the same machine).
+                    _target = next.Machine;
+                    Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area)));
+                    Task.Run(() => _log($"[input] keyboard and mouse from {from} on to {next.Machine} at ({next.X}, {next.Y})"));
+                    if (next.Machine != from)
+                        _remoteChanged(next.Machine);
+                    return;
+                case MouseDecision.Here here:
+                    InputInjector.SetCursor(here.X, here.Y);
+                    Task.Run(() => _log($"[input] keyboard and mouse back from {from}, at ({here.X}, {here.Y})"));
+                    break;
+            }
         }
         _remoteChanged(null);
     }

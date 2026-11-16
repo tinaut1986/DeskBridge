@@ -156,6 +156,72 @@ public class HandoverTests
     }
 
     [Fact]
+    public void A_laptop_display_placed_on_the_desk_is_reached_past_the_edge_and_keeps_the_cursor()
+    {
+        // The laptop panel dragged under the middle display.
+        var panel = InputLayout.Desk("laptop-oscar", Laptop[0], new VirtualPosition(0, 1080));
+        var h = new CoordinatorHandover(Desktop, [panel]);
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(100, 1079));
+        Assert.Equal((100, 0), (enter.X, enter.Y));
+        Assert.Equal(Laptop, enter.Area);
+
+        // Back up into the middle display.
+        var up = ClientHandover.Move(enter.Area!, enter.Peers, 100, 3, 0, -10);
+        Assert.True(up.Left);
+        Assert.Equal(new MouseDecision.Here(100, 1073), h.Back(0.5, up.X, up.Y));
+    }
+
+    [Fact]
+    public void Two_displays_of_the_same_machine_placed_apart_pass_the_cursor_straight_on()
+    {
+        // A laptop with an external monitor: the panel under the left display, the monitor under the right one.
+        var panel = new DisplayRect(0, 0, 1920, 1080);
+        var monitor = new DisplayRect(1920, 0, 1920, 1080);
+        var a = InputLayout.Desk("laptop-oscar", panel, new VirtualPosition(-1920, 1080));
+        var b = InputLayout.Desk("laptop-oscar", monitor, new VirtualPosition(1920, 1080));
+        // Something between them on the desk, so they do not touch.
+        var h = new CoordinatorHandover([.. Desktop, new DisplayRect(0, 1080, 1920, 1080)], [a, b]);
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(-1000, 1079));
+        Assert.Equal([panel], enter.Area);
+
+        // Right from the panel: the middle display under the desktop (this PC) — comes back here.
+        var right = ClientHandover.Move(enter.Area!, enter.Peers, 1915, 500, 10, 0);
+        Assert.True(right.Left);
+        Assert.IsType<MouseDecision.Here>(h.Back(0.5, right.X, right.Y));
+
+        // From the middle display right again: the laptop's monitor, with only that one as the area.
+        var second = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(1919, 1600));
+        Assert.Equal([monitor], second.Area);
+        Assert.Equal((1920, 520), (second.X, second.Y));
+
+        // Up from the monitor: display 1 of the desktop, back here at the same spot.
+        var up = ClientHandover.Move(second.Area!, second.Peers, 2500, 2, 0, -5);
+        Assert.Equal(new MouseDecision.Here(2500, 1077), h.Back(0.5, up.X, up.Y));
+    }
+
+    [Fact]
+    public void Leaving_one_desk_display_into_another_of_the_same_machine_switches_without_coming_back()
+    {
+        var panel = new DisplayRect(0, 0, 1920, 1080);
+        var monitor = new DisplayRect(1920, 0, 1920, 1080);
+        // Both under the desktop, side by side in a different order than on the laptop itself.
+        var a = InputLayout.Desk("laptop-oscar", panel, new VirtualPosition(1920, 1080));
+        var b = InputLayout.Desk("laptop-oscar", monitor, new VirtualPosition(0, 1080));
+        var h = new CoordinatorHandover(Desktop, [a, b]);
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(2500, 1079)); // onto the panel
+        Assert.Equal([panel], enter.Area);
+        var left = ClientHandover.Move(enter.Area!, enter.Peers, 3, 500, -10, 0);
+        Assert.True(left.Left);
+        var on = Assert.IsType<MouseDecision.Enter>(h.Back(0.5, left.X, left.Y));
+        Assert.Equal(("laptop-oscar", monitor), (on.Machine, on.Area![0]));
+        Assert.Equal((1920 + 1913, 500), (on.X, on.Y)); // right edge of the monitor, same height
+        Assert.Equal("laptop-oscar", h.Remote);
+    }
+
+    [Fact]
     public void Losing_the_target_brings_the_cursor_back()
     {
         var h = new CoordinatorHandover(Desktop, [LaptopAt(PlacementSide.Right)]);

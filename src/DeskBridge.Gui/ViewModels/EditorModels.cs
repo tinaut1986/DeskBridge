@@ -92,23 +92,21 @@ public sealed class MachineVm : ObservableObject
 
     public ObservableCollection<DisplayVm> Displays { get; } = Tracked<DisplayVm>();
 
-    private PlacementSide _inputSide = PlacementSide.Right;
+    private IReadOnlyDictionary<string, VirtualPosition> _deskPositions = new Dictionary<string, VirtualPosition>();
 
-    /// <summary>On which side of the coordinator this machine is, for keyboard and mouse sharing.</summary>
-    public PlacementSide InputSide
+    /// <summary>Its displays placed on the coordinator's desk (Layout tab), by display id; the others stay apart.</summary>
+    public IReadOnlyDictionary<string, VirtualPosition> DeskPositions { get => _deskPositions; set => Set(ref _deskPositions, value); }
+
+    /// <summary>Places one display on the desk (or takes it off with null).</summary>
+    public void PlaceOnDesk(string display, VirtualPosition? position)
     {
-        get => _inputSide;
-        set
-        {
-            if (Set(ref _inputSide, value))
-                InputPosition = null; // choosing a side places it there again
-        }
+        var copy = new Dictionary<string, VirtualPosition>(DeskPositions);
+        if (position is null)
+            copy.Remove(display);
+        else
+            copy[display] = position;
+        DeskPositions = copy;
     }
-
-    private VirtualPosition? _inputPosition;
-
-    /// <summary>Placed by hand in the mouse map: top-left corner of its displays in the coordinator's desktop.</summary>
-    public VirtualPosition? InputPosition { get => _inputPosition; set => Set(ref _inputPosition, value); }
 
     public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Id : Name;
 }
@@ -347,12 +345,20 @@ public sealed class EditorModel
         var model = new EditorModel { ControlPort = config.ControlPort };
         foreach (var m in config.Machines)
         {
-            var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort, InputSide = m.InputSide ?? PlacementSide.Right };
-            vm.InputPosition = m.InputPosition;
+            var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort };
             foreach (var d in m.Displays)
                 vm.Displays.Add(DisplayVm.From(d));
             model.Machines.Add(vm);
             vm.HasInput = m.HasInput;
+        }
+
+        // Displays on the coordinator's desk (from older versions: where the machine was placed for the mouse).
+        var coordinator = config.Machines.FirstOrDefault(m => m.HasInput)?.Displays
+            .Select(d => new Core.Planning.DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList() ?? [];
+        foreach (var (m, vm) in config.Machines.Zip(model.Machines))
+        {
+            if (!m.HasInput)
+                vm.DeskPositions = Core.Input.InputLayout.DeskPositions(m, coordinator);
         }
 
         foreach (var p in config.Profiles)
@@ -384,7 +390,10 @@ public sealed class EditorModel
         var machines = Machines.Select(m => new MachineConfig(
             m.Id.Trim(), m.Name.Trim(), m.Address.Trim(),
             m.Displays.Select(d => d.ToConfig()).ToList(),
-            m.HasInput, m.ControlPort, m.InputSide == PlacementSide.Right ? null : m.InputSide, m.InputPosition)).ToList();
+            m.HasInput, m.ControlPort,
+            DeskPositions: m.HasInput || m.DeskPositions.Count == 0
+                ? null
+                : m.DeskPositions.Where(p => m.Displays.Any(d => d.Id.Trim() == p.Key)).ToDictionary())).ToList();
 
         var profiles = Profiles.Select(p => new ProfileConfig(
             p.Name.Trim(),

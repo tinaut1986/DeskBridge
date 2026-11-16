@@ -16,8 +16,13 @@ public sealed record DisplayConfig(string Id, int Width, int Height, int Refresh
 /// moves to it past that edge). Null = to the right. Ignored on the coordinator itself.
 /// </param>
 /// <param name="InputPosition">
-/// For keyboard and mouse sharing, placed by hand: where the top-left corner of this machine's displays goes in
-/// the coordinator's desktop (e.g. below its displays). Overrides <paramref name="InputSide"/>.
+/// Older versions: where the top-left corner of this machine's displays went in the coordinator's desktop for
+/// the mouse. Read once into <paramref name="DeskPositions"/>.
+/// </param>
+/// <param name="DeskPositions">
+/// This machine's displays placed on the coordinator's desk (the Layout tab), by display id: the top-left corner
+/// of each in the coordinator's desktop coordinates. A display on the desk is used from the coordinator like one
+/// more of its monitors (the cursor moves onto it past the edge where they touch); one that is not stays apart.
 /// </param>
 public sealed record MachineConfig(
     string Id,
@@ -27,7 +32,8 @@ public sealed record MachineConfig(
     bool HasInput = false,
     int? ControlPort = null,
     PlacementSide? InputSide = null,
-    VirtualPosition? InputPosition = null);
+    VirtualPosition? InputPosition = null,
+    IReadOnlyDictionary<string, VirtualPosition>? DeskPositions = null);
 
 /// <summary>
 /// How a lent display is streamed. Every value is optional: by default the virtual display

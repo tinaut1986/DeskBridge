@@ -153,7 +153,10 @@
                     </Border>
 
                     <StackPanel Grid.Row="1" Margin="0,10">
-                        <ItemsControl ItemsSource="{Binding PlacementRows}" Margin="0,0,0,6">
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                                   Text="{l:T 'Drag displays of other machines onto your desk to use them from here like more monitors (the cursor moves onto them where they touch). In the table, choose what each display shows in this profile.'}" />
+                        <!-- Where virtual displays go inside the borrowing machine is automatic now. -->
+                        <ItemsControl ItemsSource="{Binding PlacementRows}" Margin="0,0,0,6" Visibility="Collapsed">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="0,2">
@@ -178,7 +181,7 @@
                             <DataGridTextColumn Header="{l:T 'Physical display'}" Binding="{Binding DisplayLabel}" IsReadOnly="True" Width="120" />
                             <DataGridTextColumn Header="{l:T 'Owner'}" Binding="{Binding Owner.Name}" IsReadOnly="True" Width="150" />
                             <DataGridTextColumn Header="{l:T 'Native mode'}" Binding="{Binding Display.Summary}" IsReadOnly="True" Width="150" />
-                            <DataGridTemplateColumn Header="{l:T 'Used by'}" Width="170">
+                            <DataGridTemplateColumn Header="{l:T 'Shows'}" Width="170">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <ComboBox ItemsSource="{Binding DataContext.Model.Machines, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -221,11 +224,6 @@
             <!-- ============ Machines ============ -->
             <TabItem Header="{l:T 'Machines'}" Padding="14,3">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="240" />
-                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="5*" />
                         <ColumnDefinition Width="12" />
@@ -247,16 +245,6 @@
                                 <DataGridTextColumn Header="{l:T 'Address'}" Binding="{Binding Address, UpdateSourceTrigger=LostFocus}" Width="130" />
                                 <DataGridTextColumn Header="{l:T 'Port'}" Binding="{Binding ControlPort, TargetNullValue=''}" Width="70" />
                                 <DataGridCheckBoxColumn Header="{l:T 'Keyboard and mouse'}" Binding="{Binding HasInput, UpdateSourceTrigger=PropertyChanged}" Width="140" />
-                                <DataGridTemplateColumn Header="{l:T 'Mouse side'}" Width="110">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox Margin="2" DisplayMemberPath="Label" SelectedValuePath="Side"
-                                                      ToolTip="{l:T 'On which side of the coordinator this machine is: the cursor goes to it past that edge.'}"
-                                                      ItemsSource="{Binding DataContext.InputSideOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                      SelectedValue="{Binding InputSide, UpdateSourceTrigger=PropertyChanged}" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
@@ -282,15 +270,6 @@
                         </DataGrid>
                     </DockPanel>
 
-                    <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,14,0,6">
-                        <TextBlock Text="{l:T 'Mouse map'}" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" />
-                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                                   Text="{l:T 'Where the displays of each machine are next to the coordinator’s, for keyboard and mouse sharing: drag them anywhere (below, above, to one side), and the cursor goes to that machine past the edge where they touch. Right-click to place one again on its side.'}" />
-                    </StackPanel>
-                    <Border Grid.Row="2" Grid.ColumnSpan="3" BorderThickness="1" CornerRadius="6"
-                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
-                        <Canvas x:Name="MouseCanvas" ClipToBounds="True" SizeChanged="MouseCanvas_SizeChanged" />
-                    </Border>
                 </Grid>
             </TabItem>
 

@@ -32,10 +32,12 @@ public partial class MainWindow
         if (_agent is null || local.Count == 0)
             return [];
         var connected = _agent.Directory.Connected.ToHashSet();
+        // Displays of other machines placed on this PC's desk (Layout tab): reached past the edge where they touch.
         var edges = _vm.Model.Machines
-            .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()) && m.Displays.Count > 0)
-            .Select(m => InputLayout.Target(m.Id.Trim(), local,
-                m.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList(), m.InputSide, m.InputPosition));
+            .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()))
+            .SelectMany(m => m.Displays
+                .Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()))
+                .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height), m.DeskPositions[d.Id.Trim()])));
         // Displays here that show another machine's screen: entering one moves the cursor to that machine.
         var lent = _lentDisplays.Values
             .Where(l => connected.Contains(l.Machine) && local.Contains(l.Here))

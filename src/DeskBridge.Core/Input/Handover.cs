@@ -21,6 +21,9 @@ public abstract record MouseDecision
 
     /// <summary>The cursor is on another machine: swallow and send this relative move.</summary>
     public sealed record Forward(string Machine, int Dx, int Dy) : MouseDecision;
+
+    /// <summary>The cursor came back to this PC: put it at (<paramref name="X"/>, <paramref name="Y"/>).</summary>
+    public sealed record Here(int X, int Y) : MouseDecision;
 }
 
 /// <summary>
@@ -55,7 +58,7 @@ public sealed class CoordinatorHandover
         _targets = targets;
         if (_remote is not null)
             // The same target (a machine can be reachable past an edge and through displays showing it); gone: back here.
-            _remote = targets.FirstOrDefault(t => t.Machine == _remote.Machine && t.Lent == _remote.Lent);
+            _remote = targets.FirstOrDefault(t => t.SameAs(_remote));
     }
 
     public MouseDecision OnMouseMove(int x, int y)
@@ -80,8 +83,7 @@ public sealed class CoordinatorHandover
             (_parkX, _parkY) = (lent.X + lent.Width / 2, lent.Y + lent.Height / 2);
             _remote = target;
             RemoteSide = PlacementSide.Right;
-            var peers = _displays.Select(d => d with { X = d.X - target.OffsetX, Y = d.Y - target.OffsetY }).ToList();
-            return new MouseDecision.Enter(target.Machine, ex, ey, peers, PlacementSide.Right, 0.5, _parkX, _parkY, [shown]);
+            return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY, [shown]);
         }
 
         foreach (var (cx, cy) in Beyond(x, y))
@@ -99,9 +101,9 @@ public sealed class CoordinatorHandover
             RemoteSide = side;
 
             var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, cx - target.OffsetX, cy - target.OffsetY);
-            var peers = _displays.Select(d => d with { X = d.X - target.OffsetX, Y = d.Y - target.OffsetY }).ToList();
             double fraction = EdgeGeometry.AtEdge(_displays, side, px, py) ? EdgeGeometry.Fraction(_displays, side, px, py) : 0.5;
-            return new MouseDecision.Enter(target.Machine, ex, ey, peers, side, fraction, _parkX, _parkY);
+            return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), side, fraction, _parkX, _parkY,
+                target.Confine ? target.Displays : null);
         }
         return new MouseDecision.Pass();
     }
@@ -125,17 +127,52 @@ public sealed class CoordinatorHandover
     }
 
     /// <summary>
-    /// The other machine sent the cursor back at (<paramref name="x"/>, <paramref name="y"/>) in its own
-    /// coordinates (or, from older versions, at <paramref name="fraction"/> along the edge): where to put it here.
+    /// Where the cursor may leave to from <paramref name="target"/>, in that machine's coordinates: this PC's
+    /// displays and every other display placed on the desk (the machine's own other displays included).
     /// </summary>
-    public (int X, int Y) Return(double fraction, int? x = null, int? y = null)
+    private List<DisplayRect> PeersOf(InputTarget target) =>
+        _displays
+            .Concat(_targets.Where(t => t.Lent is null && !t.SameAs(target)).SelectMany(t => t.Placed))
+            .Select(d => d with { X = d.X - target.OffsetX, Y = d.Y - target.OffsetY })
+            .ToList();
+
+    /// <summary>
+    /// The other machine sent the cursor back at (<paramref name="x"/>, <paramref name="y"/>) in its own
+    /// coordinates (or, from older versions, at <paramref name="fraction"/> along the edge): it lands on this PC
+    /// (<see cref="MouseDecision.Here"/>) or, when that point is on another display placed on the desk, goes
+    /// straight on to it (<see cref="MouseDecision.Enter"/>).
+    /// </summary>
+    public MouseDecision Back(double fraction, int? x = null, int? y = null)
     {
         var remote = _remote;
         _remote = null;
-        if (remote is not null && x is { } rx && y is { } ry)
-            return EdgeGeometry.ClampToDisplays(_displays, rx + remote.OffsetX, ry + remote.OffsetY);
-        return EdgeGeometry.PointOnEdge(_displays, RemoteSide, fraction, inset: 2);
+        if (remote is null || x is not { } rx || y is not { } ry)
+        {
+            var (ex, ey) = EdgeGeometry.PointOnEdge(_displays, RemoteSide, fraction, inset: 2);
+            return new MouseDecision.Here(ex, ey);
+        }
+
+        int dx = rx + remote.OffsetX, dy = ry + remote.OffsetY;
+        if (!InputLayout.Contains(_displays, dx, dy)
+            && _targets.FirstOrDefault(t => t.Lent is null && !t.SameAs(remote) && t.Contains(dx, dy)) is { } next)
+        {
+            _remote = next;
+            var (nx, ny) = EdgeGeometry.ClampToDisplays(next.Displays, dx - next.OffsetX, dy - next.OffsetY);
+            return new MouseDecision.Enter(next.Machine, nx, ny, PeersOf(next), RemoteSide, 0.5, _parkX, _parkY,
+                next.Confine ? next.Displays : null);
+        }
+        var (hx, hy) = EdgeGeometry.ClampToDisplays(_displays, dx, dy);
+        return new MouseDecision.Here(hx, hy);
     }
+
+    /// <summary>Where the cursor lands here when it comes back (tests and older callers; never goes on elsewhere).</summary>
+    public (int X, int Y) Return(double fraction, int? x = null, int? y = null) =>
+        Back(fraction, x, y) switch
+        {
+            MouseDecision.Here here => (here.X, here.Y),
+            MouseDecision.Enter enter => (enter.X, enter.Y),
+            _ => (0, 0),
+        };
 
     /// <summary>Takes the cursor back by hand (hotkey): it reappears where it left.</summary>
     public (int X, int Y) ReturnHere()

@@ -12,8 +12,15 @@ namespace DeskBridge.Core.Input;
 /// soon as it enters it, at the same spot of <paramref name="Displays"/> (its one display shown there), and
 /// stays within it.
 /// </param>
-public sealed record InputTarget(string Machine, IReadOnlyList<DisplayRect> Displays, int OffsetX, int OffsetY, DisplayRect? Lent = null)
+/// <param name="Confine">Over there the cursor stays within <paramref name="Displays"/> (one display placed on its own).</param>
+public sealed record InputTarget(string Machine, IReadOnlyList<DisplayRect> Displays, int OffsetX, int OffsetY, DisplayRect? Lent = null,
+    bool Confine = false)
 {
+    /// <summary>The same target after a refresh (lists are rebuilt, so records do not compare equal).</summary>
+    public bool SameAs(InputTarget other) =>
+        Machine == other.Machine && Lent == other.Lent && Confine == other.Confine && OffsetX == other.OffsetX
+        && OffsetY == other.OffsetY && Displays.SequenceEqual(other.Displays);
+
     /// <summary>A point of the coordinator's desktop is over one of this machine's displays.</summary>
     public bool Contains(int x, int y) => InputLayout.Contains(Displays, x - OffsetX, y - OffsetY);
 
@@ -50,6 +57,30 @@ public static class InputLayout
             _ => (c.Right, c.Y),
         };
     }
+
+    /// <summary>
+    /// Where a machine's displays are on the coordinator's desk: as saved, or, from older versions that placed
+    /// the whole machine for the mouse (by hand or on a side), each display at its spot in that placement.
+    /// None for a machine that was never placed.
+    /// </summary>
+    public static Dictionary<string, VirtualPosition> DeskPositions(MachineConfig machine, IReadOnlyList<DisplayRect> coordinator)
+    {
+        if (machine.DeskPositions is { } saved)
+            return new Dictionary<string, VirtualPosition>(saved);
+        if ((machine.InputPosition is null && machine.InputSide is null) || machine.Displays.Count == 0 || coordinator.Count == 0)
+            return [];
+        var rects = machine.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList();
+        var target = Target(machine.Id, coordinator, rects, machine.InputSide ?? PlacementSide.Right, machine.InputPosition);
+        return machine.Displays.ToDictionary(d => d.Id, d => new VirtualPosition(d.X + target.OffsetX, d.Y + target.OffsetY));
+    }
+
+    /// <summary>
+    /// One display of another machine placed on the coordinator's desk with its top-left corner at
+    /// <paramref name="position"/>: the cursor reaches it past the edge where it touches the coordinator's
+    /// displays and stays on it until it is pushed back out.
+    /// </summary>
+    public static InputTarget Desk(string machine, DisplayRect display, VirtualPosition position) =>
+        new(machine, [display], position.X - display.X, position.Y - display.Y, Confine: true);
 
     /// <summary>
     /// A display of the coordinator (<paramref name="lent"/>) showing <paramref name="shown"/>, a display of
