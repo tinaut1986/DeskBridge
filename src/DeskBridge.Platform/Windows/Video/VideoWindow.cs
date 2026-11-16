@@ -55,8 +55,17 @@ public sealed class VideoWindow : IDisposable
     private int _width, _height;
     private volatile bool _resized;
 
-    /// <summary>Where the coordinator itself puts the other machine's pointer (see <see cref="SetLocalPointer"/>).</summary>
-    private sealed record LocalPosition(int X, int Y, long Tick);
+    /// <summary>
+    /// Where the coordinator itself puts the other machine's pointer (see <see cref="SetLocalPointer"/>); Gone: it
+    /// just left this display, and no pointer is drawn for a moment.
+    /// </summary>
+    private sealed record LocalPosition(int X, int Y, long Tick, bool Gone = false);
+
+    /// <summary>
+    /// After the pointer leaves, the position the other machine reports is still the old one (a round trip late):
+    /// drawing it would show the pointer jump back inside before it disappears. Nothing is drawn this long.
+    /// </summary>
+    private const int GoneMs = 500;
 
     private volatile LocalPosition? _local;
     private int _repaintPosted;
@@ -86,8 +95,12 @@ public sealed class VideoWindow : IDisposable
         foreach (var window in Windows.Values)
         {
             bool here = position is not null && window._monitor is { } m && m.X == monitorX && m.Y == monitorY;
-            var next = here ? new LocalPosition(position!.Value.X, position.Value.Y, Environment.TickCount64) : null;
-            if (next is null && window._local is null)
+            LocalPosition next;
+            if (here)
+                next = new LocalPosition(position!.Value.X, position.Value.Y, Environment.TickCount64);
+            else if (window._local is { Gone: false })
+                next = new LocalPosition(0, 0, Environment.TickCount64, Gone: true);
+            else
                 continue;
             window._local = next;
             if (Interlocked.Exchange(ref window._repaintPosted, 1) == 0)
@@ -365,7 +378,14 @@ public sealed class VideoWindow : IDisposable
     {
         int width = _pictureWidth, height = _pictureHeight;
         _streamPointer = pointer;
-        if (_local is { } local)
+        if (_local is { Gone: true } gone)
+        {
+            if (Environment.TickCount64 - gone.Tick < GoneMs)
+                pointer = pointer with { Visible = false };
+            else
+                _local = null;
+        }
+        else if (_local is { } local)
         {
             // Drawn where the coordinator moved it. Once the mouse rests, where the other machine really has it wins
             // (it can differ: a program moved it, or a move was handled a bit differently over there).
