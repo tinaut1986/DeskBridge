@@ -156,7 +156,7 @@
   "Profile '{profile}': invalid placement for '{machine}'.": "Perfil '{profile}': posició no vàlida per a '{machine}'.",
   "Profile '{profile}': machine '{machine}' (used by) does not exist.": "Perfil '{profile}': l'equip '{machine}' (Usada per) no existeix.",
   "Profile '{profile}': machine '{machine}' does not exist.": "Perfil '{profile}': l'equip '{machine}' no existeix.",
-  "Profile {profile} applied on {count} machines (simulated).": "Perfil {profile} aplicat a {count} equips (simulat).",
+  "Profile {profile} applied on {count} machines.": "Perfil {profile} aplicat a {count} equips.",
   "Profile {profile} failed on: {machines}. See the log in This PC.": "El perfil {profile} ha fallat a: {machines}. Mira el registre a Aquest PC.",
   "Project page": "Pàgina del projecte",
   "Protocol version mismatch with {host} ({remote}, here {local}). Update both machines.": "La versió del protocol no coincideix amb {host} ({remote}, aquí {local}). Actualitza tots dos equips.",

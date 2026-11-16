@@ -156,7 +156,7 @@
   "Profile '{profile}': invalid placement for '{machine}'.": "プロファイル「{profile}」:「{machine}」の配置が無効です。",
   "Profile '{profile}': machine '{machine}' (used by) does not exist.": "プロファイル「{profile}」：マシン「{machine}」（使用元）が存在しません。",
   "Profile '{profile}': machine '{machine}' does not exist.": "プロファイル「{profile}」：マシン「{machine}」が存在しません。",
-  "Profile {profile} applied on {count} machines (simulated).": "プロファイル {profile} を {count} 台のマシンに適用しました（シミュレーション）。",
+  "Profile {profile} applied on {count} machines.": "プロファイル {profile} を {count} 台のマシンに適用しました。",
   "Profile {profile} failed on: {machines}. See the log in This PC.": "プロファイル {profile} の適用に失敗したマシン：{machines}。「このPC」のログを確認してください。",
   "Project page": "プロジェクトのページ",
   "Protocol version mismatch with {host} ({remote}, here {local}). Update both machines.": "{host} とプロトコルのバージョンが一致しません（相手 {remote}、こちら {local}）。両方のマシンをアップデートしてください。",

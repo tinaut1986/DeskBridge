@@ -156,7 +156,7 @@
   "Profile '{profile}': invalid placement for '{machine}'.": "Профиль «{profile}»: недопустимое расположение для «{machine}».",
   "Profile '{profile}': machine '{machine}' (used by) does not exist.": "Профиль «{profile}»: компьютера «{machine}» (используется им) не существует.",
   "Profile '{profile}': machine '{machine}' does not exist.": "Профиль «{profile}»: компьютера «{machine}» не существует.",
-  "Profile {profile} applied on {count} machines (simulated).": "Профиль {profile} применён на компьютерах: {count} (имитация).",
+  "Profile {profile} applied on {count} machines.": "Профиль {profile} применён на компьютерах: {count}.",
   "Profile {profile} failed on: {machines}. See the log in This PC.": "Не удалось применить профиль {profile} на: {machines}. Смотрите журнал на вкладке «Этот ПК».",
   "Project page": "Страница проекта",
   "Protocol version mismatch with {host} ({remote}, here {local}). Update both machines.": "Версии протокола не совпадают с {host} ({remote}, здесь {local}). Обновите оба компьютера.",

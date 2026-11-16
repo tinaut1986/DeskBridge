@@ -728,7 +728,7 @@ public partial class MainWindow : Window
             }
             var failed = results.Where(r => !r.Ok).Select(r => r.Machine).ToList();
             _vm.Status = failed.Count == 0
-                ? L.T("Profile {profile} applied on {count} machines (simulated).", ("profile", profile.Name), ("count", results.Count))
+                ? L.T("Profile {profile} applied on {count} machines.", ("profile", profile.Name), ("count", results.Count))
                 : L.T("Profile {profile} failed on: {machines}. See the log in This PC.", ("profile", profile.Name), ("machines", string.Join(", ", failed)));
             Notify(_vm.Status);
         }

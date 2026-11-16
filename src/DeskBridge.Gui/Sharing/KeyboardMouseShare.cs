@@ -38,6 +38,34 @@ public sealed class KeyboardMouseShare : IDisposable
     private readonly Task _sender;
     private string? _target; // where queued items go
     private int _localButtons; // mouse buttons held on this PC (bit per button)
+    private long _settleUntil;
+    private int _parkedX, _parkedY; // where the local cursor waits while the other machine has it
+    private int _settleFromX, _settleFromY;
+    private Task _pointerChain = Task.CompletedTask;
+
+    /// <summary>
+    /// Hides or shows this PC's pointer off the hook's thread (swapping system cursors takes a while, and the hook
+    /// must answer at once), in the order asked.
+    /// </summary>
+    private void Pointer(bool hide)
+    {
+        lock (_gate)
+            _pointerChain = _pointerChain.ContinueWith(_ =>
+            {
+                if (hide)
+                    CursorHider.Hide();
+                else
+                    CursorHider.Show();
+            }, TaskScheduler.Default);
+    }
+
+    /// <summary>The cursor came back: ignore, for a moment, moves that still come from where it was parked.</summary>
+    private void Settle(int parkX, int parkY)
+    {
+        _settleFromX = parkX;
+        _settleFromY = parkY;
+        _settleUntil = Environment.TickCount64 + 150;
+    }
 
     public KeyboardMouseShare(
         IReadOnlyList<DisplayRect> displays,
@@ -80,6 +108,11 @@ public sealed class KeyboardMouseShare : IDisposable
         {
             if (m.Message == NativeMessages.MouseMove)
             {
+                // Just back here: moves still in flight from the old park point (where the cursor waited, maybe over
+                // a display showing the other machine) must not send it straight back there.
+                if (_logic.Remote is null && Environment.TickCount64 < _settleUntil
+                    && Math.Abs(m.X - _settleFromX) < 64 && Math.Abs(m.Y - _settleFromY) < 64)
+                    return true;
                 // A button held here (a window or a file being dragged on this PC): the cursor stays here, over
                 // displays showing another machine too, so the drag can go across them or be dropped on them.
                 // Also over a window of this PC that is on top of the video there (one dropped on that display, the
@@ -90,11 +123,12 @@ public sealed class KeyboardMouseShare : IDisposable
                 {
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
+                        (_parkedX, _parkedY) = (enter.ParkX, enter.ParkY);
                         _target = enter.Machine;
                         Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY, enter.Holes)));
                         var how = enter.Area is null ? "past the edge" : "onto its display (on the desk, or shown here)";
                         Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
-                        CursorHider.Hide(); // not left in sight here while the other machine has the cursor
+                        Pointer(hide: true); // not left in sight here while the other machine has the cursor
                         _remoteChanged(enter.Machine);
                         return true;
                     case MouseDecision.Forward forward:
@@ -167,8 +201,9 @@ public sealed class KeyboardMouseShare : IDisposable
             {
                 cameBack = _logic.Remote;
                 var (x, y) = _logic.ReturnHere();
-                CursorHider.Show();
+                Settle(_parkedX, _parkedY);
                 InputInjector.SetCursor(x, y);
+                Pointer(hide: false);
                 Enqueue(new ReleaseItem());
             }
             else if (!k.Down && _localDown.Remove(k.VirtualKey))
@@ -204,8 +239,9 @@ public sealed class KeyboardMouseShare : IDisposable
                         _remoteChanged(next.Machine);
                     return;
                 case MouseDecision.Here here:
-                    CursorHider.Show();
+                    Settle(_parkedX, _parkedY);
                     InputInjector.SetCursor(here.X, here.Y);
+                    Pointer(hide: false);
                     Task.Run(() => _log($"[input] keyboard and mouse back from {from}, at ({here.X}, {here.Y})"));
                     break;
             }
@@ -219,7 +255,7 @@ public sealed class KeyboardMouseShare : IDisposable
             _log(reason);
         lock (_gate)
             _logic.ForceLocal();
-        CursorHider.Show();
+        Pointer(hide: false);
         _remoteChanged(null);
     }
 
@@ -311,7 +347,7 @@ public sealed class KeyboardMouseShare : IDisposable
         if (remote is not null && _sessionOf(remote) is { } session)
             _ = session.NotifyAsync(new InputReleaseMessage());
         _hook.Dispose();
-        CursorHider.Show();
+        Pointer(hide: false);
         _stop.Cancel();
         try
         {

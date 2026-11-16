@@ -156,7 +156,7 @@
   "Profile '{profile}': invalid placement for '{machine}'.": "方案「{profile}」：「{machine}」的位置無效。",
   "Profile '{profile}': machine '{machine}' (used by) does not exist.": "方案「{profile}」：電腦「{machine}」（使用端）不存在。",
   "Profile '{profile}': machine '{machine}' does not exist.": "方案「{profile}」：電腦「{machine}」不存在。",
-  "Profile {profile} applied on {count} machines (simulated).": "方案 {profile} 已套用到 {count} 台電腦（模擬）。",
+  "Profile {profile} applied on {count} machines.": "方案 {profile} 已套用到 {count} 台電腦。",
   "Profile {profile} failed on: {machines}. See the log in This PC.": "方案 {profile} 在以下電腦上失敗：{machines}。請查看「本機」中的記錄。",
   "Project page": "專案頁面",
   "Protocol version mismatch with {host} ({remote}, here {local}). Update both machines.": "與 {host} 的通訊協定版本不一致（對方 {remote}，本機 {local}）。請更新兩台電腦。",

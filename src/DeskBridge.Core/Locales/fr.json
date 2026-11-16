@@ -156,7 +156,7 @@
   "Profile '{profile}': invalid placement for '{machine}'.": "Profil '{profile}' : position non valide pour '{machine}'.",
   "Profile '{profile}': machine '{machine}' (used by) does not exist.": "Profil '{profile}' : la machine '{machine}' (utilisée par) n'existe pas.",
   "Profile '{profile}': machine '{machine}' does not exist.": "Profil '{profile}' : la machine '{machine}' n'existe pas.",
-  "Profile {profile} applied on {count} machines (simulated).": "Profil {profile} appliqué sur {count} machines (simulé).",
+  "Profile {profile} applied on {count} machines.": "Profil {profile} appliqué sur {count} machines.",
   "Profile {profile} failed on: {machines}. See the log in This PC.": "Le profil {profile} a échoué sur : {machines}. Consultez le journal dans Ce PC.",
   "Project page": "Page du projet",
   "Protocol version mismatch with {host} ({remote}, here {local}). Update both machines.": "Versions de protocole différentes avec {host} ({remote}, ici {local}). Mettez à jour les deux machines.",
