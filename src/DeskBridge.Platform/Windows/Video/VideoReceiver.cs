@@ -111,7 +111,11 @@ public sealed class VideoReceiver : IAsyncDisposable
                                 // A late picture is decoded (the next ones depend on it) but not shown.
                                 if (late)
                                     return;
-                                window?.Present(texture, slice, w, h, pointer);
+                                // H.264 codes whole 16-pixel blocks: a 1080-line picture decodes as 1088 lines, the
+                                // last 8 being padding (green). Only the size the sender sent is shown.
+                                int shownWidth = _format is { Width: > 0 } f ? Math.Min(w, f.Width) : w;
+                                int shownHeight = _format is { Height: > 0 } g ? Math.Min(h, g.Height) : h;
+                                window?.Present(texture, slice, shownWidth, shownHeight, pointer);
                                 _frames++;
                                 reportFrames++;
                                 if (_frames % 15 == 0)

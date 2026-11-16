@@ -195,6 +195,12 @@ try
                     }
                     return 0;
                 }
+                case "probe-video":
+                {
+                    var reply = await session.RequestAsync(Via(new ProbeMessage("video")));
+                    Console.WriteLine(reply is ReportMessage r ? r.Text : reply is ErrorMessage e ? e.Message : reply.GetType().Name);
+                    return 0;
+                }
                 case "probe-vdd":
                 {
                     var reply = await session.RequestAsync(Via(new ProbeMessage("vdd")));

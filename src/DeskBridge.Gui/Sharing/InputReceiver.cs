@@ -24,6 +24,7 @@ public sealed class InputReceiver(
     private IReadOnlyList<DisplayRect>? _peers; // the coordinator's displays here (null: older coordinator, by side)
     private int _x, _y;
     private double _speedX = 1, _speedY = 1, _restX, _restY;
+    private IReadOnlyList<DisplayRect>? _holes; // parts the coordinator keeps (its windows over the video)
 
     // In a Remote Desktop session the pointer DeskBridge moves is not drawn by the client: draw our own.
     private PointerOverlay? _overlay;
@@ -54,6 +55,7 @@ public sealed class InputReceiver(
                     _peers = enter.Peers;
                     // Moves arrive in the coordinator's pixels: scaled to this display (keeping the fractions).
                     (_speedX, _speedY) = (enter.SpeedX ?? 1, enter.SpeedY ?? 1);
+                    _holes = enter.Holes;
                     (_restX, _restY) = (0, 0);
                     (_x, _y) = enter is { X: { } ex, Y: { } ey, Peers: not null }
                         ? EdgeGeometry.ClampToDisplays(_displays, ex, ey)
@@ -78,7 +80,7 @@ public sealed class InputReceiver(
                         _restX -= mx;
                         _restY -= my;
                         var move = _peers is { } peers
-                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my)
+                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes)
                             : ClientHandover.Move(_displays, _side, _x, _y, mx, my);
                         if (move.Left)
                         {

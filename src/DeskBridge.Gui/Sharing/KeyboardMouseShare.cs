@@ -46,7 +46,10 @@ public sealed class KeyboardMouseShare : IDisposable
         Action<string> log,
         Action<string?> remoteChanged)
     {
-        _logic = new CoordinatorHandover(displays, targets);
+        _logic = new CoordinatorHandover(displays, targets)
+        {
+            WindowsOverVideo = () => VideoWindow.WindowsAbove().Select(w => new DisplayRect(w.X, w.Y, w.Width, w.Height)).ToList(),
+        };
         _sessionOf = sessionOf;
         _log = log;
         _remoteChanged = remoteChanged;
@@ -88,7 +91,7 @@ public sealed class KeyboardMouseShare : IDisposable
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
                         _target = enter.Machine;
-                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY)));
+                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY, enter.Holes)));
                         var how = enter.Area is null ? "past the edge" : "onto its display (on the desk, or shown here)";
                         Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
                         _remoteChanged(enter.Machine);
@@ -193,7 +196,7 @@ public sealed class KeyboardMouseShare : IDisposable
                 case MouseDecision.Enter next:
                     // Straight on to another display placed on the desk (maybe of the same machine).
                     _target = next.Machine;
-                    Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area, next.SpeedX, next.SpeedY)));
+                    Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area, next.SpeedX, next.SpeedY, next.Holes)));
                     Task.Run(() => _log($"[input] keyboard and mouse from {from} on to {next.Machine} at ({next.X}, {next.Y})"));
                     if (next.Machine != from)
                         _remoteChanged(next.Machine);

@@ -17,9 +17,10 @@ public abstract record MouseDecision
     /// <param name="Side">The direction it crossed in, and <paramref name="Fraction"/> along that edge (for older versions).</param>
     /// <param name="Area">Where the cursor may go over there; null: all that machine's displays.</param>
     /// <param name="SpeedX">Pixels there per pixel moved here (a display scaled up by Windows moves faster in pixels).</param>
+    /// <param name="Holes">Parts of the area covered here by this PC's windows on top of the video (that machine's coordinates).</param>
     public sealed record Enter(string Machine, int X, int Y, IReadOnlyList<DisplayRect> Peers,
         PlacementSide Side, double Fraction, int ParkX, int ParkY, IReadOnlyList<DisplayRect>? Area = null,
-        double SpeedX = 1, double SpeedY = 1) : MouseDecision;
+        double SpeedX = 1, double SpeedY = 1, IReadOnlyList<DisplayRect>? Holes = null) : MouseDecision;
 
     /// <summary>The cursor is on another machine: swallow and send this relative move.</summary>
     public sealed record Forward(string Machine, int Dx, int Dy) : MouseDecision;
@@ -63,6 +64,31 @@ public sealed class CoordinatorHandover
             _remote = targets.FirstOrDefault(t => t.SameAs(_remote));
     }
 
+    /// <summary>
+    /// Where this PC's own windows cover the displays that show other machines (asked for when the cursor goes
+    /// over, so it can come back to them); null when nothing does.
+    /// </summary>
+    public Func<IReadOnlyList<DisplayRect>>? WindowsOverVideo { get; set; }
+
+    /// <summary>Those covered parts, in that machine's coordinates (through each display showing it).</summary>
+    private List<DisplayRect>? HolesOf(string machine)
+    {
+        if (WindowsOverVideo?.Invoke() is not { Count: > 0 } covered)
+            return null;
+        var holes = new List<DisplayRect>();
+        foreach (var t in _targets.Where(t => t.Machine == machine && t.Lent is not null))
+        {
+            var l = t.Lent!.Value;
+            foreach (var c in covered)
+            {
+                int left = Math.Max(c.X, l.X), top = Math.Max(c.Y, l.Y), right = Math.Min(c.Right, l.Right), bottom = Math.Min(c.Bottom, l.Bottom);
+                if (right > left && bottom > top)
+                    holes.Add(t.ToClient(new DisplayRect(left, top, right - left, bottom - top)));
+            }
+        }
+        return holes.Count > 0 ? holes : null;
+    }
+
     /// <summary>The point is on a display of this PC that shows another machine.</summary>
     public bool IsOverLent(int x, int y) =>
         _targets.Any(t => t.Lent is { } l && x >= l.X && x < l.Right && y >= l.Y && y < l.Bottom);
@@ -93,7 +119,7 @@ public sealed class CoordinatorHandover
             _remote = target;
             RemoteSide = PlacementSide.Right;
             return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY,
-                AreaOf(target.Machine) ?? [shown], 1 / target.ScaleX, 1 / target.ScaleY);
+                AreaOf(target.Machine) ?? [shown], 1 / target.ScaleX, 1 / target.ScaleY, HolesOf(target.Machine));
         }
 
         foreach (var (cx, cy) in Beyond(x, y))
@@ -114,7 +140,7 @@ public sealed class CoordinatorHandover
             var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, tx, ty);
             double fraction = EdgeGeometry.AtEdge(_displays, side, px, py) ? EdgeGeometry.Fraction(_displays, side, px, py) : 0.5;
             return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), side, fraction, _parkX, _parkY,
-                target.Confine ? AreaOf(target.Machine) : null, 1 / target.ScaleX, 1 / target.ScaleY);
+                target.Confine ? AreaOf(target.Machine) : null, 1 / target.ScaleX, 1 / target.ScaleY, HolesOf(target.Machine));
         }
         return new MouseDecision.Pass();
     }
@@ -177,6 +203,7 @@ public sealed class CoordinatorHandover
         var from = _targets
             .Where(t => t.Machine == remote.Machine && (t.Confine || t.Lent is not null))
             .OrderBy(t => t.Displays.Min(d => Distance(d, rx, ry)))
+            .ThenBy(t => t.Lent is null) // on a display shown here (a window over the video there): through that one
             .FirstOrDefault() ?? remote;
         var (dx, dy) = from.ToDesk(rx, ry);
         if (!InputLayout.Contains(_displays, dx, dy)
@@ -186,7 +213,7 @@ public sealed class CoordinatorHandover
             var (cx, cy) = next.ToClient(dx, dy);
             var (nx, ny) = EdgeGeometry.ClampToDisplays(next.Displays, cx, cy);
             return new MouseDecision.Enter(next.Machine, nx, ny, PeersOf(next), RemoteSide, 0.5, _parkX, _parkY,
-                next.Confine ? AreaOf(next.Machine) : null, 1 / next.ScaleX, 1 / next.ScaleY);
+                next.Confine ? AreaOf(next.Machine) : null, 1 / next.ScaleX, 1 / next.ScaleY, HolesOf(next.Machine));
         }
         var (hx, hy) = EdgeGeometry.ClampToDisplays(_displays, dx, dy);
         return new MouseDecision.Here(hx, hy);
@@ -238,9 +265,13 @@ public static class ClientHandover
     /// A relative move when the coordinator's displays are known in this machine's coordinates
     /// (<paramref name="peers"/>): the cursor leaves when it is pushed into one of them.
     /// </summary>
-    public static ClientMove Move(IReadOnlyList<DisplayRect> displays, IReadOnlyList<DisplayRect> peers, int fromX, int fromY, int dx, int dy)
+    /// <param name="holes">Parts of the displays the coordinator keeps (its windows over the video): entering one leaves.</param>
+    public static ClientMove Move(IReadOnlyList<DisplayRect> displays, IReadOnlyList<DisplayRect> peers, int fromX, int fromY, int dx, int dy,
+        IReadOnlyList<DisplayRect>? holes = null)
     {
         int x = fromX + dx, y = fromY + dy;
+        if (holes is not null && InputLayout.Contains(holes, x, y) && !InputLayout.Contains(holes, fromX, fromY))
+            return new ClientMove(x, y, true, 0.5);
         if (InputLayout.Contains(displays, x, y))
             return new ClientMove(x, y, false, 0);
         if (InputLayout.Contains(peers, x, y))

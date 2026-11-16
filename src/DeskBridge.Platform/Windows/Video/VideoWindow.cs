@@ -56,6 +56,65 @@ public sealed class VideoWindow : IDisposable
         public int X, Y;
     }
 
+    /// <summary>
+    /// Windows of this PC above the video windows (in z-order), clipped to them: screen rectangles where the cursor
+    /// belongs to this PC even over a display that shows another machine. Hidden, minimised and cloaked windows,
+    /// and windows that let clicks through, do not count.
+    /// </summary>
+    public static List<(int X, int Y, int Width, int Height)> WindowsAbove()
+    {
+        var result = new List<(int, int, int, int)>();
+        var videos = Windows.Keys.Select(h => GetWindowRect(h, out var r) ? r : default).Where(r => r.Right > r.Left).ToList();
+        if (videos.Count == 0)
+            return result;
+        for (nint hwnd = GetTopWindow(0); hwnd != 0; hwnd = GetWindow(hwnd, 2 /* GW_HWNDNEXT */))
+        {
+            if (Windows.ContainsKey(hwnd))
+                break; // below the video windows nothing is visible over them
+            if (!IsWindowVisible(hwnd) || IsIconic(hwnd))
+                continue;
+            long ex = GetWindowLongPtrW(hwnd, -20 /* GWL_EXSTYLE */);
+            if ((ex & 0x20 /* WS_EX_TRANSPARENT */) != 0)
+                continue;
+            if (DwmGetWindowAttribute(hwnd, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0)
+                continue;
+            if (DwmGetWindowAttribute(hwnd, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, out Rect bounds, Marshal.SizeOf<Rect>()) != 0
+                && !GetWindowRect(hwnd, out bounds))
+                continue;
+            foreach (var v in videos)
+            {
+                int left = Math.Max(bounds.Left, v.Left), top = Math.Max(bounds.Top, v.Top);
+                int right = Math.Min(bounds.Right, v.Right), bottom = Math.Min(bounds.Bottom, v.Bottom);
+                if (right > left && bottom > top)
+                    result.Add((left, top, right - left, bottom - top));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Every video window: where it is, its client size and what it draws (troubleshooting).</summary>
+    public static string Report() => Windows.Count == 0
+        ? "no video window"
+        : string.Join("\n", Windows.Select(w =>
+        {
+            GetWindowRect(w.Key, out var r);
+            GetClientRect(w.Key, out var c);
+            var v = w.Value;
+            return $"window {r.Left},{r.Top} {r.Right - r.Left}x{r.Bottom - r.Top}, client {c.Right - c.Left}x{c.Bottom - c.Top}, "
+                   + $"monitor {v._monitor}, swap chain {v._width}x{v._height}, picture {v._converter?.InputWidth}x{v._converter?.InputHeight} "
+                   + $"drawn at {v._converter?.DestRect}";
+        }).Append("covered by windows of this PC: "
+                  + string.Join("; ", WindowsAbove().Select(w => $"{w.X},{w.Y} {w.Width}x{w.Height}"))));
+
+    [DllImport("user32.dll")] private static extern nint GetTopWindow(nint hwnd);
+    [DllImport("user32.dll")] private static extern nint GetWindow(nint hwnd, uint cmd);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(nint hwnd);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(nint hwnd, out Rect rect);
+    [DllImport("user32.dll")] private static extern long GetWindowLongPtrW(nint hwnd, int index);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(nint hwnd, int attribute, out int value, int size);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(nint hwnd, int attribute, out Rect value, int size);
+
     [DllImport("user32.dll")] private static extern nint WindowFromPoint(Point point);
     [DllImport("user32.dll")] private static extern nint GetAncestor(nint hwnd, uint flags);
 

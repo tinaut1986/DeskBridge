@@ -273,6 +273,24 @@ public class HandoverTests
     }
 
     [Fact]
+    public void A_window_of_this_PC_over_the_video_takes_the_cursor_back_when_reached_from_the_other_machine()
+    {
+        var shown = new DisplayRect(0, -1080, 1920, 1080);
+        var lent = InputLayout.Lent("laptop-oscar", Desktop[1], shown);
+        // A window left on display 3, over the laptop's video.
+        var h = new CoordinatorHandover(Desktop, [lent]) { WindowsOverVideo = () => [new DisplayRect(1000, 200, 600, 400)] };
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(100, 100));
+        var hole = Assert.Single(enter.Holes!);
+        Assert.Equal(new DisplayRect(1000, -880, 600, 400), hole);
+
+        // Moving on the laptop into that window's area hands the cursor back, right there.
+        var into = ClientHandover.Move(enter.Area!, enter.Peers, 990, -700, 20, 0, enter.Holes);
+        Assert.True(into.Left);
+        Assert.Equal(new MouseDecision.Here(1010, 380), h.Back(0.5, into.X, into.Y));
+    }
+
+    [Fact]
     public void Losing_the_target_brings_the_cursor_back()
     {
         var h = new CoordinatorHandover(Desktop, [LaptopAt(PlacementSide.Right)]);

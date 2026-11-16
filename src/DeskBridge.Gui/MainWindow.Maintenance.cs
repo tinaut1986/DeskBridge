@@ -47,6 +47,9 @@ public partial class MainWindow
             case ProbeMessage { What: "ui" }:
                 return new ReportMessage(await Dispatcher.InvokeAsync(SnapshotTabsForProbe));
 
+            case ProbeMessage { What: "video" }:
+                return new ReportMessage(Platform.Windows.Video.VideoWindow.Report());
+
             case ProbeMessage { What: "vdd" }:
                 return new ReportMessage(await Task.Run(Platform.Windows.VirtualDisplays.MttVirtualDisplays.Report, ct));
 
