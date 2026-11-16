@@ -13,7 +13,13 @@ public sealed class LateFrames
     // Frames of the window by arrival (ticks), keeping only those that can still be the minimum.
     private readonly LinkedList<(long Arrived, long Behind)> _minimums = new();
 
-    public static readonly TimeSpan Window = TimeSpan.FromSeconds(2);
+    /// <summary>
+    /// Long enough that frames held up for a while (a backlog after a hiccup) stay late until they are skipped
+    /// and the stream has caught up, instead of becoming the new normal (with a 2-second window, a backlog that
+    /// lasted longer stayed for good: 176 ms behind instead of 20); short enough for the clocks' drift (a few
+    /// milliseconds a minute) not to matter.
+    /// </summary>
+    public static readonly TimeSpan Window = TimeSpan.FromSeconds(30);
 
     /// <param name="late">A frame this much more delayed than the window's best is not shown.</param>
     public LateFrames(TimeSpan late)

@@ -39,4 +39,16 @@ public class LateFramesTests
         for (int i = 140; i < 200; i++)
             Assert.False(late.IsLate(i * Frame + 50_000, i * Frame));
     }
+
+    [Fact]
+    public void A_backlog_lasting_several_seconds_stays_late_until_it_is_gone()
+    {
+        var late = new LateFrames(TimeSpan.FromMilliseconds(80));
+        long i = 0;
+        for (; i < 600; i++) // 10 s on time, 20 ms behind
+            Assert.False(late.IsLate(i * Frame + 200_000, i * Frame));
+        // Then 5 seconds of frames arriving 170 ms behind (a backlog that does not drain by itself).
+        for (; i < 900; i++)
+            Assert.True(late.IsLate(i * Frame + 1_700_000, i * Frame));
+    }
 }
