@@ -40,7 +40,7 @@ public partial class MainWindow
             {
                 bool fromCoordinator = _agent?.Reverse?.ConnectedTo == from || from == _agent?.Machine;
                 if (!_settings.AcceptUpdates || !fromCoordinator)
-                    return new ErrorMessage(L.T("This PC does not accept new versions from other machines. It can be enabled in its This PC tab."));
+                    return new ErrorMessage(L.T("This PC does not accept new versions from other machines. It can be enabled on it, in Connection and security."));
                 return HandleUpdate(from, message);
             }
 

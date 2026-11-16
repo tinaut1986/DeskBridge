@@ -154,6 +154,14 @@ public partial class MainWindow
     private IReadOnlyList<MachineVm> OtherMachines() =>
         _vm.Model.Machines.Where(m => m.Id.Trim() != _vm.LocalMachine.Trim()).ToList();
 
+    private void SendFiles_Click(object sender, RoutedEventArgs e)
+    {
+        FileMenu_SubmenuOpened(sender, e);
+        SendFilesMenu.PlacementTarget = SendFilesButton;
+        SendFilesMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        SendFilesMenu.IsOpen = true;
+    }
+
     private void FileMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
         SendFilesMenu.Items.Clear();
@@ -212,7 +220,7 @@ public partial class MainWindow
         if (ready)
             return;
         item.IsEnabled = false;
-        item.ToolTip = L.T("Set up This PC first.");
+        item.ToolTip = L.T("Set up Connection and security first.");
         ToolTipService.SetShowOnDisabled(item, true);
     }
 

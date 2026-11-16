@@ -266,38 +266,82 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------------ language and updates
 
+    /// <summary>Set while the language and theme lists are filled, so selecting the current one saves nothing.</summary>
+    private bool _fillingChoices;
+
     private void BuildLanguageMenu()
     {
         // As in NSA and llm-browser: "System" and each language by its own name, so it can be
         // found even when the current language is not understood.
+        _fillingChoices = true;
         LanguageMenu.Items.Clear();
-        var system = new MenuItem { Header = L.T("System"), IsCheckable = true, IsChecked = _settings.Language == L.System };
-        system.Click += (_, _) => SetLanguage(L.System);
-        LanguageMenu.Items.Add(system);
-        LanguageMenu.Items.Add(new Separator());
+        LanguageMenu.Items.Add(new ComboBoxItem { Content = L.T("System"), Tag = L.System });
         foreach (var language in L.Languages)
-        {
-            var item = new MenuItem { Header = language.Name, IsCheckable = true, IsChecked = _settings.Language == language.Code };
-            item.Click += (_, _) => SetLanguage(language.Code);
-            LanguageMenu.Items.Add(item);
-        }
+            LanguageMenu.Items.Add(new ComboBoxItem { Content = language.Name, Tag = language.Code });
+        LanguageMenu.SelectedItem = LanguageMenu.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == _settings.Language)
+                                    ?? LanguageMenu.Items[0];
+        _fillingChoices = false;
+    }
+
+    private void Language_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_fillingChoices && LanguageMenu.SelectedItem is ComboBoxItem { Tag: string code } && code != _settings.Language)
+            SetLanguage(code);
     }
 
     private void BuildThemeMenu()
     {
+        _fillingChoices = true;
         ThemeMenu.Items.Clear();
         foreach (var (choice, label) in new[] { (ThemeChoice.System, L.T("System")), (ThemeChoice.Light, L.T("Light")), (ThemeChoice.Dark, L.T("Dark")) })
         {
-            var item = new MenuItem { Header = label, IsCheckable = true, IsChecked = _settings.Theme == choice };
-            item.Click += (_, _) =>
-            {
-                SaveUserSettings(_settings with { Theme = choice });
-                ThemeManager.Apply(choice);
-                BuildThemeMenu();
-            };
+            var item = new ComboBoxItem { Content = label, Tag = choice };
             ThemeMenu.Items.Add(item);
+            if (_settings.Theme == choice)
+                ThemeMenu.SelectedItem = item;
+        }
+        _fillingChoices = false;
+    }
+
+    private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_fillingChoices || ThemeMenu.SelectedItem is not ComboBoxItem { Tag: ThemeChoice choice } || choice == _settings.Theme)
+            return;
+        SaveUserSettings(_settings with { Theme = choice });
+        ThemeManager.Apply(choice);
+    }
+
+    // ------------------------------------------------------------------ navigation and the profile menu
+
+    private void GoToLayout_Click(object sender, RoutedEventArgs e) => Tabs.SelectedIndex = 1;
+
+    private void ProfileMenu_Click(object sender, RoutedEventArgs e)
+    {
+        ProfileMenu.PlacementTarget = ProfileMenuButton;
+        ProfileMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        ProfileMenu.IsOpen = true;
+    }
+
+    /// <summary>Rename: the profile list turns into a box with its name until Enter, Escape or leaving it.</summary>
+    private void RenameProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm.SelectedProfile is null)
+            return;
+        ProfileNameBox.Visibility = Visibility.Visible;
+        ProfileNameBox.Focus();
+        ProfileNameBox.SelectAll();
+    }
+
+    private void ProfileNameBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Enter or Key.Escape)
+        {
+            ProfileNameBox.Visibility = Visibility.Collapsed;
+            e.Handled = true;
         }
     }
+
+    private void ProfileNameBox_LostFocus(object sender, RoutedEventArgs e) => ProfileNameBox.Visibility = Visibility.Collapsed;
 
     private void SetLanguage(string setting)
     {
@@ -435,7 +479,7 @@ public partial class MainWindow : Window
         {
             _vm.AgentStatus = failedPort is { } port
                 ? L.T("Agent stopped: port {port} is busy", ("port", port))
-                : L.T("Agent stopped: check This PC");
+                : L.T("Agent stopped: check Connection and security");
             return;
         }
 
@@ -467,15 +511,15 @@ public partial class MainWindow : Window
     {
         bool client = IsClientHere();
         string? reason = client ? L.T("This PC connects to a coordinator: profiles and machines are edited and applied there.") : null;
-        foreach (var button in new[] { NewProfileButton, DuplicateProfileButton, DeleteProfileButton, SaveButton, ApplyButton, AddMachineButton, RemoveMachineButton })
+        foreach (var control in new Control[] { NewProfileButton, DuplicateProfileButton, RenameProfileButton, DeleteProfileButton, SaveButton, ApplyButton, AddMachineButton, RemoveMachineButton })
         {
-            button.IsEnabled = !client;
-            button.ToolTip = reason;
-            ToolTipService.SetShowOnDisabled(button, true);
+            control.IsEnabled = !client;
+            control.ToolTip = reason;
+            ToolTipService.SetShowOnDisabled(control, true);
         }
-        VideoTestMenu.IsEnabled = !client;
-        VideoTestMenu.ToolTip = client ? L.T("Only the coordinator can show another machine's screen.") : null;
-        ToolTipService.SetShowOnDisabled(VideoTestMenu, true);
+        VideoTestButton.IsEnabled = !client;
+        VideoTestButton.ToolTip = client ? L.T("Only the coordinator can show another machine's screen.") : null;
+        ToolTipService.SetShowOnDisabled(VideoTestButton, true);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -729,7 +773,7 @@ public partial class MainWindow : Window
             var failed = results.Where(r => !r.Ok).Select(r => r.Machine).ToList();
             _vm.Status = failed.Count == 0
                 ? L.T("Profile {profile} applied on {count} machines.", ("profile", profile.Name), ("count", results.Count))
-                : L.T("Profile {profile} failed on: {machines}. See the log in This PC.", ("profile", profile.Name), ("machines", string.Join(", ", failed)));
+                : L.T("Profile {profile} failed on: {machines}. See the Log.", ("profile", profile.Name), ("machines", string.Join(", ", failed)));
             Notify(_vm.Status);
         }
         catch (Exception ex) when (ex is ControlException or ConfigException)

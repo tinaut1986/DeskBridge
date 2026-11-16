@@ -40,7 +40,7 @@ public sealed class FileReceiver(Func<string?> folder)
     {
         var dir = folder();
         if (dir is null)
-            return new ErrorMessage(L.T("This machine does not accept files from other machines. It can be enabled in its This PC tab."));
+            return new ErrorMessage(L.T("This machine does not accept files from other machines. It can be enabled on it, in Sharing."));
         if (m.Size < 0)
             return new ErrorMessage(L.T("Invalid file size."));
 

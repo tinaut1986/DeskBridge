@@ -268,7 +268,7 @@ public sealed class AgentHost : IAsyncDisposable
 
             case FileStartMessage or FileChunkMessage or FileEndMessage:
                 return files?.Handle(from, request)
-                    ?? new ErrorMessage(L.T("This machine does not accept files from other machines. It can be enabled in its This PC tab."));
+                    ?? new ErrorMessage(L.T("This machine does not accept files from other machines. It can be enabled on it, in Sharing."));
 
             default:
                 return new ErrorMessage(L.T("Unexpected request: {request}.", ("request", request.GetType().Name)));
