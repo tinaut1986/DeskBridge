@@ -4,6 +4,7 @@ using DeskBridge.Core.Localization;
 using DeskBridge.Core.Model;
 using DeskBridge.Core.Planning;
 using DeskBridge.Platform.Windows.Input;
+using DeskBridge.Platform.Windows.Video;
 
 namespace DeskBridge.Gui.Sharing;
 
@@ -78,7 +79,11 @@ public sealed class KeyboardMouseShare : IDisposable
             {
                 // A button held here (a window or a file being dragged on this PC): the cursor stays here, over
                 // displays showing another machine too, so the drag can go across them or be dropped on them.
-                switch (_logic.OnMouseMove(m.X, m.Y, dragging: _logic.Remote is null && _localButtons != 0))
+                // Also over a window of this PC that is on top of the video there (one dropped on that display, the
+                // taskbar): it stays usable from here; only over the video does the cursor go to the other machine.
+                bool stay = _logic.Remote is null
+                            && (_localButtons != 0 || (_logic.IsOverLent(m.X, m.Y) && !VideoWindow.IsVideoAt(m.X, m.Y)));
+                switch (_logic.OnMouseMove(m.X, m.Y, dragging: stay))
                 {
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);

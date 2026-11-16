@@ -40,6 +40,25 @@ public sealed class VideoWindow : IDisposable
     private int _width, _height;
     private volatile bool _resized;
 
+    /// <summary>
+    /// Whether the window at that screen point is one of these video windows (and not another window of this PC on
+    /// top of it, such as one dropped over a display that shows another machine, or the taskbar).
+    /// </summary>
+    public static bool IsVideoAt(int x, int y)
+    {
+        nint hwnd = WindowFromPoint(new Point { X = x, Y = y });
+        return hwnd != 0 && Windows.ContainsKey(GetAncestor(hwnd, 2 /* GA_ROOT */));
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point
+    {
+        public int X, Y;
+    }
+
+    [DllImport("user32.dll")] private static extern nint WindowFromPoint(Point point);
+    [DllImport("user32.dll")] private static extern nint GetAncestor(nint hwnd, uint flags);
+
     /// <summary>The window was closed (by the user, for a test window).</summary>
     public event Action? Closed;
 

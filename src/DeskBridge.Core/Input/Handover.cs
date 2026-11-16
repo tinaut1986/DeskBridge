@@ -63,6 +63,10 @@ public sealed class CoordinatorHandover
             _remote = targets.FirstOrDefault(t => t.SameAs(_remote));
     }
 
+    /// <summary>The point is on a display of this PC that shows another machine.</summary>
+    public bool IsOverLent(int x, int y) =>
+        _targets.Any(t => t.Lent is { } l && x >= l.X && x < l.Right && y >= l.Y && y < l.Bottom);
+
     /// <param name="dragging">
     /// A mouse button is held on this PC (something is being dragged here): the cursor does not leave, so a window
     /// can be dragged across, or dropped on, a display that shows another machine.
