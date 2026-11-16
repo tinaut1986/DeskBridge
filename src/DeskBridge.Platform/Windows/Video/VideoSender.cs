@@ -154,6 +154,7 @@ public sealed class VideoSender : IAsyncDisposable
             using var pacer = new FramePacer(Math.Min(_fps * LooksPerFrame, 480));
             var frameGap = TimeSpan.FromSeconds(0.75 / Math.Max(1, _fps));
             bool fresh = false;
+            var lastPointer = TimeSpan.Zero;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             _clock = clock;
             (int, int, bool) pointer = default;
@@ -195,8 +196,12 @@ public sealed class VideoSender : IAsyncDisposable
                     pointerVersion = capture.PointerVersion;
                     _ = _channel.SendAsync(VideoPacket.PointerShape, image.ToBody(), default, _stop.Token);
                 }
-                if (capture.Pointer != pointer)
+                // At most once per frame time (the screen is looked at more often than that): a stream of small pointer
+                // packets made the receiver take each picture for one with the next already waiting, and skip it.
+                if (capture.Pointer != pointer
+                    && (capture.Pointer.Visible != pointer.Item3 || clock.Elapsed - lastPointer >= frameGap))
                 {
+                    lastPointer = clock.Elapsed;
                     pointer = capture.Pointer;
                     var (px, py, visible) = capture.Pointer;
                     _ = _channel.SendAsync(VideoPacket.Pointer, VideoChannel.PointerBody(px, py, visible), default, _stop.Token);

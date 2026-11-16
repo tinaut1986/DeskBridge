@@ -50,8 +50,11 @@ public sealed class VideoReceiver : IAsyncDisposable
     }
 
     /// <summary>A frame this much later than the best so far is not shown (the receiver catches up instead).</summary>
-    /// <summary>More than a pointer update waiting (about 30 bytes framed): the next frame is here.</summary>
-    private const int PointerPacketBytes = 64;
+    /// <summary>
+    /// More than this waiting means the next frame is already here (pointer updates are about 30 bytes framed, and
+    /// several can queue up; a picture that changed is larger).
+    /// </summary>
+    private const int PointerPacketBytes = 512;
 
     private static readonly long LateTicks = TimeSpan.FromMilliseconds(80).Ticks;
     private long _bytes;
