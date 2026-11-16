@@ -207,6 +207,26 @@ public class ReverseLinkTests
         Assert.Equal(0.25, await leave.Task.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    [Fact]
+    public async Task The_command_line_on_the_coordinator_reaches_the_laptop_through_its_agent()
+    {
+        await using var s = new Setup();
+        await s.WaitConnectedAsync();
+        var key = ControlAuth.DecodeKey(s.Desktop.SharedKey);
+
+        // The command line talks to its own agent with its own id (accepted from this PC only)...
+        await using (var cli = await ControlClient.OpenAsync("127.0.0.1", s.Desktop.ControlPort, "desktop", "desktop", key))
+        {
+            var reply = await cli.RequestAsync(new RelayMessage("laptop", new GetDisplaysMessage()));
+            Assert.Equal(2560, Assert.Single(Assert.IsType<DisplaysMessage>(reply).Displays).Width);
+            Assert.IsType<ErrorMessage>(await cli.RequestAsync(new RelayMessage("nobody", new GetDisplaysMessage())));
+        }
+
+        // ...while another machine cannot use the desktop to reach a third one.
+        await using var other = await ControlClient.OpenAsync("127.0.0.1", s.Desktop.ControlPort, "intruder", "desktop", key);
+        Assert.IsType<ErrorMessage>(await other.RequestAsync(new RelayMessage("laptop", new GetDisplaysMessage())));
+    }
+
     [Theory]
     [InlineData("192.168.1.52", "192.168.1.52", 47900)]
     [InlineData("192.168.1.52:5000", "192.168.1.52", 5000)]

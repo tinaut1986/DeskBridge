@@ -37,6 +37,7 @@ public partial class MainWindow
         AcceptFilesBox.IsChecked = _settings.AcceptFiles;
         ShareInputBox.IsChecked = _settings.ShareInput;
         AcceptInputBox.IsChecked = _settings.AcceptInput;
+        AcceptUpdatesBox.IsChecked = _settings.AcceptUpdates;
         FilesFolderBox.Text = _settings.EffectiveFilesFolder;
 
         if (_options.SnapshotDir is null)
@@ -56,6 +57,7 @@ public partial class MainWindow
         agent.DiagnosticsProvider = OwnDiagnostics;
         agent.InputHandler = HandleInputAsync;
         agent.VideoHandler = HandleVideoAsync;
+        agent.MaintenanceHandler = HandleMaintenanceAsync;
         agent.VideoOpened += OnVideoOpened;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not
@@ -118,6 +120,7 @@ public partial class MainWindow
             AcceptFiles = AcceptFilesBox.IsChecked == true,
             ShareInput = ShareInputBox.IsChecked == true,
             AcceptInput = AcceptInputBox.IsChecked == true,
+            AcceptUpdates = AcceptUpdatesBox.IsChecked == true,
         });
         UpdateInputSharing();
         if (_clipboard is not null)

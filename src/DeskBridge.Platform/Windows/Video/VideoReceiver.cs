@@ -27,6 +27,9 @@ public sealed class VideoReceiver : IAsyncDisposable
     public (int Frames, long Bytes, VideoFormat? Format) Stats => (_frames, _bytes, _format);
 
     private int _frames;
+
+    /// <summary>A frame this much later than the best so far is not shown (the receiver catches up instead).</summary>
+    private static readonly long LateTicks = TimeSpan.FromMilliseconds(80).Ticks;
     private long _bytes;
     private VideoFormat? _format;
 
@@ -48,6 +51,9 @@ public sealed class VideoReceiver : IAsyncDisposable
         VideoWindow? window = null;
         H264Decoder? decoder = null;
         var report = Stopwatch.StartNew();
+        var clock = Stopwatch.StartNew();
+        long bestBehind = long.MaxValue;
+        int skipped = 0;
         int reportFrames = 0;
         long reportBytes = 0;
         try
@@ -80,13 +86,26 @@ public sealed class VideoReceiver : IAsyncDisposable
                         var (time, _, data) = VideoChannel.ParseFrame(p.Body);
                         _bytes += data.Length;
                         reportBytes += data.Length;
+
+                        // How far behind the sender this frame is: its time against our clock, relative to the
+                        // least behind frame so far (the clocks of the two machines are not compared directly).
+                        long behind = clock.Elapsed.Ticks - time;
+                        bestBehind = Math.Min(bestBehind, behind);
+                        bool late = behind - bestBehind > LateTicks;
+                        if (late)
+                            skipped++;
                         try
                         {
                             decoder.Decode(data.Span, time, (texture, slice, w, h) =>
                             {
+                                // A late picture is decoded (the next ones depend on it) but not shown.
+                                if (late)
+                                    return;
                                 window?.Present(texture, slice, w, h);
                                 _frames++;
                                 reportFrames++;
+                                if (_frames % 15 == 0)
+                                    _ = _channel.SendAsync(VideoPacket.Shown, BitConverter.GetBytes(time), default);
                             });
                         }
                         catch (SharpGen.Runtime.SharpGenException ex)
@@ -101,7 +120,9 @@ public sealed class VideoReceiver : IAsyncDisposable
 
                 if (report.Elapsed.TotalSeconds >= 10)
                 {
-                    _log($"[video] {_channel.RemoteMachine}: {reportFrames / report.Elapsed.TotalSeconds:F1} fps, {reportBytes * 8 / 1e6 / report.Elapsed.TotalSeconds:F1} Mbps");
+                    _log($"[video] {_channel.RemoteMachine}: {reportFrames / report.Elapsed.TotalSeconds:F1} fps shown, "
+                         + $"{reportBytes * 8 / 1e6 / report.Elapsed.TotalSeconds:F1} Mbps, {skipped} late frames not shown");
+                    skipped = 0;
                     report.Restart();
                     reportFrames = 0;
                     reportBytes = 0;

@@ -19,6 +19,12 @@ public enum VideoPacket : byte
     /// <summary>Receiver → sender: the next frame must be a key frame (decoder (re)started).</summary>
     KeyFrameRequest = 10,
 
+    /// <summary>
+    /// Receiver → sender: the frame with this time (int64) is on screen now. The sender measures the
+    /// round trip from capture to display and back (the network part is a millisecond or two on a LAN).
+    /// </summary>
+    Shown = 11,
+
     /// <summary>Either way: the stream ends, with the reason (UTF-8 text).</summary>
     Stop = 20,
 }

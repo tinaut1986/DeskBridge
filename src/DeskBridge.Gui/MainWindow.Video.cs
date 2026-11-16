@@ -23,7 +23,7 @@ public partial class MainWindow
     private readonly ConcurrentDictionary<string, VideoSender> _videoSenders = new();
 
     /// <summary>Coordinator: streams it asked for and is waiting to receive (window title, monitor or null).</summary>
-    private readonly ConcurrentDictionary<string, (string Machine, string Title, (int X, int Y, int W, int H)? Monitor)> _videoPending = new();
+    private readonly ConcurrentDictionary<string, (string Machine, string? Title, (int X, int Y, int W, int H)? Monitor)> _videoPending = new();
 
     /// <summary>Coordinator: streams being shown, by stream key.</summary>
     private readonly ConcurrentDictionary<string, VideoReceiver> _videoReceivers = new();

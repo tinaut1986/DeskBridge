@@ -23,6 +23,12 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(InputEventsMessage), "inputEvents")]
 [JsonDerivedType(typeof(InputLeaveMessage), "inputLeave")]
 [JsonDerivedType(typeof(InputReleaseMessage), "inputRelease")]
+[JsonDerivedType(typeof(RelayMessage), "relay")]
+[JsonDerivedType(typeof(UpdateStartMessage), "updateStart")]
+[JsonDerivedType(typeof(UpdateChunkMessage), "updateChunk")]
+[JsonDerivedType(typeof(UpdateEndMessage), "updateEnd")]
+[JsonDerivedType(typeof(VideoProbeMessage), "videoProbe")]
+[JsonDerivedType(typeof(ReportMessage), "report")]
 [JsonDerivedType(typeof(StartVideoMessage), "startVideo")]
 [JsonDerivedType(typeof(StopVideoMessage), "stopVideo")]
 [JsonDerivedType(typeof(ConfigSyncMessage), "configSync")]
@@ -95,6 +101,29 @@ public sealed record StartVideoMessage(string Key, bool Send, string Display, in
 /// <summary>Stops a stream started with <see cref="StartVideoMessage"/> (or every stream when Key is null).</summary>
 public sealed record StopVideoMessage(string? Key) : ControlMessage;
 
+/// <summary>
+/// From this PC only (the command line talking to its own agent): pass <paramref name="Inner"/> to
+/// <paramref name="Target"/> over the session it has with it, and return the reply. This is how another
+/// machine is troubleshot from here even when it accepts no incoming connections.
+/// </summary>
+public sealed record RelayMessage(string Target, ControlMessage Inner) : ControlMessage;
+
+/// <summary>
+/// A new DeskBridge build for this machine (only with "allow updates from the coordinator" on): sent in
+/// chunks, checked against <paramref name="Sha256"/>, then installed and started in place of this one.
+/// </summary>
+public sealed record UpdateStartMessage(string Version, long Size, string Sha256) : ControlMessage;
+
+public sealed record UpdateChunkMessage(long Offset, string DataBase64) : ControlMessage;
+
+public sealed record UpdateEndMessage() : ControlMessage;
+
+/// <summary>From this PC only: receive a stream from <paramref name="Machine"/> without showing it, and report how it went.</summary>
+public sealed record VideoProbeMessage(string Machine, double Seconds) : ControlMessage;
+
+/// <summary>A text answer (a probe's report).</summary>
+public sealed record ReportMessage(string Text) : ControlMessage;
+
 /// <summary>Asks a machine for its state, to troubleshoot it from another one.</summary>
 public sealed record GetDiagnosticsMessage() : ControlMessage;
 
@@ -106,7 +135,9 @@ public sealed record DiagnosticsMessage(
     int ControlPort,
     bool IsCoordinator,
     DeskBridgeConfig? Config,
-    IReadOnlyList<string> Log) : ControlMessage;
+    IReadOnlyList<string> Log,
+    string? AppPath = null,
+    bool AcceptsUpdates = false) : ControlMessage;
 
 /// <summary>The coordinator's current configuration, sent when a machine connects and whenever it is saved.</summary>
 public sealed record ConfigSyncMessage(DeskBridgeConfig Config) : ControlMessage;

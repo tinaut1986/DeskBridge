@@ -117,6 +117,9 @@ public sealed class AgentHost : IAsyncDisposable
     /// </summary>
     public Func<string, ControlMessage, CancellationToken, Task<ControlMessage>>? VideoHandler { get; set; }
 
+    /// <summary>Remote updates and video probes (troubleshooting from the coordinator). Unset: refused.</summary>
+    public Func<string, ControlMessage, CancellationToken, Task<ControlMessage>>? MaintenanceHandler { get; set; }
+
     /// <summary>Raised (on a thread-pool thread) for every video connection another machine opens to this one; the handler owns it.</summary>
     public event Action<VideoChannel>? VideoOpened;
 
@@ -189,6 +192,21 @@ public sealed class AgentHost : IAsyncDisposable
                 ProfileApplied?.Invoke(plan.Profile);
                 return new AppliedMessage(local.Machine, plan.Profile, plan.Warnings);
             }
+            case RelayMessage relay:
+            {
+                // Only the command line on this very PC (a session with this machine's own id comes only from loopback).
+                if (from != local.Machine)
+                    return new ErrorMessage(L.T("Only this PC can relay requests to other machines."));
+                if (Directory.Find(relay.Target) is not { } target)
+                    return new ErrorMessage(L.T("{machine} is not connected.", ("machine", relay.Target)));
+                return await target.RequestAsync(relay.Inner, ct);
+            }
+
+            case UpdateStartMessage or UpdateChunkMessage or UpdateEndMessage or VideoProbeMessage:
+                return MaintenanceHandler is { } maintenance
+                    ? await maintenance(from, request, ct)
+                    : new ErrorMessage(L.T("Unexpected request: {request}.", ("request", request.GetType().Name)));
+
             case StartVideoMessage or StopVideoMessage:
                 return VideoHandler is { } video
                     ? await video(from, request, ct)

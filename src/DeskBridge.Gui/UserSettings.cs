@@ -21,6 +21,7 @@ public enum ThemeChoice { System, Light, Dark }
 /// <param name="FilesFolder">Where received files go; null = Downloads\DeskBridge.</param>
 /// <param name="ShareInput">On the coordinator: its keyboard and mouse move to another machine past the edge.</param>
 /// <param name="AcceptInput">On a client: the coordinator's keyboard and mouse may control this PC.</param>
+/// <param name="AcceptUpdates">The coordinator may install new DeskBridge builds here (troubleshooting).</param>
 /// <param name="CloseToTray">Closing the window keeps DeskBridge running in the notification area.</param>
 public sealed record UserSettings(
     string Language = L.System,
@@ -32,7 +33,8 @@ public sealed record UserSettings(
     ThemeChoice Theme = ThemeChoice.System,
     bool CloseToTray = true,
     bool ShareInput = false,
-    bool AcceptInput = false)
+    bool AcceptInput = false,
+    bool AcceptUpdates = false)
 {
     public static string DefaultPath => Path.Combine(AppPaths.Directory, "settings.json");
 

@@ -20,6 +20,11 @@ string usage = $"""
       deskbridge simulate <profile> <machine> Simulate applying a profile on one machine, no network
       deskbridge displays [<machine>]         List this PC's monitors, or ask a machine's agent
 
+      deskbridge remote <machine> log [<lines>]
+                                              Version, path and recent log of a machine connected to this PC's agent
+      deskbridge remote <machine> update <exe> [<version>]
+                                              Install a DeskBridge build there (it must allow updates)
+      deskbridge probe <machine> [<seconds>]  Receive a stream from a machine here, without showing it; report
       deskbridge keygen                       Generate a new shared key
       deskbridge video-test [<x> <y>] [<seconds>] [<bmp>]
                                               Capture the monitor at (x, y), encode and decode it on the GPU, report
@@ -139,6 +144,66 @@ try
             return 0;
         }
 
+        case ("remote", >= 3):
+        {
+            // Through this PC's running agent, over the session the machine keeps with it.
+            var local = LoadLocal(localPath);
+            string target = argList[1];
+            await using var session = await OpenOwnAgentAsync(local);
+            // This PC itself is asked directly; any other machine through the agent.
+            ControlMessage Via(ControlMessage m) => target == local.Machine ? m : new RelayMessage(target, m);
+            switch (argList[2])
+            {
+                case "log":
+                {
+                    int count = argList.Count > 3 ? int.Parse(argList[3]) : 60;
+                    var reply = await session.RequestAsync(Via(new GetDiagnosticsMessage()));
+                    if (reply is not DiagnosticsMessage d)
+                        return Fail(reply is ErrorMessage e ? e.Message : $"Unexpected reply: {reply.GetType().Name}");
+                    Console.WriteLine($"{d.Machine} {d.Version}  {d.AppPath}  accepts updates: {d.AcceptsUpdates}");
+                    foreach (var line in d.Log.TakeLast(count))
+                        Console.WriteLine(line);
+                    return 0;
+                }
+                case "update" when argList.Count >= 4:
+                {
+                    var file = argList[3];
+                    var version = argList.Count > 4 ? argList[4]
+                        : System.Diagnostics.FileVersionInfo.GetVersionInfo(file).ProductVersion?.Split('+')[0]
+                          ?? throw new ArgumentException("Give the version: the file has none.");
+                    var bytes = await File.ReadAllBytesAsync(file);
+                    var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+                    async Task Send(ControlMessage m)
+                    {
+                        if (await session.RequestAsync(Via(m)) is ErrorMessage e)
+                            throw new ControlException(e.Message);
+                    }
+                    Log($"Sending DeskBridge {version} ({bytes.Length / 1048576.0:F1} MiB) to {target}...");
+                    await Send(new UpdateStartMessage(version, bytes.Length, sha));
+                    const int chunk = 1024 * 1024;
+                    for (int offset = 0; offset < bytes.Length; offset += chunk)
+                        await Send(new UpdateChunkMessage(offset, Convert.ToBase64String(bytes, offset, Math.Min(chunk, bytes.Length - offset))));
+                    await Send(new UpdateEndMessage());
+                    Log($"{target} is restarting with {version}.");
+                    return 0;
+                }
+                default:
+                    return Fail(usage);
+            }
+        }
+
+        case ("probe", >= 2):
+        {
+            var local = LoadLocal(localPath);
+            double seconds = argList.Count > 2 ? double.Parse(argList[2], System.Globalization.CultureInfo.InvariantCulture) : 10;
+            await using var session = await OpenOwnAgentAsync(local);
+            var reply = await session.RequestAsync(new VideoProbeMessage(argList[1], seconds));
+            if (reply is not ReportMessage report)
+                return Fail(reply is ErrorMessage e ? e.Message : $"Unexpected reply: {reply.GetType().Name}");
+            Console.WriteLine(report.Text);
+            return 0;
+        }
+
         case ("keygen", 1):
             Console.WriteLine(ControlAuth.NewKey());
             Console.Error.WriteLine("Put this same key in \"sharedKey\" of deskbridge.local.json on every machine.");
@@ -192,6 +257,10 @@ static async Task<int> RunAgentAsync(LocalSettings local)
     await stopped.Task;
     return 0;
 }
+
+/// <summary>A session with this PC's own running agent (it accepts its own machine id from this PC only).</summary>
+static Task<ControlSession> OpenOwnAgentAsync(LocalSettings local) =>
+    ControlClient.OpenAsync("127.0.0.1", local.ControlPort, local.Machine, local.Machine, ControlAuth.DecodeKey(local.SharedKey));
 
 static DeskBridgeConfig LoadConfig(string path)
 {

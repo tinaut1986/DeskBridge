@@ -304,6 +304,9 @@
                             <CheckBox x:Name="AcceptInputBox" Margin="0,3" Click="Sharing_Click">
                                 <TextBlock TextWrapping="Wrap" Text="{l:T 'Let the coordinator control this PC with its keyboard and mouse'}" />
                             </CheckBox>
+                            <CheckBox x:Name="AcceptUpdatesBox" Margin="0,3" Click="Sharing_Click">
+                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Let the coordinator install new versions of DeskBridge on this PC (to troubleshoot it remotely)'}" />
+                            </CheckBox>
                             <CheckBox x:Name="AcceptFilesBox" Margin="0,3" Click="Sharing_Click">
                                 <TextBlock TextWrapping="Wrap" Text="{l:T 'Accept files sent from the other machines'}" />
                             </CheckBox>

@@ -24,6 +24,23 @@ public sealed class VideoSender : IAsyncDisposable
     private readonly int _monitorX, _monitorY, _fps, _bitrateMbps;
     private H264Encoder? _encoder;
     private volatile bool _keyFrameWanted;
+    private System.Diagnostics.Stopwatch? _clock;
+    private readonly object _latencyLock = new();
+    private double _latencySum, _latencyMax;
+    private int _latencyCount;
+
+    /// <summary>Capture to display and back, average and worst since the last call (ms), or null without data.</summary>
+    public (double Average, double Max, int Samples)? TakeLatency()
+    {
+        lock (_latencyLock)
+        {
+            if (_latencyCount == 0)
+                return null;
+            var result = (_latencySum / _latencyCount, _latencyMax, _latencyCount);
+            (_latencySum, _latencyMax, _latencyCount) = (0, 0, 0);
+            return result;
+        }
+    }
 
     /// <summary>Why the stream ended (null while it runs or after a normal stop).</summary>
     public string? Failure { get; private set; }
@@ -71,6 +88,7 @@ public sealed class VideoSender : IAsyncDisposable
 
             using var pacer = new FramePacer(_fps);
             var clock = System.Diagnostics.Stopwatch.StartNew();
+            _clock = clock;
             (int, int, bool) pointer = default;
             var nextReport = TimeSpan.FromSeconds(3);
             while (!_stop.IsCancellationRequested)
@@ -78,8 +96,10 @@ public sealed class VideoSender : IAsyncDisposable
                 pacer.Wait();
                 if (clock.Elapsed >= nextReport)
                 {
-                    _log($"[video] encoder: {encoder.Stats}");
-                    nextReport = clock.Elapsed + TimeSpan.FromSeconds(30);
+                    var latency = TakeLatency();
+                    _log($"[video] encoder: {encoder.Stats}"
+                         + (latency is { } l ? $"; capture to screen and back {l.Average:F0} ms (worst {l.Max:F0}, {l.Samples} samples)" : ""));
+                    nextReport = clock.Elapsed + TimeSpan.FromSeconds(10);
                 }
                 capture.TryAcquire(0); // never wait inside it: it holds the device lock
                 if (capture.Pointer != pointer)
@@ -148,6 +168,16 @@ public sealed class VideoSender : IAsyncDisposable
             {
                 if (packet.Type == VideoPacket.KeyFrameRequest)
                     _keyFrameWanted = true;
+                else if (packet.Type == VideoPacket.Shown && packet.Body.Length >= 8 && _clock is { } clock)
+                {
+                    double ms = TimeSpan.FromTicks(clock.Elapsed.Ticks - BitConverter.ToInt64(packet.Body)).TotalMilliseconds;
+                    lock (_latencyLock)
+                    {
+                        _latencySum += ms;
+                        _latencyCount++;
+                        _latencyMax = Math.Max(_latencyMax, ms);
+                    }
+                }
                 else if (packet.Type == VideoPacket.Stop)
                     break;
             }

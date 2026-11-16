@@ -90,6 +90,8 @@ public sealed class VideoWindow : IDisposable
                 Scaling = Scaling.Stretch,
             });
             factory.MakeWindowAssociation(_hwnd, WindowAssociationFlags.IgnoreAll);
+            using (var dxgiDevice = _video.Device.QueryInterface<IDXGIDevice1>())
+                dxgiDevice.MaximumFrameLatency = 1; // never queue pictures ahead of the screen
         }
         _ready.Set();
 
@@ -180,7 +182,10 @@ public sealed class VideoWindow : IDisposable
             }
             _backBuffer ??= _swapChain.GetBuffer<ID3D11Texture2D>(0);
             _converter.Convert(texture, slice, _backBuffer);
-            _swapChain.Present(1, PresentFlags.None); // with vsync: no tearing, at most one refresh of delay
+            // Without waiting for the vertical blank: waiting there made the window fall behind a stream that
+            // runs a hair faster than the monitor, and the delay grew for as long as it was open. With the flip
+            // model a newer picture simply replaces one still waiting for the next refresh (no tearing).
+            _swapChain.Present(0, PresentFlags.None);
         }
     }
 

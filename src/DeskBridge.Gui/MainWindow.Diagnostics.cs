@@ -25,7 +25,9 @@ public partial class MainWindow
         int.TryParse(_vm.LocalPort, out var port) ? port : 0,
         IsCoordinatorHere(),
         _vm.Model.ToConfig([]),
-        _vm.Log.TakeLast(300).ToList()));
+        _vm.Log.TakeLast(300).ToList(),
+        Environment.ProcessPath,
+        _settings.AcceptUpdates));
 
     /// <summary>On the UI thread: asks every newly connected machine for its diagnostics.</summary>
     private void CollectNewDiagnostics()
