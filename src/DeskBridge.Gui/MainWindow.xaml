@@ -116,6 +116,20 @@
             </DockPanel>
         </Border>
 
+        <!-- Virtual Display Driver missing (shown when the applied profile needs it here) -->
+        <Border x:Name="DriverBanner" DockPanel.Dock="Top" Visibility="Collapsed" Padding="12,8"
+                Background="{DynamicResource BetaChipBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="{l:T 'Install'}" Style="{StaticResource Primary}" Click="InstallDriver_Click" />
+                    <Button Content="{l:T 'More information'}" Click="DriverInfo_Click" />
+                    <Button Content="{l:T 'Later'}" Click="DriverLater_Click" Margin="0" />
+                </StackPanel>
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"
+                           Text="{l:T 'The applied profile shows displays of this PC on another machine. To create them, this PC needs the Virtual Display Driver (free and open source, MIT, signed). Until then, its main display is shown instead.'}" />
+            </DockPanel>
+        </Border>
+
         <!-- Status bar -->
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="12,6">
             <DockPanel>

@@ -63,6 +63,7 @@ public partial class MainWindow
         agent.InputHandler = HandleInputAsync;
         agent.VideoHandler = HandleVideoAsync;
         agent.MaintenanceHandler = HandleMaintenanceAsync;
+        agent.PlanApplied += CheckVirtualDisplayDriver;
         agent.VideoOpened += OnVideoOpened;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not

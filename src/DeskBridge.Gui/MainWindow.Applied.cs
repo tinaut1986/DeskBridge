@@ -96,10 +96,16 @@ public partial class MainWindow
     /// <summary>A machine (re)connected: give it the applied profile again, then start its streams.</summary>
     private async Task ReapplyToAsync(string machine)
     {
+        // At start the restore and the machine's connection can ask at the same moment: once is enough.
+        if (_lastReapply.TryGetValue(machine, out var last) && DateTime.UtcNow - last < TimeSpan.FromSeconds(10))
+            return;
+        _lastReapply[machine] = DateTime.UtcNow;
         if (_applied is not null)
             await ApplyToMachineAsync(machine);
         ResumeProfileStreams(machine);
     }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _lastReapply = new();
 
     private async Task ApplyToMachineAsync(string machine)
     {

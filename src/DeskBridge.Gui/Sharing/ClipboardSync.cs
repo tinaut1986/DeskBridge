@@ -75,7 +75,7 @@ public sealed class ClipboardSync : IDisposable
     public bool Apply(ClipboardMessage message)
     {
         _lastHash = Hash(message);
-        _ignoreUntil = DateTime.UtcNow.AddSeconds(1); // our own change must not travel back
+        _ignoreUntil = DateTime.UtcNow.AddSeconds(2); // our own change must not travel back
         return Retry(() =>
         {
             if (message.Text is { } text)
@@ -140,8 +140,14 @@ public sealed class ClipboardSync : IDisposable
         }
     }
 
+    /// <summary>
+    /// The same text compares equal however it was written back: Remote Desktop's own clipboard sharing (or
+    /// another app) rewrites it with other line endings or a trailing NUL, which used to send it back again.
+    /// </summary>
     private static string Hash(ClipboardMessage m) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(m.Text is null ? "img:" + m.PngBase64 : "txt:" + m.Text)));
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(m.Text is null
+            ? "img:" + m.PngBase64
+            : "txt:" + m.Text.Replace("\r\n", "\n").TrimEnd('\0'))));
 
     public void Dispose()
     {

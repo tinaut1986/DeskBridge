@@ -84,6 +84,32 @@ public sealed class AgentHost : IAsyncDisposable
     /// <summary>Raised (on a thread-pool thread) after a profile is applied.</summary>
     public event Action<string>? ProfileApplied;
 
+    /// <summary>Raised (on a thread-pool thread) after a profile is applied, with its whole plan.</summary>
+    public event Action<LayoutPlan>? PlanApplied;
+
+    private (DeskBridgeConfig Config, LayoutPlan Plan)? _lastApplied;
+
+    /// <summary>
+    /// Puts the last applied profile in place again here (e.g. once a driver it needed is installed).
+    /// False when no profile was applied yet.
+    /// </summary>
+    public async Task<bool> ReapplyAsync(CancellationToken ct = default)
+    {
+        if (_lastApplied is not { } last)
+            return false;
+        await _applyLock.WaitAsync(ct);
+        try
+        {
+            log(L.T("Applying profile '{profile}'...", ("profile", last.Plan.Profile)));
+            await applier.ApplyAsync(last.Config, last.Plan, local.Machine, ct);
+        }
+        finally
+        {
+            _applyLock.Release();
+        }
+        return true;
+    }
+
     /// <summary>The configuration the coordinator sent with the last profile (so non-coordinators know the others).</summary>
     public event Action<DeskBridgeConfig>? ConfigReceived;
 
@@ -181,6 +207,7 @@ public sealed class AgentHost : IAsyncDisposable
                     log(L.T("Applying profile '{profile}'...", ("profile", apply.Profile)));
                     await applier.ApplyAsync(apply.Config, plan, local.Machine, ct);
                     ActiveProfile = plan.Profile;
+                    _lastApplied = (apply.Config, plan);
                 }
                 finally
                 {
@@ -190,6 +217,7 @@ public sealed class AgentHost : IAsyncDisposable
                 if (AcceptConfigFrom(from))
                     ConfigReceived?.Invoke(apply.Config);
                 ProfileApplied?.Invoke(plan.Profile);
+                PlanApplied?.Invoke(plan);
                 return new AppliedMessage(local.Machine, plan.Profile, plan.Warnings);
             }
             case RelayMessage relay:
