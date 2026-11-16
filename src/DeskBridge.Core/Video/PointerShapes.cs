@@ -2,15 +2,21 @@ using System.Buffers.Binary;
 
 namespace DeskBridge.Core.Video;
 
-/// <summary>A mouse pointer picture: straight-alpha BGRA, <see cref="Width"/> x <see cref="Height"/>.</summary>
-public sealed record PointerImage(int Width, int Height, byte[] Bgra)
+/// <summary>
+/// A mouse pointer picture: straight-alpha BGRA, <see cref="Width"/> x <see cref="Height"/>, with its hot spot
+/// (the pixel that points: the arrow's tip).
+/// </summary>
+public sealed record PointerImage(int Width, int Height, byte[] Bgra, int HotX = 0, int HotY = 0)
 {
+    /// <summary>Size, pixels and then the hot spot (older versions send no hot spot).</summary>
     public byte[] ToBody()
     {
-        var body = new byte[8 + Bgra.Length];
+        var body = new byte[8 + Bgra.Length + 8];
         BinaryPrimitives.WriteInt32LittleEndian(body, Width);
         BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(4), Height);
         Bgra.CopyTo(body, 8);
+        BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(8 + Bgra.Length), HotX);
+        BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(12 + Bgra.Length), HotY);
         return body;
     }
 
@@ -19,9 +25,13 @@ public sealed record PointerImage(int Width, int Height, byte[] Bgra)
         if (body.Length < 8)
             return null;
         int w = BinaryPrimitives.ReadInt32LittleEndian(body), h = BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(4));
-        if (w <= 0 || h <= 0 || w > 512 || h > 512 || body.Length != 8 + w * h * 4)
+        int pixels = w * h * 4;
+        if (w <= 0 || h <= 0 || w > 512 || h > 512 || (body.Length != 8 + pixels && body.Length != 16 + pixels))
             return null;
-        return new PointerImage(w, h, body[8..]);
+        if (body.Length == 8 + pixels)
+            return new PointerImage(w, h, body[8..]);
+        int hx = BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(8 + pixels)), hy = BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(12 + pixels));
+        return new PointerImage(w, h, body[8..(8 + pixels)], Math.Clamp(hx, 0, w - 1), Math.Clamp(hy, 0, h - 1));
     }
 }
 

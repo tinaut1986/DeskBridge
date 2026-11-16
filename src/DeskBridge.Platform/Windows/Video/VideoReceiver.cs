@@ -50,7 +50,10 @@ public sealed class VideoReceiver : IAsyncDisposable
     }
 
     /// <summary>A frame this much later than the best so far is not shown (the receiver catches up instead).</summary>
-    /// <summary>More than a pointer update waiting (about 30 bytes framed): the next frame is here.</summary>
+    /// <summary>
+    /// More than this waiting means the next frame is already here (pointer updates are about 30 bytes framed, and
+    /// several can queue up; a picture that changed is larger).
+    /// </summary>
     private const int PointerPacketBytes = 64;
 
     private static readonly long LateTicks = TimeSpan.FromMilliseconds(80).Ticks;
@@ -71,6 +74,7 @@ public sealed class VideoReceiver : IAsyncDisposable
 
     private void Run()
     {
+        Priority.MultimediaThread();
         VideoDevice? video = null;
         VideoWindow? window = null;
         H264Decoder? decoder = null;
@@ -80,6 +84,9 @@ public sealed class VideoReceiver : IAsyncDisposable
         int skipped = 0;
         (int X, int Y, bool Visible) pointer = default;
         int reportFrames = 0;
+        int lateByTime = 0, lateByQueue = 0;
+        double decodeMs = 0, decodeMax = 0;
+        int decoded = 0;
         long reportBytes = 0;
         try
         {
@@ -113,7 +120,7 @@ public sealed class VideoReceiver : IAsyncDisposable
                         // A still screen sends no frames: the pointer is drawn again over the last picture, unless a
                         // frame is already on its way (it draws it anyway).
                         if (_channel.Pending <= PointerPacketBytes)
-                            window?.Repaint(pointer);
+                            window?.RequestRepaint(pointer);
                         break;
 
                     case VideoPacket.PointerShape:
@@ -121,7 +128,7 @@ public sealed class VideoReceiver : IAsyncDisposable
                         {
                             window?.SetPointerImage(image);
                             if (_channel.Pending <= PointerPacketBytes)
-                                window?.Repaint(pointer);
+                                window?.RequestRepaint(pointer);
                         }
                         break;
 
@@ -134,9 +141,15 @@ public sealed class VideoReceiver : IAsyncDisposable
                         // the newest: the next frame is already waiting (a backlog, even one there since the start,
                         // which the timing alone takes for normal). Decoded, since the next ones depend on it, but
                         // not shown: only the newest picture is.
-                        bool late = lateFrames.IsLate(clock.Elapsed.Ticks, time) | _channel.Pending > PointerPacketBytes;
+                        bool byTime = lateFrames.IsLate(clock.Elapsed.Ticks, time), byQueue = _channel.Pending > PointerPacketBytes;
+                        bool late = byTime | byQueue;
                         if (late)
                             skipped++;
+                        if (byTime)
+                            lateByTime++;
+                        else if (byQueue)
+                            lateByQueue++;
+                        long decodeStart = Stopwatch.GetTimestamp();
                         try
                         {
                             decoder.Decode(data.Span, time, (texture, slice, w, h) =>
@@ -162,14 +175,25 @@ public sealed class VideoReceiver : IAsyncDisposable
                             decoder = new H264Decoder(video);
                             _ = _channel.SendAsync(VideoPacket.KeyFrameRequest);
                         }
+                        finally
+                        {
+                            double ms = Stopwatch.GetElapsedTime(decodeStart).TotalMilliseconds;
+                            decodeMs += ms;
+                            decodeMax = Math.Max(decodeMax, ms);
+                            decoded++;
+                        }
                         break;
                 }
 
                 if (report.Elapsed.TotalSeconds >= 10)
                 {
                     _log($"[video] {_channel.RemoteMachine}: {reportFrames / report.Elapsed.TotalSeconds:F1} fps shown, "
-                         + $"{reportBytes * 8 / 1e6 / report.Elapsed.TotalSeconds:F1} Mbps, {skipped} late frames not shown");
+                         + $"{reportBytes * 8 / 1e6 / report.Elapsed.TotalSeconds:F1} Mbps, {skipped} late frames not shown"
+                         + (skipped > 0 ? $" ({lateByTime} behind time, {lateByQueue} with the next one waiting)" : "")
+                         + (decoded > 0 ? $"; decode and show {decodeMs / decoded:F1} ms (worst {decodeMax:F0})" : "")
+                         + $"; pointer redrawn alone {window?.TakeRepaints() ?? 0} times");
                     skipped = 0;
+                    (lateByTime, lateByQueue, decodeMs, decodeMax, decoded) = (0, 0, 0, 0, 0);
                     report.Restart();
                     reportFrames = 0;
                     reportBytes = 0;

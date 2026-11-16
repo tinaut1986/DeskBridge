@@ -217,6 +217,7 @@ public sealed class H264Encoder : IDisposable
 
     private void EventLoop()
     {
+        Priority.MultimediaThread();
         try
         {
             while (!_stopping)

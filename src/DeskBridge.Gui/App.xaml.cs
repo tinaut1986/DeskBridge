@@ -12,6 +12,7 @@ public partial class App : Application
     private void OnStartup(object sender, StartupEventArgs e)
     {
         Updater.CleanUpAfterUpdate(e.Args);
+        DeskBridge.Platform.Windows.Priority.RaiseProcess(); // keyboard, mouse and video stay smooth on a busy PC
         DeskBridge.Platform.Windows.Input.CursorHider.Show(); // in case the app ended while the pointer was hidden
         DeskBridge.Platform.Windows.Audio.MutedDevices.RestoreLeftOver(); // and with this PC's output muted
         DeskBridge.Platform.Windows.Audio.DefaultMicrophone.Restore(null); // or VB-CABLE as its microphone

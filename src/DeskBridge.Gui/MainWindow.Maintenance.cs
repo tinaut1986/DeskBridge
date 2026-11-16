@@ -50,6 +50,9 @@ public partial class MainWindow
             case ProbeMessage { What: "video" }:
                 return new ReportMessage(Platform.Windows.Video.VideoWindow.Report());
 
+            case ProbeMessage { What: "drag" }:
+                return await Dispatcher.InvokeAsync(StartDragTest);
+
             case ProbeMessage { What: "vdd" }:
                 return new ReportMessage(await Task.Run(Platform.Windows.VirtualDisplays.MttVirtualDisplays.Report, ct));
 
@@ -60,6 +63,65 @@ public partial class MainWindow
                 return new ErrorMessage(L.T("Unexpected request: {request}.", ("request", message.GetType().Name)));
         }
     }
+
+    /// <summary>
+    /// A window that moves back and forth across the display being sent, for 10 seconds: the picture changes like
+    /// while dragging a window, with no input involved, so the video figures in the log can be read without anyone
+    /// at the machines. Never takes the focus.
+    /// </summary>
+    private ControlMessage StartDragTest()
+    {
+        if (_videoSenders.Values.FirstOrDefault() is not { } sender)
+            return new ErrorMessage("This PC is not sending any display.");
+        if (sender.Size is not { Width: > 0 } size)
+            return new ErrorMessage("The display being sent is not captured yet.");
+        var display = (sender.Monitor.X, sender.Monitor.Y, size.Width, size.Height);
+
+        var window = new Window
+        {
+            Title = "DeskBridge drag test",
+            Width = 600,
+            Height = 400,
+            WindowStyle = WindowStyle.ToolWindow,
+            ShowActivated = false,
+            ShowInTaskbar = false,
+            Topmost = true,
+            Background = new System.Windows.Media.LinearGradientBrush(System.Windows.Media.Colors.SteelBlue, System.Windows.Media.Colors.Orange, 45),
+            Content = new System.Windows.Controls.TextBlock
+            {
+                Text = "DeskBridge: drag test (10 s)",
+                FontSize = 28,
+                Foreground = System.Windows.Media.Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        window.Show();
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        var clock = Stopwatch.StartNew();
+        int w = Math.Min(900, display.Width / 2), h = Math.Min(600, display.Height / 2);
+        void Move(object? s, EventArgs e)
+        {
+            double t = clock.Elapsed.TotalSeconds;
+            if (t > 10)
+            {
+                System.Windows.Media.CompositionTarget.Rendering -= Move;
+                window.Close();
+                AddLog("[video] drag test finished");
+                return;
+            }
+            // Back and forth across the display, once every 2 seconds, plus a slower up and down.
+            double fx = 0.5 - 0.5 * Math.Cos(t * Math.PI), fy = 0.5 - 0.5 * Math.Cos(t * Math.PI / 2.5);
+            int x = display.X + (int)(fx * (display.Width - w)), y = display.Y + (int)(fy * (display.Height - h));
+            SetWindowPos(hwnd, -1 /* HWND_TOPMOST */, x, y, w, h, 0x0010 /* SWP_NOACTIVATE */);
+        }
+        System.Windows.Media.CompositionTarget.Rendering += Move;
+        AddLog($"[video] drag test: a window moves across the display at ({display.X}, {display.Y}) for 10 s");
+        return new ReportMessage($"A test window moves across the display at ({display.X}, {display.Y}) for 10 s; read the log afterwards.");
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
 
     private ControlMessage HandleUpdate(string from, ControlMessage message)
     {

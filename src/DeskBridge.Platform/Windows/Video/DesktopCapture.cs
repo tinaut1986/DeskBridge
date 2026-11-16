@@ -185,7 +185,7 @@ public sealed unsafe class DesktopCapture : IDisposable
             var image = PointerShapes.Convert((int)shape.Type, (int)shape.Width, (int)shape.Height, (int)shape.Pitch, _shapeBuffer.AsSpan(0, (int)used));
             if (image is not null)
             {
-                PointerImage = image;
+                PointerImage = image with { HotX = shape.HotSpot.X, HotY = shape.HotSpot.Y };
                 PointerVersion++;
             }
         }

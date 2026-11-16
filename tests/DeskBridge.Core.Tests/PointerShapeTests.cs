@@ -30,6 +30,9 @@ public class PointerShapeTests
         var back = PointerImage.FromBody(image.ToBody())!;
         Assert.Equal((image.Width, image.Height), (back.Width, back.Height));
         Assert.Equal(image.Bgra, back.Bgra);
+        var pointing = PointerImage.FromBody((image with { HotX = 1, HotY = 0 }).ToBody())!;
+        Assert.Equal((1, 0), (pointing.HotX, pointing.HotY));
+        Assert.Equal(image.Bgra, pointing.Bgra);
         Assert.Null(PointerImage.FromBody([1, 0, 0, 0, 1, 0, 0, 0])); // size and data disagree
     }
 
