@@ -52,7 +52,7 @@ public sealed class VideoReceiver : IAsyncDisposable
         H264Decoder? decoder = null;
         var report = Stopwatch.StartNew();
         var clock = Stopwatch.StartNew();
-        long bestBehind = long.MaxValue;
+        var lateFrames = new LateFrames(TimeSpan.FromTicks(LateTicks));
         int skipped = 0;
         (int X, int Y, bool Visible) pointer = default;
         int reportFrames = 0;
@@ -97,11 +97,8 @@ public sealed class VideoReceiver : IAsyncDisposable
                         _bytes += data.Length;
                         reportBytes += data.Length;
 
-                        // How far behind the sender this frame is: its time against our clock, relative to the
-                        // least behind frame so far (the clocks of the two machines are not compared directly).
-                        long behind = clock.Elapsed.Ticks - time;
-                        bestBehind = Math.Min(bestBehind, behind);
-                        bool late = behind - bestBehind > LateTicks;
+                        // Too far behind the least delayed frame of the last seconds (see LateFrames).
+                        bool late = lateFrames.IsLate(clock.Elapsed.Ticks, time);
                         if (late)
                             skipped++;
                         try
