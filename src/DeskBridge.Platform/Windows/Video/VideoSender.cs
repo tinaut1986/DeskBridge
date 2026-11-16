@@ -174,9 +174,12 @@ public sealed class VideoSender : IAsyncDisposable
                 {
                     var latency = TakeLatency();
                     _log($"[video] encoder: {encoder.Stats}; {encoded / 10.0:F1} frames/s encoded (only when the screen changes)"
+                         + (_encodeDelayCount > 0 ? $"; encoder holds a picture {_encodeDelaySum / _encodeDelayCount:F1} ms (worst {_encodeDelayMax:F0})" : "")
+                         + (_dropped > 0 ? $"; {_dropped} frames dropped (network behind)" : "")
                          + (latency is { } l ? $"; capture to screen and back {l.Average:F0} ms (worst {l.Max:F0}, {l.Samples} samples)" : ""));
                     nextReport = clock.Elapsed + TimeSpan.FromSeconds(10);
                     encoded = 0;
+                    (_encodeDelaySum, _encodeDelayMax, _encodeDelayCount, _dropped) = (0, 0, 0, 0);
                 }
                 if (capture.TryAcquire(0)) // never wait inside it: it holds the device lock
                 {
@@ -237,12 +240,23 @@ public sealed class VideoSender : IAsyncDisposable
         }
     }
 
+    private double _encodeDelaySum, _encodeDelayMax;
+    private int _encodeDelayCount, _dropped;
+
     private void Enqueue(EncodedFrame frame)
     {
+        if (_clock is { } clock)
+        {
+            double ms = TimeSpan.FromTicks(clock.Elapsed.Ticks - frame.Time).TotalMilliseconds;
+            _encodeDelaySum += ms;
+            _encodeDelayMax = Math.Max(_encodeDelayMax, ms);
+            _encodeDelayCount++;
+        }
         if (_queue.Count >= MaxQueued && !frame.KeyFrame)
         {
             // The network is behind: drop what is waiting and start again from a key frame.
-            while (_queue.TryTake(out _)) { }
+            while (_queue.TryTake(out _))
+                _dropped++;
             _keyFrameWanted = true;
             return;
         }

@@ -402,8 +402,14 @@ public sealed class VideoWindow : IDisposable
     }
 
     /// <summary>Draws the last picture again with the pointer somewhere else (it moved over a still screen).</summary>
+    private int _repaints;
+
+    /// <summary>Times the pointer was drawn again on its own since the last call (for logs).</summary>
+    public int TakeRepaints() => Interlocked.Exchange(ref _repaints, 0);
+
     private void Repaint((int X, int Y, bool Visible) pointer)
     {
+        Interlocked.Increment(ref _repaints);
         lock (_drawLock)
         {
             if (_swapChain is not null && _picture is not null && _converter is not null && !_resized)
