@@ -50,6 +50,9 @@ public sealed class VideoReceiver : IAsyncDisposable
     }
 
     /// <summary>A frame this much later than the best so far is not shown (the receiver catches up instead).</summary>
+    /// <summary>More than a pointer update waiting (about 30 bytes framed): the next frame is here.</summary>
+    private const int PointerPacketBytes = 64;
+
     private static readonly long LateTicks = TimeSpan.FromMilliseconds(80).Ticks;
     private long _bytes;
     private VideoFormat? _format;
@@ -119,8 +122,11 @@ public sealed class VideoReceiver : IAsyncDisposable
                         _bytes += data.Length;
                         reportBytes += data.Length;
 
-                        // Too far behind the least delayed frame of the last seconds (see LateFrames).
-                        bool late = lateFrames.IsLate(clock.Elapsed.Ticks, time);
+                        // Too far behind the least delayed frame of the last seconds (see LateFrames), or simply not
+                        // the newest: the next frame is already waiting (a backlog, even one there since the start,
+                        // which the timing alone takes for normal). Decoded, since the next ones depend on it, but
+                        // not shown: only the newest picture is.
+                        bool late = lateFrames.IsLate(clock.Elapsed.Ticks, time) | _channel.Pending > PointerPacketBytes;
                         if (late)
                             skipped++;
                         try

@@ -47,7 +47,7 @@ public partial class MainWindow
         var color = ColorOfId(_vm.LocalMachine.Trim());
         foreach (var gone in _frames.Keys.Where(k => wanted.All(d => (d.X, d.Y) != k)).ToList())
         {
-            _frames[gone].Close();
+            _frames[gone].Dispose();
             _frames.Remove(gone);
         }
         foreach (var display in wanted)
@@ -68,7 +68,7 @@ public partial class MainWindow
     {
         _framesTimer?.Stop();
         foreach (var frame in _frames.Values)
-            frame.Close();
+            frame.Dispose();
         _frames.Clear();
     }
 
