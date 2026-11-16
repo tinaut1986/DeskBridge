@@ -46,7 +46,7 @@ public sealed record VideoFormat(int Width, int Height, int Fps, int BitrateMbps
 /// (4-byte length, AES-GCM ciphertext and tag, a per-direction counter as nonce). No JSON and no base64,
 /// so a 1080p60 stream costs next to nothing to frame and encrypt.
 /// </summary>
-public sealed class VideoChannel : IAsyncDisposable
+public sealed class VideoChannel : IVideoLink
 {
     /// <summary>Largest packet accepted (a key frame of a 4K picture at a high bitrate fits easily).</summary>
     public const int MaxPacket = 16 * 1024 * 1024;

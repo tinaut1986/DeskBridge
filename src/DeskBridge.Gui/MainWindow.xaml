@@ -736,6 +736,14 @@
                             </CheckBox>
                         </Border>
                         <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="VideoAtOnceBox" Style="{StaticResource Switch}" Click="VideoAtOnce_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Show the displays of other machines without waiting for the screen refresh'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'About 8 ms less delay on the displays that show another machine. While something moves fast, a horizontal line may show where two pictures meet.'}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
                             <CheckBox x:Name="StartWithWindowsMenu" Style="{StaticResource Switch}" Click="StartWithWindows_Click">
                                 <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Start with Windows'}" />
                             </CheckBox>
@@ -746,6 +754,15 @@
                                     <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Run as administrator'}" />
                                     <TextBlock Style="{StaticResource Hint}" Text="{l:T 'On a machine controlled from the coordinator: needed for the keyboard and mouse to work in apps opened as administrator. DeskBridge starts as administrator when you sign in (a scheduled task); Windows asks for permission once, on this PC. Files cannot be dropped on its window meanwhile.'}" />
                                     <TextBlock x:Name="AdminStatusText" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="SecureBox" Style="{StaticResource Switch}" Click="Secure_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Let the coordinator use the lock screen and administrator prompts'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Installs a small Windows service (DeskBridge Helper): with it, the lock screen and the administrator prompts of this PC are seen and used from the coordinator, the way AnyDesk does it. Windows does not let any normal program reach them. Needs &quot;Run as administrator&quot;; only DeskBridge running as administrator can use the service.'}" />
+                                    <TextBlock x:Name="SecureStatusText" Style="{StaticResource Hint}" Margin="0,4,0,0" />
                                 </StackPanel>
                             </CheckBox>
                         </Border>

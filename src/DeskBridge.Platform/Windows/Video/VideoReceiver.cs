@@ -99,7 +99,8 @@ public sealed class VideoReceiver : IAsyncDisposable
                 window.Closed += () => _stop.Cancel();
                 _window = window;
             }
-            _log($"[video] receiving from {_channel.RemoteMachine} on {video.GpuName}");
+            _log($"[video] receiving from {_channel.RemoteMachine} on {video.GpuName}"
+                 + (window is null ? "" : window.CanShowAtOnce ? $" (pictures shown {(VideoWindow.Immediate ? "at once" : "at the next refresh")})" : " (cannot show pictures between refreshes)"));
 
             while (!_stop.IsCancellationRequested)
             {

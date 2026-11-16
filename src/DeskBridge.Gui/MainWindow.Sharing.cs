@@ -48,6 +48,8 @@ public partial class MainWindow
         if (_options.SnapshotDir is null)
             WatchSession();
         ShowFramesBox.IsChecked = _settings.ShowFrames;
+        VideoAtOnceBox.IsChecked = _settings.VideoAtOnce;
+        Platform.Windows.Video.VideoWindow.Immediate = _settings.VideoAtOnce;
         StartFrames();
         if (_options.SnapshotDir is null)
             SourceInitialized += (_, _) => _clipboard = new ClipboardSync(this, SendClipboardAsync, AddLog) { SendEnabled = _settings.ClipboardSend };

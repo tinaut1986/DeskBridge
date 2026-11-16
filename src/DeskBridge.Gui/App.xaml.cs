@@ -11,6 +11,11 @@ public partial class App : Application
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        if (RunSecureMode(e.Args))
+        {
+            Shutdown();
+            return;
+        }
         Updater.CleanUpAfterUpdate(e.Args);
         DeskBridge.Platform.Windows.Priority.RaiseProcess(); // keyboard, mouse and video stay smooth on a busy PC
         DeskBridge.Platform.Windows.Input.CursorHider.Show(); // in case the app ended while the pointer was hidden
@@ -51,6 +56,17 @@ public partial class App : Application
                 Shutdown();
                 return;
             }
+            // "Run as administrator" is on but this copy was opened by hand (the Start menu) or restarted by an update
+            // without those rights: the task opens it again as administrator. Not for other copies started minimized
+            // (the task's own start at sign-in), so a task that cannot elevate never loops.
+            if (!Elevation.IsElevated && (!options.Minimized || e.Args.Contains("--after-update"))
+                && Elevation.TaskExists() && Elevation.HandOverToTask())
+            {
+                _instance.Dispose();
+                _instance = null;
+                Shutdown();
+                return;
+            }
         }
 
         var settings = UserSettings.Load(options.SettingsPath);
@@ -69,6 +85,43 @@ public partial class App : Application
             new WindowInteropHelper(window).EnsureHandle(); // started with Windows: agent and clipboard run, window stays hidden
         else
             window.Show();
+    }
+
+    /// <summary>
+    /// The Windows service and its helper (both SYSTEM, see Secure.SecureService), and installing or removing the
+    /// service from an elevated copy started for it. True when this process was one of those.
+    /// </summary>
+    private static bool RunSecureMode(string[] args)
+    {
+        if (args.Contains("--service"))
+        {
+            UseSecureLog();
+            System.ServiceProcess.ServiceBase.Run(new Secure.HelperService());
+            return true;
+        }
+        if (args.Contains("--secure-helper"))
+        {
+            UseSecureLog();
+            Secure.SecureHelper.Run();
+            return true;
+        }
+        if (args.Contains("--install-service"))
+        {
+            Secure.SecureService.Install(Environment.ProcessPath!, FileLog.Write);
+            return true;
+        }
+        if (args.Contains("--uninstall-service"))
+        {
+            Secure.SecureService.Uninstall(FileLog.Write);
+            return true;
+        }
+        return false;
+    }
+
+    private static void UseSecureLog()
+    {
+        FileLog.Directory = FileLog.SecureDirectory;
+        FileLog.Prefix = "secure";
     }
 
     private static void RecordCrash(Exception? ex)

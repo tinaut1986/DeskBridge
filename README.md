@@ -57,12 +57,17 @@ Barra lateral con estas páginas:
 - **Actualizaciones**: versión instalada, canal y buscar ahora.
 - **Registro**: el log, diagnósticos de todos los equipos y prueba de vídeo.
 - **General**: idioma (11), tema, iniciar con Windows, seguir en el área de notificación al cerrar,
-  **marcar cada pantalla con el color de su equipo** (un borde fino) y **ejecutar como administrador**.
+  **marcar cada pantalla con el color de su equipo** (un borde fino), **mostrar las pantallas de otros equipos
+  sin esperar al refresco** (menos retraso, a veces una línea de corte), **ejecutar como administrador** y
+  **permitir que el coordinador use la pantalla de bloqueo y los avisos de administrador** (instala un servicio).
 
 **Ejecutar como administrador** (en el equipo controlado): Windows no deja que un programa normal envíe teclas o
 clics a una aplicación abierta como administrador. Con esta opción DeskBridge arranca elevado al iniciar sesión
-(una tarea programada; Windows pide permiso una vez). Los avisos de UAC (escritorio seguro) siguen sin poder
-manejarse a distancia: eso necesitaría un servicio de Windows.
+(una tarea programada; Windows pide permiso una vez). Si se abre a mano sin permisos, le pasa el relevo a la tarea.
+
+**Pantalla de bloqueo y avisos de UAC**: ningún programa normal puede verlos ni escribir en ellos. La opción
+instala el servicio "DeskBridge Helper" (como AnyDesk): con él se ven en el monitor prestado y se manejan desde el
+coordinador. Necesita "Ejecutar como administrador": el servicio solo atiende a DeskBridge con esos permisos.
 
 La configuración vive en `%APPDATA%\DeskBridge\`: `deskbridge.json` (común, se edita en el coordinador y se
 reparte sola), `deskbridge.local.json` (id del equipo y clave) y `settings.json` (preferencias de este usuario).
@@ -74,8 +79,7 @@ baja latencia, teclado y ratón, sonido, micrófono, portapapeles, archivos, act
 
 El vídeo solo se envía cuando la pantalla cambia: una pantalla quieta apenas gasta red ni GPU.
 
-Pendiente, por orden: servicio de Windows para los avisos de UAC y
-la pantalla de bloqueo; mostrar el sobremesa en el portátil (fase 4); color a resolución completa (4:4:4);
+Pendiente, por orden: mostrar el sobremesa en el portátil (fase 4); color a resolución completa (4:4:4);
 cámara. Ver la [hoja de ruta](docs/arquitectura.md#hoja-de-ruta).
 
 ## Compilar y probar

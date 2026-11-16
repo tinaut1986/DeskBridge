@@ -50,6 +50,9 @@ public partial class MainWindow
             case ProbeMessage { What: "video" }:
                 return new ReportMessage(Platform.Windows.Video.VideoWindow.Report());
 
+            case ProbeMessage { What: "secure-log" }:
+                return new ReportMessage(SecureLogTail());
+
             case ProbeMessage { What: "drag" }:
                 return await Dispatcher.InvokeAsync(StartDragTest);
 

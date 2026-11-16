@@ -45,6 +45,13 @@ public static class Elevation
         return Run("cmd.exe", command, elevated: true, wait: false, log) == 0;
     }
 
+    /// <summary>
+    /// Starts DeskBridge through the sign-in task (as administrator, with no prompt: the task was allowed once) once
+    /// this copy has closed: for a copy opened by hand while "Run as administrator" is on.
+    /// </summary>
+    public static bool HandOverToTask() =>
+        Run("cmd.exe", $"/c {WaitForThisCopy()} && schtasks /Run /TN \"{TaskName}\"", elevated: false, wait: false) == 0;
+
     /// <summary>Waits (up to a minute) until this process has ended, then a second more.</summary>
     private static string WaitForThisCopy() =>
         $"powershell.exe -NoProfile -NonInteractive -Command \"Wait-Process -Id {Environment.ProcessId} -Timeout 60 -ErrorAction SilentlyContinue; Start-Sleep 1; exit 0\"";

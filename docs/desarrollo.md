@@ -31,6 +31,7 @@ deskbridge remote <equipo> log [n]               últimas líneas del log de ese
 deskbridge remote <equipo> update <exe> [versión] instala esa versión y reinicia DeskBridge allí
 deskbridge remote <equipo> displays | probe-vdd | probe-video
 deskbridge remote <equipo> drag-test             mueve una ventana de prueba 10 s por la pantalla que envía
+deskbridge remote <equipo> secure-log            log del servicio del escritorio seguro y su ayudante
 deskbridge remote <equipo> ui <carpeta>          captura PNG de cada página de su ventana
 deskbridge probe <equipo> [segundos]
 deskbridge video-test | video-net-test
@@ -68,6 +69,9 @@ que PowerShell 5.1, que estropea los caracteres no ASCII.
 | `muted-outputs.txt` | Salidas de sonido que DeskBridge silenció (se devuelven al arrancar si se cerró de golpe). |
 | `default-microphone.txt` | El micrófono predeterminado del usuario mientras "CABLE Output" lo sustituye. |
 | `logs\` | Registro por día, y `crash.txt` con el último cierre inesperado. |
+
+Con el servicio del escritorio seguro: su copia en `%ProgramFiles%\DeskBridge\DeskBridge.exe` y su log (y el del
+ayudante) en `%ProgramData%\DeskBridge\logs\secure-*.log`.
 
 En `%APPDATA%\DeskBridge\` están `deskbridge.json`, `deskbridge.local.json`, `settings.json` y
 `applied-profile.json` (el perfil aplicado, que se vuelve a poner al arrancar).

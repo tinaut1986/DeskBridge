@@ -49,6 +49,19 @@ public sealed class VideoWindow : IDisposable
     /// </summary>
     public (float R, float G, float B)? Frame { get; set; }
 
+    /// <summary>
+    /// Pictures go on screen at once instead of at the monitor's next refresh (half a frame less delay on average);
+    /// a picture can then change mid-screen, which may show as a horizontal tear while things move fast. For every
+    /// video window of this process; ignored where Windows does not support it.
+    /// </summary>
+    public static bool Immediate { get; set; }
+
+    private SwapChainFlags _swapFlags = SwapChainFlags.FrameLatencyWaitableObject;
+    private bool _canTear;
+
+    /// <summary>Whether <see cref="Immediate"/> can work here.</summary>
+    public bool CanShowAtOnce => _canTear;
+
     private const int FrameWidth = 3;
     private VideoConverter? _converter;
     private PointerRenderer? _pointer;
@@ -253,8 +266,11 @@ public sealed class VideoWindow : IDisposable
                 BufferCount = 2,
                 SwapEffect = SwapEffect.FlipDiscard,
                 Scaling = Scaling.Stretch,
-                Flags = SwapChainFlags.FrameLatencyWaitableObject,
+                Flags = _swapFlags = TearingSupported(factory)
+                    ? SwapChainFlags.FrameLatencyWaitableObject | SwapChainFlags.AllowTearing
+                    : SwapChainFlags.FrameLatencyWaitableObject,
             });
+            _canTear = (_swapFlags & SwapChainFlags.AllowTearing) != 0;
             factory.MakeWindowAssociation(_hwnd, WindowAssociationFlags.IgnoreAll);
             // Never a picture queued ahead of the screen, and the wait for its turn done on its own (a handle), not
             // inside Present: Present waiting there held the whole device, the decoder included.
@@ -372,6 +388,20 @@ public sealed class VideoWindow : IDisposable
     private volatile bool _newPicture;
     private nint _frameWait;
 
+    /// <summary>Whether the GPU and Windows can show a picture at once, between refreshes (DXGI_FEATURE_PRESENT_ALLOW_TEARING).</summary>
+    private static bool TearingSupported(IDXGIFactory2 factory)
+    {
+        try
+        {
+            using var factory5 = factory.QueryInterfaceOrNull<IDXGIFactory5>();
+            return factory5?.PresentAllowTearing == true;
+        }
+        catch (SharpGen.Runtime.SharpGenException)
+        {
+            return false;
+        }
+    }
+
     [DllImport("kernel32.dll")]
     private static extern uint WaitForSingleObject(nint handle, uint milliseconds);
 
@@ -426,7 +456,7 @@ public sealed class VideoWindow : IDisposable
                 // runs a hair faster than the monitor. With the flip model a newer picture simply replaces one still
                 // waiting for the next refresh (no tearing). With a frame latency of 1 this can still wait while the
                 // previous picture is queued: here, not on the decoder.
-                _swapChain?.Present(0, PresentFlags.None);
+                _swapChain?.Present(0, Immediate && _canTear ? PresentFlags.AllowTearing : PresentFlags.None);
             }
             catch (SharpGen.Runtime.SharpGenException)
             {
@@ -460,7 +490,7 @@ public sealed class VideoWindow : IDisposable
                 _frameView = null;
                 _backBuffer?.Dispose();
                 _backBuffer = null;
-                _swapChain.ResizeBuffers(2, (uint)rw, (uint)rh, Format.B8G8R8A8_UNorm, SwapChainFlags.FrameLatencyWaitableObject);
+                _swapChain.ResizeBuffers(2, (uint)rw, (uint)rh, Format.B8G8R8A8_UNorm, _swapFlags);
                 return false; // the picture is converted again at the new size with the next frame
             }
         }

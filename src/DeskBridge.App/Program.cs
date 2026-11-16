@@ -24,6 +24,7 @@ string usage = $"""
                                               Version, path and recent log of a machine connected to this PC's agent
       deskbridge remote <machine> update <exe> [<version>]
                                               Install a DeskBridge build there (it must allow updates)
+      deskbridge remote <machine> secure-log  Recent log of its lock-screen service (if installed)
       deskbridge remote <machine> drag-test   Move a test window across the display it sends for 10 s (no input
                                               involved), to read the video figures of a moving window in its log
       deskbridge probe <machine> [<seconds>]  Receive a stream from a machine here, without showing it; report
@@ -200,6 +201,12 @@ try
                 case "probe-video":
                 {
                     var reply = await session.RequestAsync(Via(new ProbeMessage("video")));
+                    Console.WriteLine(reply is ReportMessage r ? r.Text : reply is ErrorMessage e ? e.Message : reply.GetType().Name);
+                    return 0;
+                }
+                case "secure-log":
+                {
+                    var reply = await session.RequestAsync(Via(new ProbeMessage("secure-log")));
                     Console.WriteLine(reply is ReportMessage r ? r.Text : reply is ErrorMessage e ? e.Message : reply.GetType().Name);
                     return 0;
                 }

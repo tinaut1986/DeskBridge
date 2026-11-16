@@ -66,7 +66,8 @@ public partial class MainWindow
             _controlledBy = from;
             UpdateAgentStatus();
         }),
-        DeskOffset);
+        DeskOffset,
+        () => _secureLink);
 
     /// <summary>Called on the agent's connection thread for every keyboard and mouse sharing message.</summary>
     private Task HandleInputAsync(string from, ControlMessage message)
@@ -74,6 +75,11 @@ public partial class MainWindow
         if (message is InputLeaveMessage leave)
         {
             _share?.OnLeave(from, leave);
+            return Task.CompletedTask;
+        }
+        if (message is InputCursorMessage cursor)
+        {
+            _share?.OnCursor(from, cursor);
             return Task.CompletedTask;
         }
         return Receiver().HandleAsync(from, message);

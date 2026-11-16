@@ -17,12 +17,8 @@ public sealed class VideoSender : IAsyncDisposable
 {
     private const int MaxQueued = 3;
 
-    /// <summary>
-    /// How many times per frame the screen is checked for a new picture. Once: checking four times and encoding
-    /// each new picture at once (to save half a frame of delay) fed the encoder at an uneven pace, and it held
-    /// pictures back: a dragged window went in jerks, with most frames arriving too late to be shown.
-    /// </summary>
-    private const int LooksPerFrame = 1;
+    /// <summary>The capture waits at most this long for a new picture, so key frame requests and stops are seen.</summary>
+    private const int MaxWaitMs = 50;
 
     /// <summary>
     /// Frames still encoded after the screen stops changing: the encoder gives back each frame one later, and a
@@ -33,7 +29,31 @@ public sealed class VideoSender : IAsyncDisposable
     /// <summary>A still screen still sends one frame this often.</summary>
     private static readonly TimeSpan IdleFrameEvery = TimeSpan.FromSeconds(1);
 
-    private readonly VideoChannel _channel;
+    private readonly IVideoLink _channel;
+    private readonly bool _followInputDesktop;
+    private volatile bool _suspended, _resumed;
+
+    /// <summary>Where the packets go (the network channel, or the pipe to a relay).</summary>
+    public IVideoLink Link => _channel;
+
+    public int Fps => _fps;
+
+    public int BitrateMbps => _bitrateMbps;
+
+    /// <summary>
+    /// Sends nothing while set: the secure desktop's helper sends this display's picture meanwhile, through a relay
+    /// on the same link. When cleared, the format goes again and a key frame follows (the receiver starts over).
+    /// </summary>
+    public bool Suspended
+    {
+        get => _suspended;
+        set
+        {
+            if (_suspended && !value)
+                _resumed = true;
+            _suspended = value;
+        }
+    }
     private readonly Action<string> _log;
     private readonly CancellationTokenSource _stop = new();
     private readonly BlockingCollection<EncodedFrame> _queue = new(boundedCapacity: 64);
@@ -72,9 +92,13 @@ public sealed class VideoSender : IAsyncDisposable
     public Task Completion { get; }
 
     /// <param name="monitorX">Desktop position of the monitor to send (its top-left corner).</param>
-    public VideoSender(VideoChannel channel, int monitorX, int monitorY, int fps, int bitrateMbps, Action<string> log)
+    /// <param name="followInputDesktop">
+    /// Capture whichever desktop has the input (the secure desktop's helper, running as SYSTEM, which may open it).
+    /// </param>
+    public VideoSender(IVideoLink channel, int monitorX, int monitorY, int fps, int bitrateMbps, Action<string> log, bool followInputDesktop = false)
     {
         _channel = channel;
+        _followInputDesktop = followInputDesktop;
         _monitorX = monitorX;
         _monitorY = monitorY;
         _fps = fps;
@@ -148,7 +172,20 @@ public sealed class VideoSender : IAsyncDisposable
             var found = DesktopCapture.FindOutput(_monitorX, _monitorY)
                 ?? throw new InvalidOperationException($"No monitor at ({_monitorX}, {_monitorY}).");
             using var video = VideoDevice.Create(found.Adapter);
-            using var capture = DesktopCapture.Open(video, found.Output);
+            // The capture on a device of its own (see DesktopCapture), on the same GPU.
+            var again = DesktopCapture.FindOutput(_monitorX, _monitorY)
+                ?? throw new InvalidOperationException($"No monitor at ({_monitorX}, {_monitorY}).");
+            found.Output.Dispose();
+            using var captureDevice = VideoDevice.Create(again.Adapter);
+            // The thread moves to the desktop with the input first (it captures only the desktop it is on).
+            if (_followInputDesktop)
+                DeskBridge.Platform.Windows.Secure.InputDesktop.Follow();
+            using var capture = DesktopCapture.Open(captureDevice, again.Output);
+            if (_followInputDesktop)
+                capture.BeforeDuplicate = () => DeskBridge.Platform.Windows.Secure.InputDesktop.Follow();
+            var (shared, sharedLock) = capture.OpenFrame(video);
+            using var sharedFrame = shared;
+            using var sharedFrameLock = sharedLock;
             int w = capture.Width & ~1, h = capture.Height & ~1;
             Size = (capture.Width, capture.Height);
             using var toNv12 = new VideoConverter(video, capture.Width, capture.Height, w, h, _fps);
@@ -159,9 +196,10 @@ public sealed class VideoSender : IAsyncDisposable
             var format = new VideoFormat(w, h, _fps, _bitrateMbps, video.GpuName, encoder.Name);
             _channel.SendAsync(VideoPacket.Format, JsonSerializer.SerializeToUtf8Bytes(format), default, _stop.Token).GetAwaiter().GetResult();
 
-            // At most one frame per frame time (a little less, for timing jitter); see LooksPerFrame.
-            using var pacer = new FramePacer(Math.Min(_fps * LooksPerFrame, 480));
-            var frameGap = TimeSpan.FromSeconds(0.75 / Math.Max(1, _fps));
+            // Woken by each new picture (or pointer move); at most one picture per frame time (a little less, for
+            // timing jitter).
+            var frameTime = TimeSpan.FromSeconds(1.0 / Math.Max(1, _fps));
+            var frameGap = frameTime * 0.75;
             bool fresh = false;
             var lastPointer = TimeSpan.Zero;
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -176,7 +214,6 @@ public sealed class VideoSender : IAsyncDisposable
             int encoded = 0;
             while (!_stop.IsCancellationRequested)
             {
-                pacer.Wait();
                 if (clock.Elapsed >= nextReport)
                 {
                     var latency = TakeLatency();
@@ -188,10 +225,38 @@ public sealed class VideoSender : IAsyncDisposable
                     encoded = 0;
                     (_encodeDelaySum, _encodeDelayMax, _encodeDelayCount, _dropped) = (0, 0, 0, 0);
                 }
-                if (capture.TryAcquire(0)) // never wait inside it: it holds the device lock
+                // Until the next picture, or until something is due: the next frame time for a picture that came too
+                // soon or for sharpening, a frame to keep the stream alive, the next report.
+                var t = clock.Elapsed;
+                var wake = new[]
+                {
+                    fresh ? lastEncoded + frameGap : TimeSpan.MaxValue,
+                    t - lastChange <= SettleTime ? lastEncoded + frameTime : TimeSpan.MaxValue,
+                    lastEncoded + IdleFrameEvery,
+                    nextReport,
+                }.Min();
+                int waitMs = _keyFrameWanted ? 0 : (int)Math.Clamp((wake - t).TotalMilliseconds, 0, MaxWaitMs);
+                bool got = capture.TryAcquire(waitMs); // on the capture's own device: waiting here blocks nothing else
+                if (!got && capture.Paused is not null)
+                    _stop.Token.WaitHandle.WaitOne(Math.Max(waitMs, 10)); // lost (lock screen, UAC...): no busy loop
+                if (got)
                 {
                     lastChange = clock.Elapsed;
                     fresh = true;
+                }
+                if (_suspended)
+                {
+                    _stop.Token.WaitHandle.WaitOne(50);
+                    continue;
+                }
+                if (_resumed)
+                {
+                    // Back from the helper's stream: the receiver starts over with this one.
+                    _resumed = false;
+                    _channel.SendAsync(VideoPacket.Format, JsonSerializer.SerializeToUtf8Bytes(format), default, _stop.Token).GetAwaiter().GetResult();
+                    _keyFrameWanted = true;
+                    pointerVersion = -1;
+                    pointer = default;
                 }
                 if (capture.Changed)
                 {
@@ -223,7 +288,7 @@ public sealed class VideoSender : IAsyncDisposable
                 bool due = now - lastEncoded >= frameGap;
                 bool wanted = keyFrame
                               || (fresh && due) // a new picture
-                              || (due && now - lastChange <= SettleTime) // sharpening the last one
+                              || (now - lastEncoded >= frameTime && now - lastChange <= SettleTime) // sharpening the last one
                               || now - lastEncoded >= IdleFrameEvery; // keeping the stream alive
                 if (!wanted)
                     continue;
@@ -233,7 +298,22 @@ public sealed class VideoSender : IAsyncDisposable
                     _keyFrameWanted = false;
                     encoder.RequestKeyFrame();
                 }
-                toNv12.Convert(capture.Frame, 0, encoder.NextInput());
+                try
+                {
+                    sharedFrameLock.AcquireSync(0, 100);
+                }
+                catch (SharpGen.Runtime.SharpGenException)
+                {
+                    continue;
+                }
+                try
+                {
+                    toNv12.Convert(sharedFrame, 0, encoder.NextInput());
+                }
+                finally
+                {
+                    sharedFrameLock.ReleaseSync(0);
+                }
                 if (encoder.Encode(now.Ticks, TimeSpan.FromMilliseconds(200)))
                 {
                     lastEncoded = now;
@@ -275,7 +355,8 @@ public sealed class VideoSender : IAsyncDisposable
         try
         {
             foreach (var frame in _queue.GetConsumingEnumerable(_stop.Token))
-                await _channel.SendAsync(VideoPacket.Frame, VideoChannel.FrameHeader(frame.Time, frame.KeyFrame), frame.Data, _stop.Token);
+                if (!_suspended) // frames queued before the helper took over are not sent after its own
+                    await _channel.SendAsync(VideoPacket.Frame, VideoChannel.FrameHeader(frame.Time, frame.KeyFrame), frame.Data, _stop.Token);
         }
         catch (OperationCanceledException)
         {
