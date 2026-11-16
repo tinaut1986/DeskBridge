@@ -82,13 +82,15 @@ public sealed record InputEvent(InputKind Kind, int X = 0, int Y = 0, int Code =
 /// <param name="Peers">The coordinator's displays in this machine's coordinates: the cursor goes back when pushed into them.</param>
 /// <param name="Area">Where the cursor may go on this machine (the display shown on the coordinator); null: all its displays.</param>
 /// <param name="SpeedX">Pixels to move here per pixel moved on the coordinator (displays of different scales).</param>
+/// <param name="AreaDesk">Where each display of <paramref name="Area"/> is on the coordinator's desk (same order).</param>
 /// <param name="Holes">
 /// Parts of this machine's displays covered, on the coordinator, by its own windows on top of the video (one left
 /// there): the cursor goes back to the coordinator when it enters them, so they can be used.
 /// </param>
 public sealed record InputEnterMessage(PlacementSide Side, double Fraction, int? X = null, int? Y = null,
     IReadOnlyList<DisplayRect>? Peers = null, IReadOnlyList<DisplayRect>? Area = null,
-    double? SpeedX = null, double? SpeedY = null, IReadOnlyList<DisplayRect>? Holes = null) : ControlMessage;
+    double? SpeedX = null, double? SpeedY = null, IReadOnlyList<DisplayRect>? Holes = null,
+    IReadOnlyList<DisplayRect>? AreaDesk = null) : ControlMessage;
 
 /// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
 public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events) : ControlMessage;

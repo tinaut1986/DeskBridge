@@ -58,6 +58,7 @@ public sealed class InputReceiver(
     }
 
     private GlobalInputHook? _localWatch;
+    private IReadOnlyList<DisplayRect>? _areaDesk;
 
     public async Task HandleAsync(string from, ControlMessage message)
     {
@@ -77,6 +78,7 @@ public sealed class InputReceiver(
                     // Moves arrive in the coordinator's pixels: scaled to this display (keeping the fractions).
                     (_speedX, _speedY) = (enter.SpeedX ?? 1, enter.SpeedY ?? 1);
                     _holes = enter.Holes;
+                    _areaDesk = enter.Area is { Count: > 0 } && enter.AreaDesk?.Count == enter.Area.Count ? enter.AreaDesk : null;
                     (_restX, _restY) = (0, 0);
                     (_x, _y) = enter is { X: { } ex, Y: { } ey, Peers: not null }
                         ? EdgeGeometry.ClampToDisplays(_displays, ex, ey)
@@ -101,7 +103,7 @@ public sealed class InputReceiver(
                         _restX -= mx;
                         _restY -= my;
                         var move = _peers is { } peers
-                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes)
+                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes, _areaDesk)
                             : ClientHandover.Move(_displays, _side, _x, _y, mx, my);
                         if (move.Left)
                         {

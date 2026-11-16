@@ -18,9 +18,11 @@ public abstract record MouseDecision
     /// <param name="Area">Where the cursor may go over there; null: all that machine's displays.</param>
     /// <param name="SpeedX">Pixels there per pixel moved here (a display scaled up by Windows moves faster in pixels).</param>
     /// <param name="Holes">Parts of the area covered here by this PC's windows on top of the video (that machine's coordinates).</param>
+    /// <param name="AreaDesk">Where each display of <paramref name="Area"/> is on this PC's desk (same order).</param>
     public sealed record Enter(string Machine, int X, int Y, IReadOnlyList<DisplayRect> Peers,
         PlacementSide Side, double Fraction, int ParkX, int ParkY, IReadOnlyList<DisplayRect>? Area = null,
-        double SpeedX = 1, double SpeedY = 1, IReadOnlyList<DisplayRect>? Holes = null) : MouseDecision;
+        double SpeedX = 1, double SpeedY = 1, IReadOnlyList<DisplayRect>? Holes = null,
+        IReadOnlyList<DisplayRect>? AreaDesk = null) : MouseDecision;
 
     /// <summary>The cursor is on another machine: swallow and send this relative move.</summary>
     public sealed record Forward(string Machine, int Dx, int Dy) : MouseDecision;
@@ -119,7 +121,8 @@ public sealed class CoordinatorHandover
             _remote = target;
             RemoteSide = PlacementSide.Right;
             return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY,
-                AreaOf(target.Machine) ?? [shown], 1 / target.ScaleX, 1 / target.ScaleY, HolesOf(target.Machine));
+                AreaOf(target.Machine) ?? [shown], 1 / target.ScaleX, 1 / target.ScaleY, HolesOf(target.Machine),
+                AreaDeskOf(target.Machine));
         }
 
         foreach (var (cx, cy) in Beyond(x, y))
@@ -140,7 +143,8 @@ public sealed class CoordinatorHandover
             var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, tx, ty);
             double fraction = EdgeGeometry.AtEdge(_displays, side, px, py) ? EdgeGeometry.Fraction(_displays, side, px, py) : 0.5;
             return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), side, fraction, _parkX, _parkY,
-                target.Confine ? AreaOf(target.Machine) : null, 1 / target.ScaleX, 1 / target.ScaleY, HolesOf(target.Machine));
+                target.Confine ? AreaOf(target.Machine) : null, 1 / target.ScaleX, 1 / target.ScaleY, HolesOf(target.Machine),
+                target.Confine ? AreaDeskOf(target.Machine) : null);
         }
         return new MouseDecision.Pass();
     }
@@ -179,9 +183,25 @@ public sealed class CoordinatorHandover
     /// </summary>
     private List<DisplayRect>? AreaOf(string machine)
     {
-        var area = _targets.Where(t => t.Machine == machine && (t.Confine || t.Lent is not null)).SelectMany(t => t.Displays).Distinct().ToList();
+        var area = AreaPairs(machine).Select(p => p.Display).ToList();
         return area.Count > 0 ? area : null;
     }
+
+    /// <summary>
+    /// Where each display of <see cref="AreaOf"/> is on this PC's desk (same order): over there the cursor goes
+    /// from one to another as they touch on the desk, not as that machine's own desktop has them (its displays
+    /// can have very different pixel sizes there).
+    /// </summary>
+    private List<DisplayRect>? AreaDeskOf(string machine)
+    {
+        var desk = AreaPairs(machine).Select(p => p.Desk).ToList();
+        return desk.Count > 0 ? desk : null;
+    }
+
+    private IEnumerable<(DisplayRect Display, DisplayRect Desk)> AreaPairs(string machine) =>
+        _targets.Where(t => t.Machine == machine && (t.Confine || t.Lent is not null))
+            .SelectMany(t => t.Displays.Select(d => (Display: d, Desk: t.Lent ?? t.ToDesk(d))))
+            .DistinctBy(p => p.Display);
 
     /// <summary>
     /// The other machine sent the cursor back at (<paramref name="x"/>, <paramref name="y"/>) in its own
@@ -213,7 +233,8 @@ public sealed class CoordinatorHandover
             var (cx, cy) = next.ToClient(dx, dy);
             var (nx, ny) = EdgeGeometry.ClampToDisplays(next.Displays, cx, cy);
             return new MouseDecision.Enter(next.Machine, nx, ny, PeersOf(next), RemoteSide, 0.5, _parkX, _parkY,
-                next.Confine ? AreaOf(next.Machine) : null, 1 / next.ScaleX, 1 / next.ScaleY, HolesOf(next.Machine));
+                next.Confine ? AreaOf(next.Machine) : null, 1 / next.ScaleX, 1 / next.ScaleY, HolesOf(next.Machine),
+                next.Confine ? AreaDeskOf(next.Machine) : null);
         }
         var (hx, hy) = EdgeGeometry.ClampToDisplays(_displays, dx, dy);
         return new MouseDecision.Here(hx, hy);
@@ -266,12 +287,37 @@ public static class ClientHandover
     /// (<paramref name="peers"/>): the cursor leaves when it is pushed into one of them.
     /// </summary>
     /// <param name="holes">Parts of the displays the coordinator keeps (its windows over the video): entering one leaves.</param>
+    /// <param name="desk">
+    /// Where each of <paramref name="displays"/> is on the coordinator's desk (same order): going from one to
+    /// another follows the desk, so the cursor comes out where it went in as seen on the desk.
+    /// </param>
     public static ClientMove Move(IReadOnlyList<DisplayRect> displays, IReadOnlyList<DisplayRect> peers, int fromX, int fromY, int dx, int dy,
-        IReadOnlyList<DisplayRect>? holes = null)
+        IReadOnlyList<DisplayRect>? holes = null, IReadOnlyList<DisplayRect>? desk = null)
     {
         int x = fromX + dx, y = fromY + dy;
         if (holes is not null && InputLayout.Contains(holes, x, y) && !InputLayout.Contains(holes, fromX, fromY))
             return new ClientMove(x, y, true, 0.5);
+
+        if (desk is not null && desk.Count == displays.Count)
+        {
+            int from = IndexAt(displays, fromX, fromY);
+            if (from >= 0 && !Inside(displays[from], x, y))
+            {
+                // Out of the display it was on: where that point is on the desk, and the display there.
+                var (a, ad) = (displays[from], desk[from]);
+                double qx = ad.X + (x - a.X) * (double)ad.Width / a.Width, qy = ad.Y + (y - a.Y) * (double)ad.Height / a.Height;
+                int to = IndexAt(desk, (int)Math.Floor(qx), (int)Math.Floor(qy));
+                if (to >= 0 && to != from)
+                {
+                    var (b, bd) = (displays[to], desk[to]);
+                    int bx = b.X + (int)Math.Floor((qx - bd.X) * b.Width / bd.Width), by = b.Y + (int)Math.Floor((qy - bd.Y) * b.Height / bd.Height);
+                    return new ClientMove(Math.Clamp(bx, b.X, b.Right - 1), Math.Clamp(by, b.Y, b.Bottom - 1), false, 0);
+                }
+                // Nothing of this machine there on the desk: not onto its other displays as its own desktop has them.
+                displays = [a];
+            }
+        }
+
         if (InputLayout.Contains(displays, x, y))
             return new ClientMove(x, y, false, 0);
         if (InputLayout.Contains(peers, x, y))
@@ -285,6 +331,16 @@ public static class ClientHandover
         if (ny != y && InputLayout.Contains(peers, nx, y))
             return new ClientMove(nx, y, true, 0.5);
         return new ClientMove(nx, ny, false, 0);
+    }
+
+    private static bool Inside(DisplayRect d, int x, int y) => x >= d.X && x < d.Right && y >= d.Y && y < d.Bottom;
+
+    private static int IndexAt(IReadOnlyList<DisplayRect> displays, int x, int y)
+    {
+        for (int i = 0; i < displays.Count; i++)
+            if (Inside(displays[i], x, y))
+                return i;
+        return -1;
     }
 
     /// <summary>Older coordinators: leaves back through the edge facing the coordinator.</summary>

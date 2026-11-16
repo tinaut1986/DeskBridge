@@ -301,4 +301,30 @@ public class HandoverTests
         Assert.Null(h.Remote);
         Assert.IsType<MouseDecision.Pass>(h.OnMouseMove(3000, 10));
     }
+    [Fact]
+    public void Crossing_between_that_machines_displays_follows_the_desk()
+    {
+        // The laptop's virtual display (1920x1080, above its panel in its own desktop) shown on display 3, and its
+        // 2880x1800 panel placed 1920 wide right below display 3.
+        DisplayRect desk3 = new(0, 0, 1920, 1080);
+        DisplayRect virtualDisplay = new(0, -1080, 1920, 1080), panel = new(0, 0, 2880, 1800);
+        var h = new CoordinatorHandover([new(-1920, 0, 1920, 1080), desk3, new(1920, 0, 1920, 1080)],
+        [
+            InputLayout.Lent("laptop", desk3, virtualDisplay),
+            InputLayout.Desk("laptop", panel, new VirtualPosition(0, 1080), 1920.0 / 2880),
+        ]);
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(1900, 500));
+        Assert.NotNull(enter.AreaDesk);
+
+        // Down at the right of display 3: at the right of the panel too (not at 1900 of its 2880 pixels).
+        var down = ClientHandover.Move(enter.Area!, enter.Peers, 1900, -1, 0, 2, null, enter.AreaDesk);
+        Assert.False(down.Left);
+        Assert.InRange(down.X, 2845, 2855);
+        Assert.InRange(down.Y, 0, 3);
+
+        // And back up from there: the same spot of display 3's picture.
+        var up = ClientHandover.Move(enter.Area!, enter.Peers, 2850, 1, 0, -3, null, enter.AreaDesk);
+        Assert.InRange(up.X, 1895, 1905);
+        Assert.InRange(up.Y, -3, -1);
+    }
 }
