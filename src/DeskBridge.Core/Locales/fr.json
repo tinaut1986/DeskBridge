@@ -184,6 +184,7 @@
   "Stable": "Stable",
   "Start with Windows": "Démarrer avec Windows",
   "Starting with a new configuration (the file is not overwritten until you save).": "Démarrage avec une nouvelle configuration (le fichier n'est pas écrasé tant que vous n'enregistrez pas).",
+  "Stop showing other machines' screens": "Ne plus afficher les écrans des autres machines",
   "Stream resolution": "Résolution du flux",
   "System": "Système",
   "The agent is not running.": "L’agent n’est pas en cours d’exécution.",

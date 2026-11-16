@@ -7,8 +7,9 @@ namespace DeskBridge.Core.Simulation;
 /// <summary>Stand-ins that only log what the real implementations would do.</summary>
 public static class Simulated
 {
-    public static PlanApplier Applier(Action<string> log) =>
-        new(new VirtualDisplays(log), new Sender(log), new Receiver(log), new InputRouter(log));
+    /// <param name="virtualDisplays">A real virtual display driver to use instead of the simulated one.</param>
+    public static PlanApplier Applier(Action<string> log, IVirtualDisplayDriver? virtualDisplays = null) =>
+        new(virtualDisplays ?? new VirtualDisplays(log), new Sender(log), new Receiver(log), new InputRouter(log));
 
     private sealed class VirtualDisplays(Action<string> log) : IVirtualDisplayDriver
     {

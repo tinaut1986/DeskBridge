@@ -867,6 +867,8 @@ public partial class MainWindow : Window
         try
         {
             var results = await Coordinator.SwitchProfileAsync(config, local, profile.Name.Trim(), _agent?.Directory);
+            if (results.Any(r => r.Ok))
+                await StartProfileStreamsAsync(LayoutPlanner.Plan(config, profile.Name.Trim()));
             foreach (var r in results)
             {
                 AddLog($"{r.Machine}: {(r.Ok ? "" : L.T("ERROR") + " ")}{r.Message}");

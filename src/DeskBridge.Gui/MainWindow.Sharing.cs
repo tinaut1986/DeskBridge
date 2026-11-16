@@ -46,7 +46,10 @@ public partial class MainWindow
 
     private AgentHost CreateAgent(LocalSettings local)
     {
-        var agent = new AgentHost(local, Simulated.Applier(AddLog), PlatformServices.DisplayDetector(), AddLog, _files);
+        // Real virtual displays; streams are started by the coordinator after the profile is applied (the
+        // machine that connects to it opens every video connection), the rest is still simulated.
+        var applier = Simulated.Applier(AddLog, new Platform.Windows.VirtualDisplays.MttVirtualDisplays(AddLog));
+        var agent = new AgentHost(local, applier, PlatformServices.DisplayDetector(), AddLog, _files);
         agent.ClipboardHandler = (from, message) => Dispatcher.InvokeAsync(() =>
         {
             bool applied = _settings.ClipboardReceive && _clipboard?.Apply(message) == true;

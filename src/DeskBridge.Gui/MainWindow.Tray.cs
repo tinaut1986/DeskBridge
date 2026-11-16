@@ -77,6 +77,13 @@ public partial class MainWindow
         send.Enabled = send.DropDownItems.Count > 0;
         menu.Items.Add(send);
 
+        // Always reachable, even when a full-screen stream covers the display with DeskBridge's window.
+        var stopVideo = new Forms.ToolStripMenuItem(L.T("Stop showing other machines' screens"), null, (_, _) => _ = StopProfileStreamsAsync())
+        {
+            Enabled = !_videoReceivers.IsEmpty,
+        };
+        menu.Items.Add(stopVideo);
+
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(L.T("Quit"), null, (_, _) => Quit());
     }

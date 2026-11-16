@@ -44,11 +44,14 @@ public partial class MainWindow
                 if (endpoint is not { } ep)
                     return new ErrorMessage(L.T("This machine does not know how to reach {machine}.", ("machine", from)));
 
+                // A planned virtual display (where it ended up), a physical display by id, or the main display.
                 var displays = PlatformServices.DisplayDetector().DetectDisplays();
-                var display = displays.FirstOrDefault(d => d.Id == start.Display)
-                              ?? displays.FirstOrDefault(d => d.X == 0 && d.Y == 0)
-                              ?? displays.FirstOrDefault();
-                if (display is null)
+                (int X, int Y)? position = Platform.Windows.VirtualDisplays.MttVirtualDisplays.Placed.TryGetValue(start.Display, out var placed)
+                    ? placed
+                    : (displays.FirstOrDefault(d => d.Id == start.Display)
+                       ?? displays.FirstOrDefault(d => d.X == 0 && d.Y == 0)
+                       ?? displays.FirstOrDefault()) is { } d ? (d.X, d.Y) : null;
+                if (position is not { } display)
                     return new ErrorMessage(L.T("This machine has no display to send."));
 
                 var key = Dispatcher.Invoke(() => _vm.LocalKey.Trim());
@@ -172,6 +175,80 @@ public partial class MainWindow
             AddLog(text);
             _vm.Status = text;
         }
+    }
+
+    /// <summary>The profile whose streams are running (to start them again when a machine reconnects).</summary>
+    private Core.Model.LayoutPlan? _streamPlan;
+
+    /// <summary>
+    /// Coordinator, after a profile is applied: every stream another machine sends here is asked for and shown
+    /// full screen on the display it is assigned to; streams of the previous profile stop.
+    /// </summary>
+    private async Task StartProfileStreamsAsync(Core.Model.LayoutPlan plan)
+    {
+        await StopProfileStreamsAsync();
+        _streamPlan = plan;
+        foreach (var stream in plan.Streams)
+            await StartProfileStreamAsync(stream);
+    }
+
+    private async Task StartProfileStreamAsync(Core.Model.StreamSpec stream)
+    {
+        var here = _vm.LocalMachine.Trim();
+        if (stream.SourceMachine == here)
+        {
+            AddLog($"[video] {stream.Key}: showing this PC's displays on another machine is not available yet");
+            return;
+        }
+        if (stream.SinkMachine != here || _videoReceivers.ContainsKey(stream.Key) || _videoPending.ContainsKey(stream.Key))
+            return;
+        var monitor = PlatformServices.DisplayDetector().DetectDisplays().FirstOrDefault(d => d.Id == stream.SinkDisplay);
+        if (monitor is null)
+        {
+            AddLog($"[video] {stream.Key}: display {stream.SinkDisplay} of this PC is not connected");
+            return;
+        }
+        if (SessionOf(stream.SourceMachine) is not { } session)
+        {
+            AddLog($"[video] {stream.Key}: {stream.SourceMachine} is not connected; it starts when it connects");
+            return;
+        }
+        _videoPending[stream.Key] = (stream.SourceMachine, $"DeskBridge: {MachineName(stream.SourceMachine)}",
+            (monitor.X, monitor.Y, monitor.Width, monitor.Height));
+        try
+        {
+            var reply = await session.RequestAsync(new StartVideoMessage(stream.Key, Send: true, Display: stream.SourceVirtualDisplay,
+                Fps: stream.RefreshHz, BitrateMbps: stream.BitrateMbps));
+            if (reply is ErrorMessage error)
+                throw new ControlException(error.Message);
+        }
+        catch (ControlException ex)
+        {
+            _videoPending.TryRemove(stream.Key, out _);
+            AddLog(L.T("Could not start the video from {machine}: {error}", ("machine", MachineName(stream.SourceMachine)), ("error", ex.Message)));
+        }
+    }
+
+    /// <summary>Stops the streams of the applied profile (test and probe streams keep running).</summary>
+    private async Task StopProfileStreamsAsync()
+    {
+        _streamPlan = null;
+        foreach (var (key, receiver) in _videoReceivers.ToArray())
+        {
+            if (key.StartsWith("test-", StringComparison.Ordinal) || key.StartsWith("probe-", StringComparison.Ordinal))
+                continue;
+            _videoReceivers.TryRemove(key, out _);
+            await receiver.DisposeAsync(); // its completion tells the sender to stop
+        }
+    }
+
+    /// <summary>A machine (re)connected: start the streams of the applied profile it sends.</summary>
+    private void ResumeProfileStreams(string machine)
+    {
+        if (_streamPlan is not { } plan)
+            return;
+        foreach (var stream in plan.Streams.Where(s => s.SourceMachine == machine))
+            _ = StartProfileStreamAsync(stream);
     }
 
     private async Task StopAllVideoAsync()

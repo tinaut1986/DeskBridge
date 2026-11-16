@@ -64,8 +64,9 @@ public sealed class VideoWindow : IDisposable
 
         if (_monitor is { } m)
         {
-            // Over the lent monitor, never taking the focus (the keyboard stays where the cursor is).
-            _hwnd = CreateWindowExW(WsExTopmost | WsExToolWindow | WsExNoActivate, className, _title, WsPopup | WsVisible,
+            // Over the lent monitor, never taking the focus (the keyboard stays where the cursor is). Not topmost:
+            // any window can still be brought over it (DeskBridge's own, to change the profile).
+            _hwnd = CreateWindowExW(WsExToolWindow | WsExNoActivate, className, _title, WsPopup | WsVisible,
                 m.X, m.Y, m.W, m.H, 0, 0, instance, 0);
             (_width, _height) = (m.W, m.H);
         }

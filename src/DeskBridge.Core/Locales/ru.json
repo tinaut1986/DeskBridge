@@ -184,6 +184,7 @@
   "Stable": "Стабильный",
   "Start with Windows": "Запускать вместе с Windows",
   "Starting with a new configuration (the file is not overwritten until you save).": "Запуск с новой конфигурацией (файл не перезаписывается, пока вы не сохраните).",
+  "Stop showing other machines' screens": "Не показывать экраны других компьютеров",
   "Stream resolution": "Разрешение потока",
   "System": "Система",
   "The agent is not running.": "Агент не запущен.",

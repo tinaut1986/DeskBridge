@@ -184,6 +184,7 @@
   "Stable": "安定版",
   "Start with Windows": "Windows の起動時に開始",
   "Starting with a new configuration (the file is not overwritten until you save).": "新しい設定で開始します（保存するまでファイルは上書きされません）。",
+  "Stop showing other machines' screens": "ほかのマシンの画面の表示を停止",
   "Stream resolution": "ストリームの解像度",
   "System": "システム",
   "The agent is not running.": "エージェントが動作していません。",
