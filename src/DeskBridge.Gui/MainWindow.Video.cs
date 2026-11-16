@@ -29,7 +29,7 @@ public partial class MainWindow
     /// Coordinator: displays of this PC showing another machine's display, by stream key (this PC's display, the
     /// machine, and its display in its own coordinates). The cursor goes to that machine when it enters them.
     /// </summary>
-    private readonly ConcurrentDictionary<string, (string Machine, Core.Planning.DisplayRect Here, Core.Planning.DisplayRect There)> _lentDisplays = new();
+    private readonly ConcurrentDictionary<string, (string Machine, string Display, Core.Planning.DisplayRect There)> _lentDisplays = new();
 
     /// <summary>Coordinator: streams being shown, by stream key.</summary>
     private readonly ConcurrentDictionary<string, VideoReceiver> _videoReceivers = new();
@@ -307,8 +307,7 @@ public partial class MainWindow
                     _mirroredDisplays.TryRemove(stream.Key, out _);
                 }
                 ScheduleRedraw();
-                _lentDisplays[stream.Key] = (stream.SourceMachine,
-                    new Core.Planning.DisplayRect(monitor.X, monitor.Y, monitor.Width, monitor.Height),
+                _lentDisplays[stream.Key] = (stream.SourceMachine, stream.SinkDisplay,
                     new Core.Planning.DisplayRect(started.X, started.Y, started.Width, started.Height));
                 RefreshInputTargets();
             }

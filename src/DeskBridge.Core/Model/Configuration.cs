@@ -66,10 +66,15 @@ public enum PlacementSide { Right, Left, Above, Below }
 /// Per borrowing machine, where its virtual displays go relative to its own displays
 /// (default: to the right). Displays lent by the same machine keep their arrangement there.
 /// </param>
+/// <param name="PrimaryDisplay">
+/// The coordinator's display that is Windows' primary one while the profile is applied; null: the original one,
+/// or the nearest free one while the original shows another machine.
+/// </param>
 public sealed record ProfileConfig(
     string Name,
     IReadOnlyList<DisplayAssignment> Assignments,
-    IReadOnlyDictionary<string, PlacementSide>? Placement = null);
+    IReadOnlyDictionary<string, PlacementSide>? Placement = null,
+    string? PrimaryDisplay = null);
 
 public sealed record DeskBridgeConfig(
     IReadOnlyList<MachineConfig> Machines,

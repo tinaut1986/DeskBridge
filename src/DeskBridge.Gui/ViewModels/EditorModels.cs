@@ -246,6 +246,11 @@ public sealed class ProfileVm : ObservableObject
 
     public string Name { get => _name; set => Set(ref _name, value); }
 
+    private string? _primaryDisplay;
+
+    /// <summary>The coordinator's display made primary while this profile is applied; null: automatic.</summary>
+    public string? PrimaryDisplay { get => _primaryDisplay; set => Set(ref _primaryDisplay, value); }
+
     public ObservableCollection<AssignmentVm> Assignments { get; } = Tracked<AssignmentVm>();
 
     /// <summary>Where each borrowing machine puts its virtual displays (absent = to the right).</summary>
@@ -385,7 +390,7 @@ public sealed class EditorModel
 
         foreach (var p in config.Profiles)
         {
-            var profile = new ProfileVm { Name = p.Name };
+            var profile = new ProfileVm { Name = p.Name, PrimaryDisplay = p.PrimaryDisplay };
             profile.Sync(model.Machines);
             foreach (var a in p.Assignments)
             {
@@ -426,7 +431,8 @@ public sealed class EditorModel
                 .Where(a => a.IsLent)
                 .Select(a => new DisplayAssignment(a.Owner.Id.Trim(), a.Display.Id.Trim(), a.UsedBy.Id.Trim(), a.ToStreamSettings(errors), a.Position))
                 .ToList(),
-            PlacementOf(p))).ToList();
+            PlacementOf(p),
+            string.IsNullOrWhiteSpace(p.PrimaryDisplay) ? null : p.PrimaryDisplay.Trim())).ToList();
 
         return new DeskBridgeConfig(machines, profiles, ControlPort);
     }

@@ -170,7 +170,7 @@ public static class LayoutPlanner
 
         var placed = Place(config, profile, assignments, virtualDisplays);
         warnings.AddRange(ArrangementWarnings(config, placed));
-        return new LayoutPlan(profile.Name, coordinator.Id, placed, streams, inputRoutes, warnings);
+        return new LayoutPlan(profile.Name, coordinator.Id, placed, streams, inputRoutes, warnings, profile.PrimaryDisplay);
     }
 
     /// <summary>Windows needs every display to touch another one, and none may overlap.</summary>

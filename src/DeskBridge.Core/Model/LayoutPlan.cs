@@ -35,7 +35,8 @@ public sealed record LayoutPlan(
     IReadOnlyList<VirtualDisplaySpec> VirtualDisplays,
     IReadOnlyList<StreamSpec> Streams,
     IReadOnlyList<InputRoute> InputRoutes,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    string? PrimaryDisplay = null)
 {
     public IEnumerable<VirtualDisplaySpec> VirtualDisplaysOf(string machine) =>
         VirtualDisplays.Where(v => v.Machine == machine);

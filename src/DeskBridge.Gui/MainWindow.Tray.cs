@@ -106,7 +106,7 @@ public partial class MainWindow
         var stopVideo = new Forms.ToolStripMenuItem(L.T("Stop showing other machines' screens"), null, (_, _) =>
         {
             ForgetApplied();
-            _ = StopProfileStreamsAsync();
+            _ = StopProfileStreamsAsync().ContinueWith(_ => Dispatcher.InvokeAsync(RestorePrimary), TaskScheduler.Default);
         })
         {
             Enabled = !_videoReceivers.IsEmpty,

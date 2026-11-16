@@ -48,6 +48,7 @@ public partial class MainWindow
 
     private void DrawLayout()
     {
+        UpdatePrimaryBox();
         var canvas = LayoutCanvas;
         if (_deskDragging is not null)
             return; // redrawn when the drag ends
