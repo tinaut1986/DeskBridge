@@ -39,9 +39,12 @@ public partial class MainWindow
                 .Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()))
                 .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height), m.DeskPositions[d.Id.Trim()])));
         // Displays here that show another machine's screen: entering one moves the cursor to that machine.
-        var lent = _lentDisplays.Values
-            .Where(l => connected.Contains(l.Machine) && local.Contains(l.Here))
-            .Select(l => InputLayout.Lent(l.Machine, l.Here, l.There));
+        var shown = _lentDisplays.Values.Where(l => connected.Contains(l.Machine) && local.Contains(l.Here)).ToList();
+        var lent = shown.Select(l => InputLayout.Lent(l.Machine, l.Here, l.There));
+        // A display of that machine shown here AND placed on the desk (no virtual display yet: its main display is
+        // streamed instead) would be on the desk twice and the cursor would bounce between both: only the display
+        // showing it counts while that lasts.
+        edges = edges.Where(e => !shown.Any(l => l.Machine == e.Machine && e.Displays[0] == l.There));
         return lent.Concat(edges).ToList();
     }
 
