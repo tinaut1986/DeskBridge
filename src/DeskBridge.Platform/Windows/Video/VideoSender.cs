@@ -60,6 +60,9 @@ public sealed class VideoSender : IAsyncDisposable
         }
     }
 
+    /// <summary>The desktop position of the monitor sent (its top-left corner).</summary>
+    public (int X, int Y) Monitor => (_monitorX, _monitorY);
+
     /// <summary>Why the stream ended (null while it runs or after a normal stop).</summary>
     public string? Failure { get; private set; }
 
