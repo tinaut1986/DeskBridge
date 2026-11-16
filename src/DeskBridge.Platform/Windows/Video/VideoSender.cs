@@ -17,8 +17,11 @@ public sealed class VideoSender : IAsyncDisposable
 {
     private const int MaxQueued = 3;
 
-    /// <summary>Frames still encoded after the screen stops changing.</summary>
-    private static readonly TimeSpan SettleTime = TimeSpan.FromMilliseconds(500);
+    /// <summary>
+    /// Frames still encoded after the screen stops changing: the encoder gives back each frame one later, and a
+    /// few more sharpen the picture. Short, or a blinking text cursor (every half second) would keep it busy.
+    /// </summary>
+    private static readonly TimeSpan SettleTime = TimeSpan.FromMilliseconds(100);
 
     /// <summary>A still screen still sends one frame this often.</summary>
     private static readonly TimeSpan IdleFrameEvery = TimeSpan.FromSeconds(1);
