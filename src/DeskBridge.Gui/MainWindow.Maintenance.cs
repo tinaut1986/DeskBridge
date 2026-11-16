@@ -182,6 +182,7 @@ public partial class MainWindow
         if (App.TakeLastCrash() is { } crash)
             AddLog("[error] the previous run " + crash);
         AddLog(Platform.Windows.Input.PointerOverlay.Needed ? "[session] this is a Remote Desktop session" : "[session] console session");
+        AddLog(Elevation.IsElevated ? "[session] running as administrator" : "[session] running without administrator rights");
         Microsoft.Win32.SystemEvents.SessionSwitch += (_, e) =>
             AddLog(e.Reason switch
             {

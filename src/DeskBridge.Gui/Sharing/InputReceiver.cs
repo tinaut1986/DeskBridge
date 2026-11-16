@@ -10,12 +10,22 @@ namespace DeskBridge.Gui.Sharing;
 /// The machine that gets the cursor: plays the coordinator's keyboard and mouse here and, when the cursor
 /// goes back past the edge facing the coordinator, gives it back (releasing everything still held).
 /// </summary>
+/// <param name="offset">
+/// Where this PC's original arrangement's (0,0) is now (moved when DeskBridge made another display primary): the
+/// coordinator's coordinates are in the original arrangement, as its layout has this PC's displays.
+/// </param>
 public sealed class InputReceiver(
     Func<bool> enabled,
     Func<IReadOnlyList<DisplayRect>> displays,
     Func<string, ControlSession?> sessionOf,
-    Action<string?> activeChanged)
+    Action<string?> activeChanged,
+    Func<(int X, int Y)>? offset = null)
 {
+    private (int X, int Y) _offset;
+
+    private IReadOnlyList<DisplayRect>? Shift(IReadOnlyList<DisplayRect>? rects) =>
+        rects is null || _offset == (0, 0) ? rects : rects.Select(r => r with { X = r.X + _offset.X, Y = r.Y + _offset.Y }).ToList();
+
     private readonly InputInjector _injector = new();
     private readonly object _gate = new();
     private string? _from;
@@ -68,20 +78,21 @@ public sealed class InputReceiver(
             switch (message)
             {
                 case InputEnterMessage enter when enabled():
+                    _offset = offset?.Invoke() ?? (0, 0);
                     // Only the display shown on the coordinator, when it entered through one; otherwise all of them.
-                    _displays = enter.Area is { Count: > 0 } area ? area : displays();
+                    _displays = Shift(enter.Area) is { Count: > 0 } area ? area : displays();
                     if (_displays.Count == 0)
                         return;
                     _from = from;
                     _side = enter.Side;
-                    _peers = enter.Peers;
+                    _peers = Shift(enter.Peers);
                     // Moves arrive in the coordinator's pixels: scaled to this display (keeping the fractions).
                     (_speedX, _speedY) = (enter.SpeedX ?? 1, enter.SpeedY ?? 1);
-                    _holes = enter.Holes;
+                    _holes = Shift(enter.Holes);
                     _areaDesk = enter.Area is { Count: > 0 } && enter.AreaDesk?.Count == enter.Area.Count ? enter.AreaDesk : null;
                     (_restX, _restY) = (0, 0);
                     (_x, _y) = enter is { X: { } ex, Y: { } ey, Peers: not null }
-                        ? EdgeGeometry.ClampToDisplays(_displays, ex, ey)
+                        ? EdgeGeometry.ClampToDisplays(_displays, ex + _offset.X, ey + _offset.Y)
                         : ClientHandover.Enter(_displays, enter.Side, enter.Fraction);
                     InputInjector.MoveTo(_x, _y);
                     ShowPointer();
@@ -107,7 +118,9 @@ public sealed class InputReceiver(
                             : ClientHandover.Move(_displays, _side, _x, _y, mx, my);
                         if (move.Left)
                         {
-                            leave = _peers is null ? new InputLeaveMessage(move.Fraction) : new InputLeaveMessage(move.Fraction, move.X, move.Y);
+                            leave = _peers is null
+                                ? new InputLeaveMessage(move.Fraction)
+                                : new InputLeaveMessage(move.Fraction, move.X - _offset.X, move.Y - _offset.Y);
                             _injector.ReleaseAll();
                             _from = null;
                             HidePointer();

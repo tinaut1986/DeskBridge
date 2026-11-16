@@ -60,6 +60,25 @@ public sealed class VideoChannel : IAsyncDisposable
     private ulong _sendCounter, _receiveCounter;
     private readonly byte[] _header = new byte[4];
 
+    /// <summary>
+    /// Bytes already received and not read yet: more than nothing right after reading a frame means the next
+    /// one is already here, i.e. the reader is behind.
+    /// </summary>
+    public int Pending
+    {
+        get
+        {
+            try
+            {
+                return _tcp.Available;
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or System.Net.Sockets.SocketException)
+            {
+                return 0;
+            }
+        }
+    }
+
     /// <summary>The other machine's id.</summary>
     public string RemoteMachine { get; }
 

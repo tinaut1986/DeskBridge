@@ -32,15 +32,23 @@ public partial class MainWindow
         if (_agent is null || local.Count == 0)
             return [];
         var connected = _agent.Directory.Connected.ToHashSet();
+        // Desk positions are in the original arrangement's coordinates (see DeskOffset).
+        var (ox, oy) = DeskOffset();
         // Displays of other machines placed on this PC's desk (Layout tab): reached past the edge where they touch.
         var edges = _vm.Model.Machines
             .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()))
             .SelectMany(m => m.Displays
                 .Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()))
-                .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height), m.DeskPositions[d.Id.Trim()],
+                .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height),
+                    new VirtualPosition(m.DeskPositions[d.Id.Trim()].X + ox, m.DeskPositions[d.Id.Trim()].Y + oy),
                     InputLayout.DeskScale(d.Width, d.Height, d.Scale, m.DeskWidths.TryGetValue(d.Id.Trim(), out var w) ? w : null))));
-        // Displays here that show another machine's screen: entering one moves the cursor to that machine.
-        var shown = _lentDisplays.Values.Where(l => connected.Contains(l.Machine) && local.Contains(l.Here)).ToList();
+        // Displays here that show another machine's screen: entering one moves the cursor to that machine (where
+        // that display is now: it moves when the primary display changes).
+        var here = PlatformServices.DisplayDetector().DetectDisplays().ToDictionary(d => d.Id, d => new DisplayRect(d.X, d.Y, d.Width, d.Height));
+        var shown = _lentDisplays.Values
+            .Where(l => connected.Contains(l.Machine) && here.ContainsKey(l.Display))
+            .Select(l => (l.Machine, Here: here[l.Display], l.There))
+            .ToList();
         var lent = shown.Select(l => InputLayout.Lent(l.Machine, l.Here, l.There));
         // A display of that machine shown here AND placed on the desk (no virtual display yet: its main display is
         // streamed instead) would be on the desk twice and the cursor would bounce between both: only the display
@@ -57,7 +65,8 @@ public partial class MainWindow
         {
             _controlledBy = from;
             UpdateAgentStatus();
-        }));
+        }),
+        DeskOffset);
 
     /// <summary>Called on the agent's connection thread for every keyboard and mouse sharing message.</summary>
     private Task HandleInputAsync(string from, ControlMessage message)

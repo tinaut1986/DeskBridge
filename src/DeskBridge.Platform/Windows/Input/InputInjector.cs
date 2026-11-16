@@ -24,13 +24,20 @@ public sealed class InputInjector
 
     public static void SetCursor(int x, int y) => SetCursorPos(x, y);
 
-    /// <summary>Moves the cursor to an absolute point (physical pixels), as a real mouse move.</summary>
+    /// <summary>
+    /// Moves the cursor to an absolute point (physical pixels), as a real mouse move. While a window of an app
+    /// running as administrator has the focus (and this one does not), Windows drops injected input: the cursor
+    /// is then placed directly, which it does allow, so it can still be moved off this PC.
+    /// </summary>
     public static void MoveTo(int x, int y)
     {
         int left = GetSystemMetrics(SM_XVIRTUALSCREEN), top = GetSystemMetrics(SM_YVIRTUALSCREEN);
         int width = Math.Max(GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1, 1), height = Math.Max(GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1, 1);
-        Send(Mouse(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
-            (int)Math.Round((x - left) * 65535.0 / width), (int)Math.Round((y - top) * 65535.0 / height)));
+        uint sent = SendInput(1, [Mouse(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+            (int)Math.Round((x - left) * 65535.0 / width), (int)Math.Round((y - top) * 65535.0 / height))], Marshal.SizeOf<INPUT>());
+        GetCursorPos(out var now);
+        if (sent == 0 || Math.Abs(now.X - x) > 1 || Math.Abs(now.Y - y) > 1)
+            SetCursorPos(x, y);
     }
 
     public void Play(InputEvent e)

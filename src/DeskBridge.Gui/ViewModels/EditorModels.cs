@@ -246,6 +246,21 @@ public sealed class ProfileVm : ObservableObject
 
     public string Name { get => _name; set => Set(ref _name, value); }
 
+    /// <summary>
+    /// Per machine id, the display made primary there while this profile is applied: one of its own by id, or
+    /// "shows:N" (the virtual display shown on the coordinator's display N). Absent: automatic.
+    /// </summary>
+    public Dictionary<string, string> PrimaryDisplays { get; } = new();
+
+    public void SetPrimary(string machine, string? display)
+    {
+        if (display is null ? !PrimaryDisplays.Remove(machine) : PrimaryDisplays.GetValueOrDefault(machine) == display)
+            return;
+        if (display is not null)
+            PrimaryDisplays[machine] = display;
+        NotifyAnyChanged();
+    }
+
     public ObservableCollection<AssignmentVm> Assignments { get; } = Tracked<AssignmentVm>();
 
     /// <summary>Where each borrowing machine puts its virtual displays (absent = to the right).</summary>
@@ -386,6 +401,8 @@ public sealed class EditorModel
         foreach (var p in config.Profiles)
         {
             var profile = new ProfileVm { Name = p.Name };
+            foreach (var (machine, display) in p.PrimaryDisplays ?? new Dictionary<string, string>())
+                profile.PrimaryDisplays[machine] = display;
             profile.Sync(model.Machines);
             foreach (var a in p.Assignments)
             {
@@ -426,7 +443,8 @@ public sealed class EditorModel
                 .Where(a => a.IsLent)
                 .Select(a => new DisplayAssignment(a.Owner.Id.Trim(), a.Display.Id.Trim(), a.UsedBy.Id.Trim(), a.ToStreamSettings(errors), a.Position))
                 .ToList(),
-            PlacementOf(p))).ToList();
+            PlacementOf(p),
+            p.PrimaryDisplays.Where(kv => Machines.Any(m => m.Id.Trim() == kv.Key)).ToDictionary() is { Count: > 0 } primary ? primary : null)).ToList();
 
         return new DeskBridgeConfig(machines, profiles, ControlPort);
     }

@@ -40,10 +40,15 @@ public partial class MainWindow
         AcceptUpdatesBox.IsChecked = _settings.AcceptUpdates;
         SendAudioBox.IsChecked = _settings.SendAudio;
         PlayAudioBox.IsChecked = _settings.PlayAudio;
+        ShareMicBox.IsChecked = _settings.ShareMic;
+        UseRemoteMicBox.IsChecked = _settings.UseRemoteMic;
+        UpdateAudioUi();
         FilesFolderBox.Text = _settings.EffectiveFilesFolder;
 
         if (_options.SnapshotDir is null)
             WatchSession();
+        ShowFramesBox.IsChecked = _settings.ShowFrames;
+        StartFrames();
         if (_options.SnapshotDir is null)
             SourceInitialized += (_, _) => _clipboard = new ClipboardSync(this, SendClipboardAsync, AddLog) { SendEnabled = _settings.ClipboardSend };
     }
@@ -53,7 +58,7 @@ public partial class MainWindow
         // Real virtual displays; streams are started by the coordinator after the profile is applied (the
         // machine that connects to it opens every video connection), the rest is still simulated.
         var applier = Simulated.Applier(AddLog, new Platform.Windows.VirtualDisplays.MttVirtualDisplays(AddLog));
-        var agent = new AgentHost(local, applier, PlatformServices.DisplayDetector(), AddLog, _files);
+        var agent = new AgentHost(local, applier, new OriginalArrangement(PlatformServices.DisplayDetector()), AddLog, _files);
         agent.ClipboardHandler = (from, message) => Dispatcher.InvokeAsync(() =>
         {
             bool applied = _settings.ClipboardReceive && _clipboard?.Apply(message) == true;
@@ -66,6 +71,8 @@ public partial class MainWindow
         agent.VideoHandler = HandleVideoAsync;
         agent.MaintenanceHandler = HandleMaintenanceAsync;
         agent.PlanApplied += CheckVirtualDisplayDriver;
+        agent.PlanApplied += OnPlanAppliedForPrimary;
+        agent.PlanApplying += OnPlanApplyingForPrimary;
         agent.VideoOpened += OnVideoOpened;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not
@@ -131,6 +138,8 @@ public partial class MainWindow
             AcceptUpdates = AcceptUpdatesBox.IsChecked == true,
             SendAudio = SendAudioBox.IsChecked == true,
             PlayAudio = PlayAudioBox.IsChecked == true,
+            ShareMic = ShareMicBox.IsChecked == true,
+            UseRemoteMic = UseRemoteMicBox.IsChecked == true,
         });
         UpdateInputSharing();
         UpdateAudio();

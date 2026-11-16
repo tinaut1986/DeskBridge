@@ -34,6 +34,15 @@ public sealed class VideoWindow : IDisposable
     private nint _hwnd;
     private IDXGISwapChain1? _swapChain;
     private ID3D11Texture2D? _backBuffer;
+    private ID3D11RenderTargetView? _frameView;
+
+    /// <summary>
+    /// A thin border around the picture in this colour (red, green, blue; 0-1), so it is clear which machine
+    /// this display shows; null for none.
+    /// </summary>
+    public (float R, float G, float B)? Frame { get; set; }
+
+    private const int FrameWidth = 3;
     private VideoConverter? _converter;
     private PointerRenderer? _pointer;
     private PointerImage? _pendingPointerImage;
@@ -262,6 +271,8 @@ public sealed class VideoWindow : IDisposable
                     (_width, _height) = (w, h);
                     _converter?.Dispose();
                     _converter = null;
+                    _frameView?.Dispose();
+                    _frameView = null;
                     _backBuffer?.Dispose();
                     _backBuffer = null;
                     _swapChain.ResizeBuffers(2, (uint)w, (uint)h, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
@@ -282,10 +293,34 @@ public sealed class VideoWindow : IDisposable
             }
             if (pointer.Visible)
                 _pointer?.Draw(_backBuffer, _width, _height, _converter.DestRect, width, height, pointer.X, pointer.Y);
+            if (Frame is { } frame)
+                DrawFrame(frame);
             // Without waiting for the vertical blank: waiting there made the window fall behind a stream that
             // runs a hair faster than the monitor, and the delay grew for as long as it was open. With the flip
             // model a newer picture simply replaces one still waiting for the next refresh (no tearing).
             _swapChain.Present(0, PresentFlags.None);
+        }
+    }
+
+    /// <summary>The border: four thin rectangles filled on the GPU (ClearView), next to nothing per frame.</summary>
+    private void DrawFrame((float R, float G, float B) color)
+    {
+        try
+        {
+            _frameView ??= _video.Device.CreateRenderTargetView(_backBuffer!);
+            using var context = _video.Context.QueryInterfaceOrNull<ID3D11DeviceContext1>();
+            if (context is null)
+                return;
+            int w = _width, h = _height, f = FrameWidth;
+            Vortice.RawRect[] rects =
+            [
+                new(0, 0, w, f), new(0, h - f, w, h), new(0, 0, f, h), new(w - f, 0, w, h),
+            ];
+            context.ClearView(_frameView, new Vortice.Mathematics.Color4(color.R, color.G, color.B, 1), rects);
+        }
+        catch (SharpGen.Runtime.SharpGenException)
+        {
+            Frame = null; // not supported here: no border rather than no picture
         }
     }
 

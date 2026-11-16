@@ -35,7 +35,8 @@ public sealed record LayoutPlan(
     IReadOnlyList<VirtualDisplaySpec> VirtualDisplays,
     IReadOnlyList<StreamSpec> Streams,
     IReadOnlyList<InputRoute> InputRoutes,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    IReadOnlyDictionary<string, string>? PrimaryDisplays = null)
 {
     public IEnumerable<VirtualDisplaySpec> VirtualDisplaysOf(string machine) =>
         VirtualDisplays.Where(v => v.Machine == machine);
@@ -45,4 +46,7 @@ public sealed record LayoutPlan(
 
     public IEnumerable<StreamSpec> StreamsTo(string machine) =>
         Streams.Where(s => s.SinkMachine == machine);
+
+    /// <summary>The display chosen as primary on that machine: an id of its own, or a virtual display's key (with a '/').</summary>
+    public string? PrimaryDisplayOf(string machine) => PrimaryDisplays?.GetValueOrDefault(machine);
 }

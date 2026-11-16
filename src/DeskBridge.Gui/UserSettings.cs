@@ -24,6 +24,10 @@ public enum ThemeChoice { System, Light, Dark }
 /// <param name="AcceptUpdates">The coordinator may install new DeskBridge builds here (troubleshooting).</param>
 /// <param name="SendAudio">On a client: everything this PC plays is heard on the coordinator (and muted here).</param>
 /// <param name="PlayAudio">On the coordinator: the sound other machines send is played here.</param>
+/// <param name="AudioVolumes">On the coordinator: volume of each machine's sound, in percent (100 when missing).</param>
+/// <param name="ShareMic">On the coordinator: the other machines may use its microphone.</param>
+/// <param name="UseRemoteMic">On a client: the coordinator's microphone comes out of VB-CABLE here.</param>
+/// <param name="ShowFrames">Each display gets a thin border in the colour of the machine it belongs to.</param>
 /// <param name="CloseToTray">Closing the window keeps DeskBridge running in the notification area.</param>
 public sealed record UserSettings(
     string Language = L.System,
@@ -38,7 +42,11 @@ public sealed record UserSettings(
     bool AcceptInput = false,
     bool AcceptUpdates = false,
     bool SendAudio = false,
-    bool PlayAudio = true)
+    bool PlayAudio = true,
+    Dictionary<string, int>? AudioVolumes = null,
+    bool ShareMic = false,
+    bool UseRemoteMic = false,
+    bool ShowFrames = true)
 {
     public static string DefaultPath => Path.Combine(AppPaths.Directory, "settings.json");
 

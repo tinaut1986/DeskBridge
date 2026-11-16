@@ -23,12 +23,36 @@ public sealed class VideoReceiver : IAsyncDisposable
     public Task Completion => _done.Task;
     private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>The machine whose display this shows.</summary>
+    public string RemoteMachine => _channel.RemoteMachine;
+
+    /// <summary>The monitor it fills (physical pixels), or null for a normal window.</summary>
+    public (int X, int Y, int W, int H)? Monitor => _monitor;
+
     /// <summary>Frames shown and bytes received, for the status line.</summary>
     public (int Frames, long Bytes, VideoFormat? Format) Stats => (_frames, _bytes, _format);
 
     private int _frames;
 
+    private VideoWindow? _window;
+    private (float R, float G, float B)? _frameColor;
+
+    /// <summary>A border in the colour of the machine shown (red, green, blue; 0-1), or null for none.</summary>
+    public (float R, float G, float B)? FrameColor
+    {
+        get => _frameColor;
+        set
+        {
+            _frameColor = value;
+            if (_window is { } window)
+                window.Frame = value;
+        }
+    }
+
     /// <summary>A frame this much later than the best so far is not shown (the receiver catches up instead).</summary>
+    /// <summary>More than a pointer update waiting (about 30 bytes framed): the next frame is here.</summary>
+    private const int PointerPacketBytes = 64;
+
     private static readonly long LateTicks = TimeSpan.FromMilliseconds(80).Ticks;
     private long _bytes;
     private VideoFormat? _format;
@@ -64,8 +88,9 @@ public sealed class VideoReceiver : IAsyncDisposable
             video = VideoDevice.Create(adapter);
             if (_title is not null)
             {
-                window = new VideoWindow(video, _title, _monitor);
+                window = new VideoWindow(video, _title, _monitor) { Frame = _frameColor };
                 window.Closed += () => _stop.Cancel();
+                _window = window;
             }
             _log($"[video] receiving from {_channel.RemoteMachine} on {video.GpuName}");
 
@@ -97,8 +122,11 @@ public sealed class VideoReceiver : IAsyncDisposable
                         _bytes += data.Length;
                         reportBytes += data.Length;
 
-                        // Too far behind the least delayed frame of the last seconds (see LateFrames).
-                        bool late = lateFrames.IsLate(clock.Elapsed.Ticks, time);
+                        // Too far behind the least delayed frame of the last seconds (see LateFrames), or simply not
+                        // the newest: the next frame is already waiting (a backlog, even one there since the start,
+                        // which the timing alone takes for normal). Decoded, since the next ones depend on it, but
+                        // not shown: only the newest picture is.
+                        bool late = lateFrames.IsLate(clock.Elapsed.Ticks, time) | _channel.Pending > PointerPacketBytes;
                         if (late)
                             skipped++;
                         try
@@ -150,6 +178,7 @@ public sealed class VideoReceiver : IAsyncDisposable
         finally
         {
             decoder?.Dispose();
+            _window = null;
             window?.Dispose();
             video?.Dispose();
             _done.TrySetResult();

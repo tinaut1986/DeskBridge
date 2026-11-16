@@ -14,6 +14,7 @@ public partial class App : Application
         Updater.CleanUpAfterUpdate(e.Args);
         DeskBridge.Platform.Windows.Input.CursorHider.Show(); // in case the app ended while the pointer was hidden
         DeskBridge.Platform.Windows.Audio.MutedDevices.RestoreLeftOver(); // and with this PC's output muted
+        DeskBridge.Platform.Windows.Audio.DefaultMicrophone.Restore(null); // or VB-CABLE as its microphone
 
         // A crash leaves its story behind (crash.txt in the log folder), shown in the log at the next start, so it
         // can be read remotely; and the pointer is never left hidden.
@@ -25,6 +26,20 @@ public partial class App : Application
             args.SetObserved();
         };
         var options = StartupOptions.Parse(e.Args);
+
+        // Settings, Apps, Uninstall.
+        if (e.Args.Contains("--uninstall"))
+        {
+            Installation.Uninstall();
+            Shutdown();
+            return;
+        }
+        // A published build started from a download: it runs from its install folder.
+        if (options.SnapshotDir is null && Installation.MoveIntoPlace(e.Args))
+        {
+            Shutdown();
+            return;
+        }
 
         // Snapshots (development) may run next to a real instance; everything else is one per session.
         if (options.SnapshotDir is null)
@@ -46,6 +61,8 @@ public partial class App : Application
         var window = new MainWindow(options, settings);
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
+        if (options.SnapshotDir is null)
+            _ = Task.Run(Installation.Register); // the Start menu shortcut and the Apps entry, with this version
 
         if (options.Minimized && options.SnapshotDir is null)
             new WindowInteropHelper(window).EnsureHandle(); // started with Windows: agent and clipboard run, window stays hidden

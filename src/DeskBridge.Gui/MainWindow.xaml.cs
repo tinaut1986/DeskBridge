@@ -532,6 +532,8 @@ public partial class MainWindow : Window
         DisposeTray();
         // The agent's loops run on the thread pool, so blocking briefly here cannot deadlock.
         StopAllVideoAsync().Wait(TimeSpan.FromSeconds(2));
+        CloseFrames();
+        RestorePrimary(); // the displays show this PC again
         _agent?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
         _updater.InstallOnExit();
         base.OnClosed(e);
@@ -714,6 +716,8 @@ public partial class MainWindow : Window
         }
         foreach (var (machine, side) in source.Placement)
             copy.Placement[machine] = side;
+        foreach (var (machine, display) in source.PrimaryDisplays)
+            copy.PrimaryDisplays[machine] = display;
         _vm.Model.Profiles.Add(copy);
         _vm.SelectedProfile = copy;
     }
@@ -837,7 +841,9 @@ public partial class MainWindow : Window
         IReadOnlyList<DisplayConfig> detected;
         if (machine.Id == _vm.LocalMachine.Trim())
         {
-            detected = PlatformServices.DisplayDetector().DetectDisplays();
+            // In the original arrangement's coordinates, even while DeskBridge has made another display primary.
+            var (ox, oy) = DeskOffset();
+            detected = PlatformServices.DisplayDetector().DetectDisplays().Select(d => d with { X = d.X - ox, Y = d.Y - oy }).ToList();
         }
         else
         {

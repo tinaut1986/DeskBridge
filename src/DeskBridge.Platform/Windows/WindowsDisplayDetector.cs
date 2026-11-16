@@ -55,6 +55,48 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
         return result.OrderBy(d => int.TryParse(d.Config.Id, out var n) ? n : int.MaxValue).ToList();
     }
 
+    /// <summary>
+    /// Makes the display with that id Windows' primary one (Start menu, taskbar, the Windows key, new windows):
+    /// every display moves by the same amount so that one is at (0,0), the arrangement between them unchanged.
+    /// Returns whether it is the primary display now.
+    /// </summary>
+    public static bool MakePrimary(string id, Action<string> log)
+    {
+        var displays = DetectDetailed(includeVirtual: true);
+        if (displays.FirstOrDefault(d => d.Config.Id == id) is not { } target)
+        {
+            log($"[displays] display {id} is not connected: the primary display stays as it is");
+            return false;
+        }
+        if (target.IsPrimary)
+            return true;
+        int dx = -target.Config.X, dy = -target.Config.Y;
+        foreach (var display in displays)
+        {
+            var mode = new DevMode { dmSize = (ushort)Marshal.SizeOf<DevMode>() };
+            if (!NativeMethods.EnumDisplaySettings(display.DeviceName, NativeMethods.ENUM_CURRENT_SETTINGS, ref mode))
+                continue;
+            mode.dmPositionX += dx;
+            mode.dmPositionY += dy;
+            mode.dmFields = NativeMethods.DM_POSITION;
+            uint flags = NativeMethods.CDS_UPDATEREGISTRY | NativeMethods.CDS_NORESET | (display == target ? NativeMethods.CDS_SET_PRIMARY : 0);
+            int result = NativeMethods.ChangeDisplaySettingsEx(display.DeviceName, ref mode, 0, flags, 0);
+            if (result != 0)
+            {
+                log($"[displays] {display.DeviceName}: moving it refused ({result}); the primary display stays as it is");
+                NativeMethods.ChangeDisplaySettingsEx(null, 0, 0, 0, 0);
+                return false;
+            }
+        }
+        int applied = NativeMethods.ChangeDisplaySettingsEx(null, 0, 0, 0, 0); // everything at once
+        bool ok = applied == 0 && DetectDetailed(includeVirtual: true).Any(d => d.Config.Id == id && d.IsPrimary);
+        log(ok ? $"[displays] display {id} is now the primary display" : $"[displays] display {id} could not be made the primary display ({applied})");
+        return ok;
+    }
+
+    /// <summary>The id of Windows' primary display.</summary>
+    public static string? PrimaryId() => DetectDetailed(includeVirtual: true).FirstOrDefault(d => d.IsPrimary)?.Config.Id;
+
     /// <summary>Windows' scale of the monitor at that desktop position, in percent (100 when it cannot be read).</summary>
     private static int ScaleOf(int x, int y)
     {
@@ -132,6 +174,16 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
         public const uint DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x1;
         public const uint DISPLAY_DEVICE_PRIMARY_DEVICE = 0x4;
         public const int ENUM_CURRENT_SETTINGS = -1;
+        public const uint DM_POSITION = 0x20;
+        public const uint CDS_UPDATEREGISTRY = 0x1;
+        public const uint CDS_SET_PRIMARY = 0x10;
+        public const uint CDS_NORESET = 0x10000000;
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "ChangeDisplaySettingsExW")]
+        public static extern int ChangeDisplaySettingsEx(string deviceName, ref DevMode mode, nint window, uint flags, nint param);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "ChangeDisplaySettingsExW")]
+        public static extern int ChangeDisplaySettingsEx(string? deviceName, nint mode, nint window, uint flags, nint param);
 
         [StructLayout(LayoutKind.Sequential)]
         public struct Point
