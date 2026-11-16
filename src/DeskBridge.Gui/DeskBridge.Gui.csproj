@@ -30,4 +30,8 @@
     <ProjectReference Include="..\DeskBridge.Platform\DeskBridge.Platform.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
+  </ItemGroup>
+
 </Project>

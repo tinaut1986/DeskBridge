@@ -36,6 +36,7 @@ public partial class MainWindow
         _adminTask = Elevation.TaskExists();
         FollowAutostart();
         UpdateAdminUi();
+        InitSecure();
         CloseToTrayMenu.IsChecked = _settings.CloseToTray;
     }
 

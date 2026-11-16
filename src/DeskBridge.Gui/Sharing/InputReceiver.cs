@@ -19,8 +19,34 @@ public sealed class InputReceiver(
     Func<IReadOnlyList<DisplayRect>> displays,
     Func<string, ControlSession?> sessionOf,
     Action<string?> activeChanged,
-    Func<(int X, int Y)>? offset = null)
+    Func<(int X, int Y)>? offset = null,
+    Func<Secure.SecureLink?>? secure = null)
 {
+    /// <summary>The lock screen or an administrator prompt has the input, and the service's helper can play there.</summary>
+    private Secure.SecureLink? SecureDesktop() => secure?.Invoke() is { OnSecureDesktop: true } link ? link : null;
+
+    private void MoveCursor(int x, int y)
+    {
+        if (SecureDesktop() is { } link)
+            link.MoveTo(x, y);
+        else
+            InputInjector.MoveTo(x, y);
+    }
+
+    private void Play(InputEvent e)
+    {
+        if (SecureDesktop() is { } link)
+            link.Play(e);
+        else
+            _injector.Play(e);
+    }
+
+    private void ReleaseEverything()
+    {
+        _injector.ReleaseAll();
+        secure?.Invoke()?.ReleaseAll();
+    }
+
     private (int X, int Y) _offset;
 
     private IReadOnlyList<DisplayRect>? Shift(IReadOnlyList<DisplayRect>? rects) =>
@@ -94,18 +120,20 @@ public sealed class InputReceiver(
                     (_x, _y) = enter is { X: { } ex, Y: { } ey, Peers: not null }
                         ? EdgeGeometry.ClampToDisplays(_displays, ex + _offset.X, ey + _offset.Y)
                         : ClientHandover.Enter(_displays, enter.Side, enter.Fraction);
-                    InputInjector.MoveTo(_x, _y);
+                    MoveCursor(_x, _y);
                     ShowPointer();
                     break;
 
                 case InputEventsMessage events when _from == from:
-                    // Start from where the cursor really is (the touchpad may have moved it meanwhile).
-                    (_x, _y) = InputInjector.CursorPosition();
+                    // Start from where the cursor really is (the touchpad may have moved it meanwhile); on the secure
+                    // desktop this process cannot read it: from where it was put.
+                    if (SecureDesktop() is null)
+                        (_x, _y) = InputInjector.CursorPosition();
                     foreach (var e in events.Events)
                     {
                         if (e.Kind != InputKind.MouseMove)
                         {
-                            _injector.Play(e);
+                            Play(e);
                             continue;
                         }
                         _restX += e.X * _speedX;
@@ -121,19 +149,19 @@ public sealed class InputReceiver(
                             leave = _peers is null
                                 ? new InputLeaveMessage(move.Fraction)
                                 : new InputLeaveMessage(move.Fraction, move.X - _offset.X, move.Y - _offset.Y);
-                            _injector.ReleaseAll();
+                            ReleaseEverything();
                             _from = null;
                             HidePointer();
                             break;
                         }
                         (_x, _y) = (move.X, move.Y);
-                        InputInjector.MoveTo(_x, _y);
+                        MoveCursor(_x, _y);
                         ShowPointer();
                     }
                     break;
 
                 case InputReleaseMessage when _from == from:
-                    _injector.ReleaseAll();
+                    ReleaseEverything();
                     _from = null;
                     HidePointer();
                     break;

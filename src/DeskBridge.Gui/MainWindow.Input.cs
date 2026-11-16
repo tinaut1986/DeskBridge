@@ -66,7 +66,8 @@ public partial class MainWindow
             _controlledBy = from;
             UpdateAgentStatus();
         }),
-        DeskOffset);
+        DeskOffset,
+        () => _secureLink);
 
     /// <summary>Called on the agent's connection thread for every keyboard and mouse sharing message.</summary>
     private Task HandleInputAsync(string from, ControlMessage message)
