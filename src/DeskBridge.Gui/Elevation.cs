@@ -29,9 +29,9 @@ public static class Elevation
     {
         string xml = Path.Combine(Path.GetTempPath(), "deskbridge-task.xml");
         File.WriteAllText(xml, TaskXml(exe), Encoding.Unicode);
-        // One elevated command: create, wait for this copy to close, start the task (ping is the only delay
-        // that works without a console to read from).
-        string command = $"/c schtasks /Create /TN \"{TaskName}\" /XML \"{xml}\" /F && ping -n 4 127.0.0.1 >nul && schtasks /Run /TN \"{TaskName}\"";
+        // One elevated command: create, wait until this copy has really closed (a new one started earlier
+        // would find it still running and give way to it), start the task.
+        string command = $"/c schtasks /Create /TN \"{TaskName}\" /XML \"{xml}\" /F && {WaitForThisCopy()} && schtasks /Run /TN \"{TaskName}\"";
         return Run("cmd.exe", command, elevated: true, wait: false, log) == 0;
     }
 
@@ -41,9 +41,13 @@ public static class Elevation
     /// </summary>
     public static bool Disable(string exe, Action<string> log)
     {
-        string command = $"/c schtasks /Delete /TN \"{TaskName}\" /F && ping -n 4 127.0.0.1 >nul && explorer.exe \"{exe}\"";
+        string command = $"/c schtasks /Delete /TN \"{TaskName}\" /F && {WaitForThisCopy()} && explorer.exe \"{exe}\"";
         return Run("cmd.exe", command, elevated: true, wait: false, log) == 0;
     }
+
+    /// <summary>Waits (up to a minute) until this process has ended, then a second more.</summary>
+    private static string WaitForThisCopy() =>
+        $"powershell.exe -NoProfile -NonInteractive -Command \"Wait-Process -Id {Environment.ProcessId} -Timeout 60 -ErrorAction SilentlyContinue; Start-Sleep 1; exit 0\"";
 
     /// <summary>
     /// At sign-in for this user, with the highest privileges, never stopped (no 3-day limit), on battery too,
