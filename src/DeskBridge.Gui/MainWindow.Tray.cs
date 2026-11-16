@@ -33,8 +33,33 @@ public partial class MainWindow
         };
         _tray.DoubleClick += (_, _) => ShowFromTray();
         _tray.ContextMenuStrip.Opening += (_, _) => BuildTrayMenu();
+        FollowAutostart();
         StartWithWindowsMenu.IsChecked = StartsWithWindows();
         CloseToTrayMenu.IsChecked = _settings.CloseToTray;
+    }
+
+    /// <summary>
+    /// "Start with Windows" follows the app to wherever it now runs from: after an update installed by the
+    /// coordinator (a new file under %LOCALAPPDATA%\DeskBridge\bin), or when the registered file is gone.
+    /// A copy started by hand from elsewhere does not take it over.
+    /// </summary>
+    private static void FollowAutostart()
+    {
+        if (Environment.ProcessPath is not { } exe)
+            return;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            if (key?.GetValue(RunValue) is not string command || command.Contains(exe, StringComparison.OrdinalIgnoreCase))
+                return;
+            var registered = command.StartsWith('"') ? command[1..].Split('"')[0] : command.Split(' ')[0];
+            bool afterUpdate = Environment.GetCommandLineArgs().Contains("--after-update");
+            if (afterUpdate || !System.IO.File.Exists(registered))
+                key.SetValue(RunValue, $"\"{exe}\" --minimized");
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or System.IO.IOException)
+        {
+        }
     }
 
     private void BuildTrayMenu()

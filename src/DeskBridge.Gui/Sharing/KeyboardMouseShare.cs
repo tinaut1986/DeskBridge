@@ -80,7 +80,7 @@ public sealed class KeyboardMouseShare : IDisposable
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
                         _target = enter.Machine;
-                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers)));
+                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area)));
                         _remoteChanged(enter.Machine);
                         return true;
                     case MouseDecision.Forward forward:

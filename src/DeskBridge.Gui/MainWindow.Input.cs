@@ -32,11 +32,15 @@ public partial class MainWindow
         if (_agent is null || local.Count == 0)
             return [];
         var connected = _agent.Directory.Connected.ToHashSet();
-        return _vm.Model.Machines
+        var edges = _vm.Model.Machines
             .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()) && m.Displays.Count > 0)
             .Select(m => InputLayout.Target(m.Id.Trim(), local,
-                m.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList(), m.InputSide, m.InputPosition))
-            .ToList();
+                m.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList(), m.InputSide, m.InputPosition));
+        // Displays here that show another machine's screen: entering one moves the cursor to that machine.
+        var lent = _lentDisplays.Values
+            .Where(l => connected.Contains(l.Machine) && local.Contains(l.Here))
+            .Select(l => InputLayout.Lent(l.Machine, l.Here, l.There));
+        return lent.Concat(edges).ToList();
     }
 
     private InputReceiver Receiver() => _receiver ??= new InputReceiver(

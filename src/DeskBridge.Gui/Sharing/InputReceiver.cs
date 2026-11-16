@@ -44,7 +44,8 @@ public sealed class InputReceiver(
             switch (message)
             {
                 case InputEnterMessage enter when enabled():
-                    _displays = displays();
+                    // Only the display shown on the coordinator, when it entered through one; otherwise all of them.
+                    _displays = enter.Area is { Count: > 0 } area ? area : displays();
                     if (_displays.Count == 0)
                         return;
                     _from = from;

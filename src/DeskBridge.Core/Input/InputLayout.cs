@@ -7,7 +7,12 @@ namespace DeskBridge.Core.Input;
 /// A machine that can get the cursor, as the coordinator sees it: its displays in its own desktop
 /// coordinates and where they sit in the coordinator's (its coordinate + offset = coordinator coordinate).
 /// </summary>
-public sealed record InputTarget(string Machine, IReadOnlyList<DisplayRect> Displays, int OffsetX, int OffsetY)
+/// <param name="Lent">
+/// Set for a display of the coordinator that shows this machine's screen: the cursor goes to that machine as
+/// soon as it enters it, at the same spot of <paramref name="Displays"/> (its one display shown there), and
+/// stays within it.
+/// </param>
+public sealed record InputTarget(string Machine, IReadOnlyList<DisplayRect> Displays, int OffsetX, int OffsetY, DisplayRect? Lent = null)
 {
     /// <summary>A point of the coordinator's desktop is over one of this machine's displays.</summary>
     public bool Contains(int x, int y) => InputLayout.Contains(Displays, x - OffsetX, y - OffsetY);
@@ -45,6 +50,13 @@ public static class InputLayout
             _ => (c.Right, c.Y),
         };
     }
+
+    /// <summary>
+    /// A display of the coordinator (<paramref name="lent"/>) showing <paramref name="shown"/>, a display of
+    /// <paramref name="machine"/>: entering it moves the cursor there.
+    /// </summary>
+    public static InputTarget Lent(string machine, DisplayRect lent, DisplayRect shown) =>
+        new(machine, [shown], lent.X - shown.X, lent.Y - shown.Y, lent);
 
     /// <summary>
     /// The target for a machine: its displays' top-left corner at <paramref name="position"/> in the

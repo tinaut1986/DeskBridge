@@ -25,6 +25,12 @@ public partial class MainWindow
     /// <summary>Coordinator: streams it asked for and is waiting to receive (window title, monitor or null).</summary>
     private readonly ConcurrentDictionary<string, (string Machine, string? Title, (int X, int Y, int W, int H)? Monitor)> _videoPending = new();
 
+    /// <summary>
+    /// Coordinator: displays of this PC showing another machine's display, by stream key (this PC's display, the
+    /// machine, and its display in its own coordinates). The cursor goes to that machine when it enters them.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, (string Machine, Core.Planning.DisplayRect Here, Core.Planning.DisplayRect There)> _lentDisplays = new();
+
     /// <summary>Coordinator: streams being shown, by stream key.</summary>
     private readonly ConcurrentDictionary<string, VideoReceiver> _videoReceivers = new();
 
@@ -65,6 +71,7 @@ public partial class MainWindow
                     return new ErrorMessage(ex.Message);
                 }
                 var sender = new VideoSender(channel, display.X, display.Y, start.Fps, start.BitrateMbps, AddLog);
+                var sent = PlatformServices.DisplayDetector().DetectDisplays().FirstOrDefault(d => d.X == display.X && d.Y == display.Y);
                 _videoSenders[start.Key] = sender;
                 _ = sender.Completion.ContinueWith(_ =>
                 {
@@ -72,7 +79,7 @@ public partial class MainWindow
                         AddLog(sender.Failure is { } failure ? $"[video] stream to {from} stopped: {failure}" : $"[video] stream to {from} stopped");
                     _ = sender.DisposeAsync().AsTask();
                 }, TaskScheduler.Default);
-                return new OkMessage();
+                return sent is null ? new OkMessage() : new VideoStartedMessage(sent.X, sent.Y, sent.Width, sent.Height);
             }
 
             case StopVideoMessage stop:
@@ -124,6 +131,8 @@ public partial class MainWindow
         _ = receiver.Completion.ContinueWith(async _ =>
         {
             _videoReceivers.TryRemove(channel.StreamKey, out var _);
+            if (_lentDisplays.TryRemove(channel.StreamKey, out var _))
+                await Dispatcher.InvokeAsync(RefreshInputTargets);
             await receiver.DisposeAsync();
             if (SessionOf(target.Machine) is { } diagnosed)
                 await SaveDiagnosticsAsync(diagnosed); // the sender's side of the story, for troubleshooting
@@ -221,6 +230,13 @@ public partial class MainWindow
                 Fps: stream.RefreshHz, BitrateMbps: stream.BitrateMbps));
             if (reply is ErrorMessage error)
                 throw new ControlException(error.Message);
+            if (reply is VideoStartedMessage started)
+            {
+                _lentDisplays[stream.Key] = (stream.SourceMachine,
+                    new Core.Planning.DisplayRect(monitor.X, monitor.Y, monitor.Width, monitor.Height),
+                    new Core.Planning.DisplayRect(started.X, started.Y, started.Width, started.Height));
+                RefreshInputTargets();
+            }
         }
         catch (ControlException ex)
         {

@@ -15,8 +15,9 @@ public abstract record MouseDecision
     /// the cursor comes back). Swallow, and keep the local cursor parked at (ParkX, ParkY).
     /// </summary>
     /// <param name="Side">The direction it crossed in, and <paramref name="Fraction"/> along that edge (for older versions).</param>
+    /// <param name="Area">Where the cursor may go over there; null: all that machine's displays.</param>
     public sealed record Enter(string Machine, int X, int Y, IReadOnlyList<DisplayRect> Peers,
-        PlacementSide Side, double Fraction, int ParkX, int ParkY) : MouseDecision;
+        PlacementSide Side, double Fraction, int ParkX, int ParkY, IReadOnlyList<DisplayRect>? Area = null) : MouseDecision;
 
     /// <summary>The cursor is on another machine: swallow and send this relative move.</summary>
     public sealed record Forward(string Machine, int Dx, int Dy) : MouseDecision;
@@ -53,7 +54,8 @@ public sealed class CoordinatorHandover
         _displays = displays;
         _targets = targets;
         if (_remote is not null)
-            _remote = targets.FirstOrDefault(t => t.Machine == _remote.Machine); // gone: the cursor is back here
+            // The same target (a machine can be reachable past an edge and through displays showing it); gone: back here.
+            _remote = targets.FirstOrDefault(t => t.Machine == _remote.Machine && t.Lent == _remote.Lent);
     }
 
     public MouseDecision OnMouseMove(int x, int y)
@@ -65,6 +67,22 @@ public sealed class CoordinatorHandover
         }
         if (_displays.Count == 0 || _targets.Count == 0)
             return new MouseDecision.Pass();
+
+        // A display that shows another machine's screen: that machine gets the cursor at the same spot.
+        foreach (var target in _targets)
+        {
+            if (target.Lent is not { } lent || !(x >= lent.X && x < lent.Right && y >= lent.Y && y < lent.Bottom))
+                continue;
+            var shown = target.Displays[0];
+            int ex = shown.X + (int)((long)(x - lent.X) * shown.Width / lent.Width);
+            int ey = shown.Y + (int)((long)(y - lent.Y) * shown.Height / lent.Height);
+            // Parked in the middle of that display (hidden behind the video), far from any edge.
+            (_parkX, _parkY) = (lent.X + lent.Width / 2, lent.Y + lent.Height / 2);
+            _remote = target;
+            RemoteSide = PlacementSide.Right;
+            var peers = _displays.Select(d => d with { X = d.X - target.OffsetX, Y = d.Y - target.OffsetY }).ToList();
+            return new MouseDecision.Enter(target.Machine, ex, ey, peers, PlacementSide.Right, 0.5, _parkX, _parkY, [shown]);
+        }
 
         foreach (var (cx, cy) in Beyond(x, y))
         {

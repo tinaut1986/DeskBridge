@@ -124,6 +124,38 @@ public class HandoverTests
     }
 
     [Fact]
+    public void A_desktop_display_showing_the_laptop_hands_the_cursor_over_at_the_same_spot()
+    {
+        // The middle display (3) shows the laptop's virtual display, at (2880,0) right of its own panel.
+        var middle = Desktop[1];
+        var shown = new DisplayRect(2880, 0, 1920, 1080);
+        var lent = InputLayout.Lent("laptop-oscar", middle, shown);
+        var h = new CoordinatorHandover(Desktop, [LaptopAt(PlacementSide.Right), lent]);
+
+        Assert.IsType<MouseDecision.Pass>(h.OnMouseMove(-500, 300)); // display 2: stays here
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(5, 300));
+        Assert.Equal((2885, 300), (enter.X, enter.Y));
+        Assert.Equal([shown], enter.Area);
+        Assert.Equal((960, 540), (enter.ParkX, enter.ParkY)); // hidden behind the video, far from the edges
+
+        // On the laptop the cursor stays on the virtual display: up is the top of everything here...
+        var up = ClientHandover.Move(enter.Area!, enter.Peers, 3000, 2, 0, -10);
+        Assert.Equal((3000, 0, false), (up.X, up.Y, up.Left));
+
+        // ...and left of it is display 2 of the desktop, where it comes back at that very spot.
+        var left = ClientHandover.Move(enter.Area!, enter.Peers, 2885, 300, -20, 0);
+        Assert.True(left.Left);
+        Assert.Equal((-15, 300), h.Return(0.5, left.X, left.Y));
+
+        // A periodic refresh keeps the cursor with the display target, not the edge one of the same machine.
+        h.OnMouseMove(100, 100);
+        h.Update(Desktop, [LaptopAt(PlacementSide.Right), InputLayout.Lent("laptop-oscar", middle, shown)]);
+        var right = ClientHandover.Move([shown], enter.Peers, 4790, 500, 20, 0);
+        Assert.True(right.Left);
+        Assert.Equal((1930, 500), h.Return(0.5, right.X, right.Y)); // display 1, right of the middle one
+    }
+
+    [Fact]
     public void Losing_the_target_brings_the_cursor_back()
     {
         var h = new CoordinatorHandover(Desktop, [LaptopAt(PlacementSide.Right)]);

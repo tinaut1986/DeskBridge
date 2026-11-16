@@ -30,6 +30,7 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(VideoProbeMessage), "videoProbe")]
 [JsonDerivedType(typeof(ReportMessage), "report")]
 [JsonDerivedType(typeof(StartVideoMessage), "startVideo")]
+[JsonDerivedType(typeof(VideoStartedMessage), "videoStarted")]
 [JsonDerivedType(typeof(StopVideoMessage), "stopVideo")]
 [JsonDerivedType(typeof(ConfigSyncMessage), "configSync")]
 [JsonDerivedType(typeof(GetDiagnosticsMessage), "getDiagnostics")]
@@ -78,8 +79,9 @@ public sealed record InputEvent(InputKind Kind, int X = 0, int Y = 0, int Code =
 /// <param name="Fraction">Position along that edge, 0 to 1 (top to bottom, or left to right).</param>
 /// <param name="X">Where the cursor enters, in this machine's desktop coordinates (0.2.1 and later).</param>
 /// <param name="Peers">The coordinator's displays in this machine's coordinates: the cursor goes back when pushed into them.</param>
+/// <param name="Area">Where the cursor may go on this machine (the display shown on the coordinator); null: all its displays.</param>
 public sealed record InputEnterMessage(PlacementSide Side, double Fraction, int? X = null, int? Y = null,
-    IReadOnlyList<DisplayRect>? Peers = null) : ControlMessage;
+    IReadOnlyList<DisplayRect>? Peers = null, IReadOnlyList<DisplayRect>? Area = null) : ControlMessage;
 
 /// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
 public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events) : ControlMessage;
@@ -97,6 +99,9 @@ public sealed record InputReleaseMessage() : ControlMessage;
 /// receives and shows the stream there. Answered once the connection is open.
 /// </summary>
 public sealed record StartVideoMessage(string Key, bool Send, string Display, int Fps, int BitrateMbps) : ControlMessage;
+
+/// <summary>Reply to <see cref="StartVideoMessage"/>: the stream started, sending this display (sender's desktop coordinates).</summary>
+public sealed record VideoStartedMessage(int X, int Y, int Width, int Height) : ControlMessage;
 
 /// <summary>Stops a stream started with <see cref="StartVideoMessage"/> (or every stream when Key is null).</summary>
 public sealed record StopVideoMessage(string? Key) : ControlMessage;
