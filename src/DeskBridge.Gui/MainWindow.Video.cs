@@ -52,7 +52,9 @@ public partial class MainWindow
 
                 // A planned virtual display (where it ended up), a physical display by id, or the main display.
                 var displays = PlatformServices.DisplayDetector().DetectDisplays();
+                // (A virtual display that has gone away, e.g. the driver stopped: the main display instead.)
                 (int X, int Y)? position = Platform.Windows.VirtualDisplays.MttVirtualDisplays.Placed.TryGetValue(start.Display, out var placed)
+                                           && displays.Any(d => d.X == placed.X && d.Y == placed.Y)
                     ? placed
                     : (displays.FirstOrDefault(d => d.Id == start.Display)
                        ?? displays.FirstOrDefault(d => d.X == 0 && d.Y == 0)

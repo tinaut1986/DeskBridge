@@ -68,7 +68,10 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             return;
         }
 
-        if (Send($"SETDISPLAYCOUNT {displays.Count}", wantReply: false) is null)
+        // Every SETDISPLAYCOUNT reloads the driver (and a few reloads in a row can leave it stopped with a problem):
+        // only when the number of its monitors really changes.
+        if (VirtualMonitors().Count != displays.Count
+            && Send($"SETDISPLAYCOUNT {displays.Count}", wantReply: false) is null)
         {
             log("[virtual displays] the Virtual Display Driver did not take the new monitor count");
             return;
