@@ -57,7 +57,8 @@ public class ReverseLinkTests
 
         public async Task WaitConnectedAsync()
         {
-            for (int i = 0; i < 100 && DesktopAgent.Directory.Find("laptop") is null; i++)
+            // Both ends: the desktop lists the laptop a moment before the laptop records where it connected.
+            for (int i = 0; i < 100 && (DesktopAgent.Directory.Find("laptop") is null || LaptopAgent.Reverse?.ConnectedTo is null); i++)
                 await Task.Delay(50);
             Assert.NotNull(DesktopAgent.Directory.Find("laptop"));
             Assert.Equal("desktop", LaptopAgent.Reverse!.ConnectedTo);
