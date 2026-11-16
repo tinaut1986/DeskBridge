@@ -32,6 +32,9 @@
   - el H.264 de 1080 líneas se decodifica en 1088: se recorta al tamaño enviado;
   - **espacios de color explícitos** en los dos extremos (RGB 0-255; YUV BT.709 16-235). Sin eso Intel y NVIDIA
     usan valores por defecto distintos y la imagen sale lavada;
+  - la captura tiene **su propio dispositivo** D3D11 y espera dentro de `AcquireNextFrame` a que Windows tenga
+    imagen nueva (esperar ahí bloquea su dispositivo, no el del codificador); el codificador la lee por una
+    textura compartida con *keyed mutex*. Así cada imagen se codifica en cuanto Windows la compone;
   - **solo se codifican los fotogramas en que cambia la pantalla** (Desktop Duplication lo dice), más 100 ms
     después del último cambio (el codificador devuelve cada fotograma uno más tarde, y así afina la imagen) y
     uno por segundo con la pantalla quieta. El puntero va aparte: el receptor guarda la última imagen y la
@@ -40,8 +43,11 @@
     se hace con un *swap chain* con espera (`FrameLatencyWaitableObject`), nunca dentro de `Present`, que bloqueaba
     todo el dispositivo (también el decodificador) y congelaba el vídeo al arrastrar una ventana;
   - **puntero local**: el coordinador hace las mismas cuentas que el otro equipo con cada movimiento
-    (`PointerMirror`) y pinta el puntero al momento, como el Escritorio remoto; cuando el ratón para, manda la
-    posición real que llega con el vídeo. La forma del puntero viaja con su punto activo;
+    (`PointerMirror`) y pinta el puntero al momento, como el Escritorio remoto. Cada tanda de movimientos va
+    numerada y el otro equipo contesta (hasta 10 veces por segundo) dónde quedó de verdad el cursor tras una
+    tanda (`InputCursorMessage`): el coordinador desplaza su copia esa diferencia (redondeos de Windows, la
+    pantalla de bloqueo, un touchpad). La forma del puntero viaja con su punto activo;
+  - opción para mostrar el vídeo sin esperar al refresco del monitor (*tearing*; `AllowTearing`);
   - los hilos de captura, codificación, vídeo y ganchos de ratón van en el planificador multimedia de Windows
     (MMCSS) y el proceso con prioridad superior a la normal, para que un equipo cargado no dé tirones;
   - probado sin ganancia (rama `feat/encoder-flush`): meter una copia tras cada imagen para que el codificador la
@@ -67,6 +73,16 @@
   equipo puede elegir la suya por perfil (en el portátil, incluso su pantalla virtual). Cambiar la principal
   mueve el origen de Windows: las disposiciones guardan las coordenadas de la colocación original y
   `DeskOffset` convierte (entrada, vídeo, *Detectar*). La original se guarda en un fichero y se devuelve al cerrar.
+- **Escritorio seguro** (pantalla de bloqueo, avisos de UAC), opcional: un programa normal no puede capturarlo
+  ni escribir en él. El servicio `DeskBridgeHelper` (SYSTEM) mantiene un ayudante (`--secure-helper`) en la
+  sesión de la consola, con su token; el ayudante sigue el escritorio de entrada (`OpenInputDesktop`,
+  `SetThreadDesktop`). DeskBridge le habla por una *named pipe* (asíncrona: en una síncrona una escritura esperaba
+  detrás de la lectura) que solo abren SYSTEM y Administradores con el token elevado: un programa sin permisos
+  no puede usarlo para pulsar "Sí" en un aviso de UAC. Mientras el escritorio seguro tiene la entrada, DeskBridge
+  le pasa teclado y ratón, y el ayudante captura y codifica la pantalla enviada y la manda por una segunda pipe;
+  DeskBridge la reenvía por el canal cifrado mientras su propio emisor calla (después reenvía formato y fotograma
+  clave). El servicio ejecuta una copia en `Program Files` (un archivo que el usuario pudiera cambiar daría SYSTEM
+  a cualquier programa suyo), que DeskBridge como administrador pone al día en cada actualización.
 - **Rebordes de color**: la ventana de vídeo dibuja el suyo en la GPU (`ClearView`); el resto de pantallas
   llevan cuatro tiras Win32 opacas de 3 px. Una ventana transparente a pantalla completa hacía que Windows
   recompusiera todos los monitores y el vídeo bajaba a 20-30 fps.
@@ -91,8 +107,8 @@
   puede cambiar resolución, Hz y bitrate (por defecto ~20 Mbps para 1080p60; una pantalla quieta no envía casi nada).
 - **Lo que comparte un portátil de empresa está desactivado por defecto** (portapapeles, archivos, sonido,
   micrófono, actualizaciones remotas).
-- **Sin servicios ni drivers propios** de momento: VDD y VB-CABLE son de terceros, firmados; DeskBridge se
-  instala por usuario.
+- **Sin drivers propios**: VDD y VB-CABLE son de terceros, firmados; DeskBridge se instala por usuario. El
+  único servicio es el opcional del escritorio seguro.
 
 ## Hoja de ruta
 
@@ -100,11 +116,11 @@ Hecho: configuración y planificador; canal de control y de vídeo cifrados (ví
 pantalla); interfaz con barra lateral en 11
 idiomas; portapapeles y archivos; teclado y ratón; pantallas virtuales; vídeo propio portátil → sobremesa;
 sonido y micrófono; ejecutar como administrador; pantalla principal por equipo; rebordes de color; instalación
-por usuario; actualizaciones (GitHub y remotas).
+por usuario; actualizaciones (GitHub y remotas); puntero local; captura sincronizada; pantalla de bloqueo y
+avisos de UAC (servicio opcional).
 
 Pendiente:
-1. **Servicio de Windows (SYSTEM)** para ver y manejar los avisos de UAC y la pantalla de bloqueo, como AnyDesk.
-2. **Fase 4**: una pantalla del sobremesa mostrada en el portátil (el sentido contrario).
-3. **Color 4:4:4** para el texto de colores (HEVC/H.264 4:4:4 donde la GPU lo permita).
-4. **Cámara**: ver [microfono-camara.md](microfono-camara.md).
-5. Linux / Avalonia: en pausa.
+1. **Fase 4**: una pantalla del sobremesa mostrada en el portátil (el sentido contrario).
+2. **Color 4:4:4** para el texto de colores (HEVC/H.264 4:4:4 donde la GPU lo permita).
+3. **Cámara**: ver [microfono-camara.md](microfono-camara.md).
+4. Linux / Avalonia: en pausa.
