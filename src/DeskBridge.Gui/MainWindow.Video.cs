@@ -122,7 +122,7 @@ public partial class MainWindow
     /// <summary>On a thread-pool thread: a machine opened a video connection to this one.</summary>
     private void OnVideoOpened(VideoChannel channel)
     {
-        if (channel.StreamKey == AudioKey)
+        if (channel.StreamKey is AudioKey or MicKey)
         {
             OnAudioOpened(channel);
             return;

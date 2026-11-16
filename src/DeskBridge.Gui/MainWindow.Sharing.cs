@@ -40,6 +40,9 @@ public partial class MainWindow
         AcceptUpdatesBox.IsChecked = _settings.AcceptUpdates;
         SendAudioBox.IsChecked = _settings.SendAudio;
         PlayAudioBox.IsChecked = _settings.PlayAudio;
+        ShareMicBox.IsChecked = _settings.ShareMic;
+        UseRemoteMicBox.IsChecked = _settings.UseRemoteMic;
+        UpdateAudioUi();
         FilesFolderBox.Text = _settings.EffectiveFilesFolder;
 
         if (_options.SnapshotDir is null)
@@ -131,6 +134,8 @@ public partial class MainWindow
             AcceptUpdates = AcceptUpdatesBox.IsChecked == true,
             SendAudio = SendAudioBox.IsChecked == true,
             PlayAudio = PlayAudioBox.IsChecked == true,
+            ShareMic = ShareMicBox.IsChecked == true,
+            UseRemoteMic = UseRemoteMicBox.IsChecked == true,
         });
         UpdateInputSharing();
         UpdateAudio();
