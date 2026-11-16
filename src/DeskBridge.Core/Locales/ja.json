@@ -106,7 +106,7 @@
   "Invalid configuration:": "設定が正しくありません：",
   "Invalid file size.": "ファイルサイズが無効です。",
   "Invalid file transfer.": "ファイル転送が無効です。",
-  "It comes out of the CABLE Output microphone of VB-CABLE: choose it in your apps, or make it the default microphone in Windows.": "VB-CABLE の「CABLE Output」マイクから出ます。アプリで選ぶか、Windows の既定のマイクにしてください。",
+  "It comes out of the CABLE Output microphone of VB-CABLE, which is the default microphone of this PC while it is in use; your own one comes back afterwards.": "VB-CABLE の「CABLE Output」マイクから出ます。使っている間はこれがこの PC の既定のマイクになり、終わるとあなたのマイクに戻ります。",
   "It will be installed when you restart the app.": "アプリを再起動するとインストールされます。",
   "Keep running in the notification area when closed": "閉じても通知領域で動作を続ける",
   "Keyboard and mouse": "キーボードとマウス",

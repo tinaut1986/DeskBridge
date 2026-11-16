@@ -106,7 +106,7 @@
   "Invalid configuration:": "Неверная конфигурация:",
   "Invalid file size.": "Недопустимый размер файла.",
   "Invalid file transfer.": "Недопустимая передача файла.",
-  "It comes out of the CABLE Output microphone of VB-CABLE: choose it in your apps, or make it the default microphone in Windows.": "Звук идёт через микрофон «CABLE Output» из VB-CABLE: выберите его в приложениях или сделайте микрофоном по умолчанию в Windows.",
+  "It comes out of the CABLE Output microphone of VB-CABLE, which is the default microphone of this PC while it is in use; your own one comes back afterwards.": "Звук идёт через микрофон «CABLE Output» из VB-CABLE, который на это время становится микрофоном по умолчанию этого ПК; потом возвращается ваш.",
   "It will be installed when you restart the app.": "Она будет установлена при перезапуске приложения.",
   "Keep running in the notification area when closed": "Оставаться в области уведомлений при закрытии",
   "Keyboard and mouse": "Клавиатура и мышь",

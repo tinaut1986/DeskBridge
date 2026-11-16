@@ -84,6 +84,8 @@ public partial class MainWindow
             link.Stream = null;
             _ = stream.DisposeAsync("stopped").AsTask();
             AddLog(key == AudioKey ? "[audio] stopped sending this PC's sound" : "[audio] stopped using the coordinator's microphone");
+            if (key == MicKey)
+                DefaultMicrophone.Restore(AddLog);
         }
         if (wanted && link.Stream is null && !link.Starting && DateTime.UtcNow >= link.RetryAfter)
             _ = OpenAsync(key, link);
@@ -109,6 +111,8 @@ public partial class MainWindow
                 ? new AudioSender(channel, AudioSource.Output, AddLog)
                 : new AudioPlayer(channel, CableInput, AddLog);
             link.Stream = stream;
+            if (key == MicKey)
+                DefaultMicrophone.UseCable(AddLog); // apps using the default microphone hear the coordinator's
             AddLog(key == AudioKey ? $"[audio] sending this PC's sound to {name}" : $"[audio] {name}'s microphone comes out of '{CableInput}' here");
             _ = stream.Completion.ContinueWith(_ => Dispatcher.InvokeAsync(async () =>
             {
@@ -116,6 +120,8 @@ public partial class MainWindow
                     return; // stopped on purpose
                 link.Stream = null;
                 await stream.DisposeAsync("stopped");
+                if (key == MicKey)
+                    DefaultMicrophone.Restore(AddLog); // this PC's own microphone while there is no other
                 if (stream.StopReason == AudioOff)
                 {
                     AddLog(key == AudioKey
@@ -207,6 +213,7 @@ public partial class MainWindow
                 await stream.DisposeAsync("stopped"); // unmutes this PC's output
             }
         }
+        DefaultMicrophone.Restore(AddLog);
         foreach (var (machine, player) in _audioPlayers.ToArray())
         {
             _audioPlayers.TryRemove(machine, out _);

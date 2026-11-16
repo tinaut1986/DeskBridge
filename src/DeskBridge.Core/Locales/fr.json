@@ -106,7 +106,7 @@
   "Invalid configuration:": "Configuration non valide :",
   "Invalid file size.": "Taille de fichier non valide.",
   "Invalid file transfer.": "Transfert de fichier non valide.",
-  "It comes out of the CABLE Output microphone of VB-CABLE: choose it in your apps, or make it the default microphone in Windows.": "Il sort par le microphone « CABLE Output » de VB-CABLE : choisissez-le dans vos applications ou faites-en le microphone par défaut de Windows.",
+  "It comes out of the CABLE Output microphone of VB-CABLE, which is the default microphone of this PC while it is in use; your own one comes back afterwards.": "Il sort par le microphone « CABLE Output » de VB-CABLE, qui est le microphone par défaut de ce PC pendant son utilisation ; le vôtre revient ensuite.",
   "It will be installed when you restart the app.": "Elle sera installée au redémarrage de l'application.",
   "Keep running in the notification area when closed": "Rester dans la zone de notification à la fermeture",
   "Keyboard and mouse": "Clavier et souris",

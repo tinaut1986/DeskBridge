@@ -523,7 +523,7 @@
                                 <CheckBox x:Name="UseRemoteMicBox" Style="{StaticResource Switch}" Click="Sharing_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Use the coordinator’s microphone on this PC'}" />
-                                        <TextBlock Style="{StaticResource Hint}" Text="{l:T 'It comes out of the CABLE Output microphone of VB-CABLE: choose it in your apps, or make it the default microphone in Windows.'}" />
+                                        <TextBlock Style="{StaticResource Hint}" Text="{l:T 'It comes out of the CABLE Output microphone of VB-CABLE, which is the default microphone of this PC while it is in use; your own one comes back afterwards.'}" />
                                     </StackPanel>
                                 </CheckBox>
                                 <DockPanel x:Name="CableMissingPanel" Margin="0,10,0,0">

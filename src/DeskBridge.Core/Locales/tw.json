@@ -106,7 +106,7 @@
   "Invalid configuration:": "設定無效：",
   "Invalid file size.": "檔案大小無效。",
   "Invalid file transfer.": "檔案傳輸無效。",
-  "It comes out of the CABLE Output microphone of VB-CABLE: choose it in your apps, or make it the default microphone in Windows.": "聲音從 VB-CABLE 的「CABLE Output」麥克風輸出：在應用程式中選擇它，或在 Windows 中把它設為預設麥克風。",
+  "It comes out of the CABLE Output microphone of VB-CABLE, which is the default microphone of this PC while it is in use; your own one comes back afterwards.": "聲音從 VB-CABLE 的「CABLE Output」麥克風輸出，使用期間它是這台電腦的預設麥克風；結束後會恢復為你自己的麥克風。",
   "It will be installed when you restart the app.": "將在重新啟動應用程式後安裝。",
   "Keep running in the notification area when closed": "關閉時繼續在通知區域中執行",
   "Keyboard and mouse": "鍵盤和滑鼠",
