@@ -736,6 +736,14 @@
                             </CheckBox>
                         </Border>
                         <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="VideoAtOnceBox" Style="{StaticResource Switch}" Click="VideoAtOnce_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Show the displays of other machines without waiting for the screen refresh'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'About 8 ms less delay on the displays that show another machine. While something moves fast, a horizontal line may show where two pictures meet.'}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
                             <CheckBox x:Name="StartWithWindowsMenu" Style="{StaticResource Switch}" Click="StartWithWindows_Click">
                                 <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Start with Windows'}" />
                             </CheckBox>

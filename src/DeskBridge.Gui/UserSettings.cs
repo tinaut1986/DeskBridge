@@ -28,6 +28,7 @@ public enum ThemeChoice { System, Light, Dark }
 /// <param name="ShareMic">On the coordinator: the other machines may use its microphone.</param>
 /// <param name="UseRemoteMic">On a client: the coordinator's microphone comes out of VB-CABLE here.</param>
 /// <param name="ShowFrames">Each display gets a thin border in the colour of the machine it belongs to.</param>
+/// <param name="VideoAtOnce">On the coordinator: video goes on screen at once, not at the monitor's next refresh (may tear).</param>
 /// <param name="CloseToTray">Closing the window keeps DeskBridge running in the notification area.</param>
 public sealed record UserSettings(
     string Language = L.System,
@@ -46,7 +47,8 @@ public sealed record UserSettings(
     Dictionary<string, int>? AudioVolumes = null,
     bool ShareMic = false,
     bool UseRemoteMic = false,
-    bool ShowFrames = true)
+    bool ShowFrames = true,
+    bool VideoAtOnce = false)
 {
     public static string DefaultPath => Path.Combine(AppPaths.Directory, "settings.json");
 
