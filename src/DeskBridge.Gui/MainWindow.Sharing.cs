@@ -56,7 +56,7 @@ public partial class MainWindow
         // Real virtual displays; streams are started by the coordinator after the profile is applied (the
         // machine that connects to it opens every video connection), the rest is still simulated.
         var applier = Simulated.Applier(AddLog, new Platform.Windows.VirtualDisplays.MttVirtualDisplays(AddLog));
-        var agent = new AgentHost(local, applier, PlatformServices.DisplayDetector(), AddLog, _files);
+        var agent = new AgentHost(local, applier, new OriginalArrangement(PlatformServices.DisplayDetector()), AddLog, _files);
         agent.ClipboardHandler = (from, message) => Dispatcher.InvokeAsync(() =>
         {
             bool applied = _settings.ClipboardReceive && _clipboard?.Apply(message) == true;
@@ -70,6 +70,7 @@ public partial class MainWindow
         agent.MaintenanceHandler = HandleMaintenanceAsync;
         agent.PlanApplied += CheckVirtualDisplayDriver;
         agent.PlanApplied += OnPlanAppliedForPrimary;
+        agent.PlanApplying += OnPlanApplyingForPrimary;
         agent.VideoOpened += OnVideoOpened;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not

@@ -715,7 +715,8 @@ public partial class MainWindow : Window
         }
         foreach (var (machine, side) in source.Placement)
             copy.Placement[machine] = side;
-        copy.PrimaryDisplay = source.PrimaryDisplay;
+        foreach (var (machine, display) in source.PrimaryDisplays)
+            copy.PrimaryDisplays[machine] = display;
         _vm.Model.Profiles.Add(copy);
         _vm.SelectedProfile = copy;
     }

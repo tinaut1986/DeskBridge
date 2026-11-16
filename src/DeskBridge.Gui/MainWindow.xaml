@@ -336,12 +336,7 @@
                         <!-- The displays of the profile, and what the selected one shows -->
                         <Border Grid.Column="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8">
                             <DockPanel>
-                                <StackPanel DockPanel.Dock="Top" Margin="16,14,16,4">
-                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Primary display of this PC'}" />
-                                    <ComboBox x:Name="PrimaryBox" Margin="0,4,0,0" SelectionChanged="PrimaryBox_SelectionChanged"
-                                              ToolTip="{l:T 'Start menu, taskbar and new windows go there while this profile is applied. Automatic: the one you have, or the nearest one when it shows another machine.'}" />
-                                </StackPanel>
-                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Section}" Margin="16,10,16,8" Text="{l:T 'Displays'}" />
+                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Section}" Margin="16,14,16,8" Text="{l:T 'Displays'}" />
 
                                 <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="16,12,16,16"
                                         DataContext="{Binding SelectedItem, ElementName=AssignmentGrid}">

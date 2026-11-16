@@ -87,6 +87,9 @@ public sealed class AgentHost : IAsyncDisposable
     /// <summary>Raised (on a thread-pool thread) after a profile is applied, with its whole plan.</summary>
     public event Action<LayoutPlan>? PlanApplied;
 
+    /// <summary>A plan is about to be applied here (before its virtual displays are placed).</summary>
+    public event Action<LayoutPlan>? PlanApplying;
+
     private (DeskBridgeConfig Config, LayoutPlan Plan)? _lastApplied;
 
     /// <summary>
@@ -205,6 +208,7 @@ public sealed class AgentHost : IAsyncDisposable
                 try
                 {
                     log(L.T("Applying profile '{profile}'...", ("profile", apply.Profile)));
+                    PlanApplying?.Invoke(plan);
                     await applier.ApplyAsync(apply.Config, plan, local.Machine, ct);
                     ActiveProfile = plan.Profile;
                     _lastApplied = (apply.Config, plan);

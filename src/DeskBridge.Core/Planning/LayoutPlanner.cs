@@ -170,7 +170,30 @@ public static class LayoutPlanner
 
         var placed = Place(config, profile, assignments, virtualDisplays);
         warnings.AddRange(ArrangementWarnings(config, placed));
-        return new LayoutPlan(profile.Name, coordinator.Id, placed, streams, inputRoutes, warnings, profile.PrimaryDisplay);
+        return new LayoutPlan(profile.Name, coordinator.Id, placed, streams, inputRoutes, warnings, PrimaryDisplays(profile, coordinator.Id, placed));
+    }
+
+    /// <summary>
+    /// The profile's primary displays, with "shows:N" turned into the key of the virtual display shown on the
+    /// coordinator's display N (dropped when the profile has none there any more).
+    /// </summary>
+    private static Dictionary<string, string>? PrimaryDisplays(ProfileConfig profile, string coordinator, List<VirtualDisplaySpec> placed)
+    {
+        if (profile.PrimaryDisplays is not { Count: > 0 } chosen)
+            return null;
+        var result = new Dictionary<string, string>();
+        foreach (var (machine, display) in chosen)
+        {
+            if (!display.StartsWith(ProfileConfig.ShowsPrefix, StringComparison.Ordinal))
+            {
+                result[machine] = display;
+                continue;
+            }
+            string shownOn = display[ProfileConfig.ShowsPrefix.Length..];
+            if (placed.FirstOrDefault(v => v.Machine == machine && v.ForMachine == coordinator && v.ForDisplay == shownOn) is { } virtualDisplay)
+                result[machine] = virtualDisplay.Key;
+        }
+        return result.Count > 0 ? result : null;
     }
 
     /// <summary>Windows needs every display to touch another one, and none may overlap.</summary>

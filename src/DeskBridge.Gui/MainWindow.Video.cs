@@ -92,7 +92,9 @@ public partial class MainWindow
                 bool mirror = start.Display.Contains('/') && !(isVirtual && Platform.Windows.VirtualDisplays.MttVirtualDisplays.IsInstalled());
                 if (mirror)
                     AddLog($"[video] {start.Key}: no virtual display here (Virtual Display Driver missing or stopped): sending a copy of the main display");
-                return sent is null ? new OkMessage() : new VideoStartedMessage(sent.X, sent.Y, sent.Width, sent.Height, mirror);
+                // In this PC's original arrangement, as the coordinator's layout has it (see DeskOffset).
+                var (ox, oy) = DeskOffset();
+                return sent is null ? new OkMessage() : new VideoStartedMessage(sent.X - ox, sent.Y - oy, sent.Width, sent.Height, mirror);
             }
 
             case StopVideoMessage stop:
