@@ -54,6 +54,7 @@ public sealed class VideoReceiver : IAsyncDisposable
         var clock = Stopwatch.StartNew();
         long bestBehind = long.MaxValue;
         int skipped = 0;
+        (int X, int Y, bool Visible) pointer = default;
         int reportFrames = 0;
         long reportBytes = 0;
         try
@@ -82,6 +83,15 @@ public sealed class VideoReceiver : IAsyncDisposable
                         decoder = new H264Decoder(video);
                         break;
 
+                    case VideoPacket.Pointer:
+                        pointer = VideoChannel.ParsePointer(p.Body);
+                        break;
+
+                    case VideoPacket.PointerShape:
+                        if (PointerImage.FromBody(p.Body) is { } image)
+                            window?.SetPointerImage(image);
+                        break;
+
                     case VideoPacket.Frame when decoder is not null:
                         var (time, _, data) = VideoChannel.ParseFrame(p.Body);
                         _bytes += data.Length;
@@ -101,7 +111,7 @@ public sealed class VideoReceiver : IAsyncDisposable
                                 // A late picture is decoded (the next ones depend on it) but not shown.
                                 if (late)
                                     return;
-                                window?.Present(texture, slice, w, h);
+                                window?.Present(texture, slice, w, h, pointer);
                                 _frames++;
                                 reportFrames++;
                                 if (_frames % 15 == 0)

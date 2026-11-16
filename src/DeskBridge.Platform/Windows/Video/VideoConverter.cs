@@ -25,6 +25,9 @@ public sealed class VideoConverter : IDisposable
     public int OutputWidth { get; }
     public int OutputHeight { get; }
 
+    /// <summary>Where the picture lands in the output (inside the black bars, if any).</summary>
+    public (int X, int Y, int W, int H) DestRect { get; }
+
     public VideoConverter(VideoDevice video, int inputWidth, int inputHeight, int outputWidth, int outputHeight, int fps = 60)
     {
         _video = video;
@@ -57,6 +60,7 @@ public sealed class VideoConverter : IDisposable
         _videoContext.VideoProcessorSetStreamAutoProcessingMode(_processor, 0, false);
         _videoContext.VideoProcessorSetStreamSourceRect(_processor, 0, true, new RawRect(0, 0, inputWidth, inputHeight));
         _videoContext.VideoProcessorSetStreamDestRect(_processor, 0, true, new RawRect(x, y, x + w, y + h));
+        DestRect = (x, y, w, h);
         _videoContext.VideoProcessorSetOutputTargetRect(_processor, true, new RawRect(0, 0, outputWidth, outputHeight));
         _videoContext.VideoProcessorSetOutputBackgroundColor(_processor, false, new VideoColor { Rgba = new VideoColorRgba { A = 1 } });
     }

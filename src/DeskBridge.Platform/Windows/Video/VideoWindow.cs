@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using DeskBridge.Core.Video;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 
@@ -34,6 +35,8 @@ public sealed class VideoWindow : IDisposable
     private IDXGISwapChain1? _swapChain;
     private ID3D11Texture2D? _backBuffer;
     private VideoConverter? _converter;
+    private PointerRenderer? _pointer;
+    private PointerImage? _pendingPointerImage;
     private int _width, _height;
     private volatile bool _resized;
 
@@ -153,8 +156,18 @@ public sealed class VideoWindow : IDisposable
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
-    /// <summary>Draws a decoded picture (slice <paramref name="slice"/> of an NV12 texture), fitted to the window.</summary>
-    public void Present(ID3D11Texture2D texture, uint slice, int width, int height)
+    /// <summary>The other machine's pointer picture changed.</summary>
+    public void SetPointerImage(PointerImage image)
+    {
+        lock (_drawLock)
+            _pendingPointerImage = image;
+    }
+
+    /// <summary>
+    /// Draws a decoded picture (slice <paramref name="slice"/> of an NV12 texture), fitted to the window, with the
+    /// other machine's pointer over it when <paramref name="pointer"/> is visible.
+    /// </summary>
+    public void Present(ID3D11Texture2D texture, uint slice, int width, int height, (int X, int Y, bool Visible) pointer = default)
     {
         lock (_drawLock)
         {
@@ -182,6 +195,14 @@ public sealed class VideoWindow : IDisposable
             }
             _backBuffer ??= _swapChain.GetBuffer<ID3D11Texture2D>(0);
             _converter.Convert(texture, slice, _backBuffer);
+            if (_pendingPointerImage is { } image)
+            {
+                _pendingPointerImage = null;
+                _pointer ??= new PointerRenderer(_video);
+                _pointer.SetImage(image);
+            }
+            if (pointer.Visible)
+                _pointer?.Draw(_backBuffer, _width, _height, _converter.DestRect, width, height, pointer.X, pointer.Y);
             // Without waiting for the vertical blank: waiting there made the window fall behind a stream that
             // runs a hair faster than the monitor, and the delay grew for as long as it was open. With the flip
             // model a newer picture simply replaces one still waiting for the next refresh (no tearing).
@@ -197,6 +218,7 @@ public sealed class VideoWindow : IDisposable
         lock (_drawLock)
         {
             _converter?.Dispose();
+            _pointer?.Dispose();
             _backBuffer?.Dispose();
             _swapChain?.Dispose();
             _swapChain = null;

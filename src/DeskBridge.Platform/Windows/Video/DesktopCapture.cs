@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using DeskBridge.Core.Video;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 
@@ -10,7 +11,7 @@ namespace DeskBridge.Platform.Windows.Video;
 /// The mouse pointer is not part of the image (it is sent separately).
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class DesktopCapture : IDisposable
+public sealed unsafe class DesktopCapture : IDisposable
 {
     private readonly VideoDevice _video;
     private readonly IDXGIOutput1 _output;
@@ -23,8 +24,18 @@ public sealed class DesktopCapture : IDisposable
     /// <summary>The latest frame (valid until the next <see cref="TryAcquire"/>).</summary>
     public ID3D11Texture2D Frame { get; }
 
-    /// <summary>Where the pointer is on this monitor, and whether it is visible (from the last frame that moved it).</summary>
+    /// <summary>
+    /// Where the pointer's picture goes on this monitor (its top-left corner), and whether it is visible
+    /// (from the last frame that moved it).
+    /// </summary>
     public (int X, int Y, bool Visible) Pointer { get; private set; }
+
+    /// <summary>The pointer's picture; <see cref="PointerVersion"/> changes with it.</summary>
+    public PointerImage? PointerImage { get; private set; }
+
+    public int PointerVersion { get; private set; }
+
+    private byte[] _shapeBuffer = new byte[64 * 1024];
 
     private DesktopCapture(VideoDevice video, IDXGIOutput1 output, int width, int height)
     {
@@ -101,6 +112,8 @@ public sealed class DesktopCapture : IDisposable
 
         if (info.LastMouseUpdateTime != 0)
             Pointer = (info.PointerPosition.Position.X, info.PointerPosition.Position.Y, info.PointerPosition.Visible);
+        if (info.PointerShapeBufferSize > 0)
+            ReadPointerShape(info.PointerShapeBufferSize);
         bool image = info.LastPresentTime != 0;
         using (resource)
         {
@@ -111,6 +124,23 @@ public sealed class DesktopCapture : IDisposable
             }
         }
         return image;
+    }
+
+    private unsafe void ReadPointerShape(uint size)
+    {
+        if (_shapeBuffer.Length < size)
+            _shapeBuffer = new byte[size];
+        fixed (byte* buffer = _shapeBuffer)
+        {
+            if (_duplication!.GetFramePointerShape((uint)_shapeBuffer.Length, (nint)buffer, out uint used, out var shape).Failure)
+                return;
+            var image = PointerShapes.Convert((int)shape.Type, (int)shape.Width, (int)shape.Height, (int)shape.Pitch, _shapeBuffer.AsSpan(0, (int)used));
+            if (image is not null)
+            {
+                PointerImage = image;
+                PointerVersion++;
+            }
+        }
     }
 
     public void Dispose()

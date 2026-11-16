@@ -90,6 +90,7 @@ public sealed class VideoSender : IAsyncDisposable
             var clock = System.Diagnostics.Stopwatch.StartNew();
             _clock = clock;
             (int, int, bool) pointer = default;
+            int pointerVersion = 0;
             var nextReport = TimeSpan.FromSeconds(3);
             while (!_stop.IsCancellationRequested)
             {
@@ -102,6 +103,11 @@ public sealed class VideoSender : IAsyncDisposable
                     nextReport = clock.Elapsed + TimeSpan.FromSeconds(10);
                 }
                 capture.TryAcquire(0); // never wait inside it: it holds the device lock
+                if (capture.PointerVersion != pointerVersion && capture.PointerImage is { } image)
+                {
+                    pointerVersion = capture.PointerVersion;
+                    _ = _channel.SendAsync(VideoPacket.PointerShape, image.ToBody(), default, _stop.Token);
+                }
                 if (capture.Pointer != pointer)
                 {
                     pointer = capture.Pointer;

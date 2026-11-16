@@ -16,6 +16,9 @@ public enum VideoPacket : byte
     /// <summary>Sender → receiver: pointer position on the captured display: x, y (int32), visible (byte).</summary>
     Pointer = 3,
 
+    /// <summary>Sender → receiver: a new pointer picture (<see cref="PointerImage"/>), drawn at the Pointer position.</summary>
+    PointerShape = 4,
+
     /// <summary>Receiver → sender: the next frame must be a key frame (decoder (re)started).</summary>
     KeyFrameRequest = 10,
 

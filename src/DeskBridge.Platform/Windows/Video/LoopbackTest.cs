@@ -100,6 +100,15 @@ public static class LoopbackTest
         string? saved = null;
         if (picturePath is not null && picture is not null)
         {
+            // The pointer as the receiver draws it, over the decoded picture.
+            if (capture.PointerImage is { } image)
+            {
+                using var pointer = new PointerRenderer(video);
+                pointer.SetImage(image);
+                var (px, py, _) = capture.Pointer;
+                pointer.Draw(picture, w, h, (0, 0, w, h), w, h, px, py);
+                log?.Invoke($"Pointer {image.Width}x{image.Height} drawn at ({px}, {py})");
+            }
             SaveBmp(video, picture, picturePath);
             saved = picturePath;
         }
