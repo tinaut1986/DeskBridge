@@ -23,8 +23,23 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
     /// <summary>Where each planned virtual display ended up (its top-left corner in this PC's desktop), by key.</summary>
     public static ConcurrentDictionary<string, (int X, int Y)> Placed { get; } = new();
 
-    /// <summary>True when the driver answered on its pipe.</summary>
-    public static bool IsInstalled() => Send("PING", wantReply: true)?.StartsWith("PONG", StringComparison.Ordinal) == true;
+    /// <summary>
+    /// True when the driver's pipe takes a connection (some versions do not answer PING, so the connection itself
+    /// is the sign that the driver is installed and running).
+    /// </summary>
+    public static bool IsInstalled()
+    {
+        try
+        {
+            using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+            pipe.Connect(1500);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     public async Task SetDisplaysAsync(IReadOnlyList<VirtualDisplaySpec> displays, CancellationToken ct = default)
     {
@@ -74,6 +89,16 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             return;
         }
 
+        // A monitor that is not part of the desktop cannot be given a mode directly: extend the desktop onto
+        // every connected display first, as Windows' display settings do.
+        if (devices.Take(displays.Count).Any(d => !IsAttached(d)))
+        {
+            int extended = SetDisplayConfig(0, 0, 0, 0, SdcApply | SdcTopologyExtend);
+            if (extended != 0)
+                log($"[virtual displays] extending the desktop onto the virtual monitors failed ({extended})");
+            await Task.Delay(1000, ct);
+        }
+
         for (int i = 0; i < displays.Count; i++)
         {
             var spec = displays[i];
@@ -88,6 +113,12 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
                 PositionY = spec.Y,
             };
             int result = ChangeDisplaySettingsExW(devices[i], ref mode, 0, CdsUpdateRegistry | CdsNoReset, 0);
+            if (result != 0)
+            {
+                // Not every refresh rate is in the driver's list: let Windows pick one for that size.
+                mode.Fields &= ~DmDisplayFrequency;
+                result = ChangeDisplaySettingsExW(devices[i], ref mode, 0, CdsUpdateRegistry | CdsNoReset, 0);
+            }
             if (result != 0)
                 log($"[virtual displays] {devices[i]}: mode {spec.Width}x{spec.Height}@{spec.RefreshHz} refused ({result})");
         }
@@ -182,21 +213,35 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
         return string.Join("\n", lines);
     }
 
-    /// <summary>The driver's monitors that are part of the desktop (\\.\DISPLAYn names), in order.</summary>
+    /// <summary>
+    /// The driver's monitors (\\.\DISPLAYn names), in order, whether or not they are part of the desktop yet:
+    /// giving one a mode and a position attaches it.
+    /// </summary>
     private static List<string> VirtualMonitors()
     {
         var found = new List<string>();
         var device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
         for (uint i = 0; EnumDisplayDevicesW(null, i, ref device, 0); i++)
         {
-            bool attached = (device.StateFlags & DisplayDeviceAttachedToDesktop) != 0;
             bool virtualDriver = device.DeviceString.Contains("Virtual Display", StringComparison.OrdinalIgnoreCase)
                                  || device.DeviceId.Contains("MttVDD", StringComparison.OrdinalIgnoreCase);
-            if (attached && virtualDriver)
+            if (virtualDriver)
                 found.Add(device.DeviceName);
             device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
         }
         return found;
+    }
+
+    private static bool IsAttached(string deviceName)
+    {
+        var device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
+        for (uint i = 0; EnumDisplayDevicesW(null, i, ref device, 0); i++)
+        {
+            if (device.DeviceName == deviceName)
+                return (device.StateFlags & DisplayDeviceAttachedToDesktop) != 0;
+            device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
+        }
+        return false;
     }
 
     /// <summary>One command per connection, UTF-16, as the driver expects; null when it could not be sent.</summary>
@@ -226,6 +271,10 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
 
     private const uint DmPosition = 0x20, DmPelsWidth = 0x80000, DmPelsHeight = 0x100000, DmDisplayFrequency = 0x400000;
     private const uint CdsUpdateRegistry = 0x1, CdsNoReset = 0x10000000;
+    private const uint SdcTopologyExtend = 0x4, SdcApply = 0x80;
+
+    [DllImport("user32.dll")]
+    private static extern int SetDisplayConfig(uint pathCount, nint paths, uint modeCount, nint modes, uint flags);
     private const uint DisplayDeviceAttachedToDesktop = 0x1;
     private const int EnumCurrentSettings = -1;
 

@@ -70,6 +70,8 @@ public partial class MainWindow
                 {
                     return new ErrorMessage(ex.Message);
                 }
+                if (_videoSenders.TryRemove(start.Key, out var previous))
+                    await previous.DisposeAsync(); // asked again (the coordinator reconnected): one sender per stream
                 var sender = new VideoSender(channel, display.X, display.Y, start.Fps, start.BitrateMbps, AddLog);
                 var sent = PlatformServices.DisplayDetector().DetectDisplays().FirstOrDefault(d => d.X == display.X && d.Y == display.Y);
                 _videoSenders[start.Key] = sender;
@@ -116,6 +118,8 @@ public partial class MainWindow
             return;
         }
         var receiver = new VideoReceiver(channel, target.Title, target.Monitor, AddLog);
+        if (_videoReceivers.TryGetValue(channel.StreamKey, out var replaced))
+            _ = replaced.DisposeAsync().AsTask();
         _videoReceivers[channel.StreamKey] = receiver;
         _ = Task.Run(async () =>
         {
@@ -130,12 +134,25 @@ public partial class MainWindow
         });
         _ = receiver.Completion.ContinueWith(async _ =>
         {
-            _videoReceivers.TryRemove(channel.StreamKey, out var _);
-            if (_lentDisplays.TryRemove(channel.StreamKey, out var _))
+            bool current = _videoReceivers.TryRemove(new KeyValuePair<string, VideoReceiver>(channel.StreamKey, receiver));
+            if (current && _lentDisplays.TryRemove(channel.StreamKey, out var _))
                 await Dispatcher.InvokeAsync(RefreshInputTargets);
             await receiver.DisposeAsync();
-            if (SessionOf(target.Machine) is { } diagnosed)
-                await SaveDiagnosticsAsync(diagnosed); // the sender's side of the story, for troubleshooting
+            if (!current)
+                return; // replaced by a newer receiver for the same stream: nothing else to do
+
+            // The window was closed here, or the stream ended: the other machine stops sending (before any restart).
+            if (SessionOf(target.Machine) is { } session)
+            {
+                try
+                {
+                    await session.RequestAsync(new StopVideoMessage(channel.StreamKey));
+                }
+                catch (ControlException)
+                {
+                }
+                await SaveDiagnosticsAsync(session); // the sender's side of the story, for troubleshooting
+            }
 
             // A stream of the applied profile that ended by itself (the sender gave up, the connection broke):
             // ask for it again; it stays off only when the profile changes or the tray stops it.
@@ -146,17 +163,6 @@ public partial class MainWindow
                 {
                     AddLog($"[video] {stream.Key} stopped by itself: starting it again");
                     await Dispatcher.InvokeAsync(() => StartProfileStreamAsync(stream)).Task.Unwrap();
-                }
-            }
-            // The window was closed here: the other machine stops sending.
-            if (SessionOf(target.Machine) is { } session)
-            {
-                try
-                {
-                    await session.RequestAsync(new StopVideoMessage(channel.StreamKey));
-                }
-                catch (ControlException)
-                {
                 }
             }
         }, TaskScheduler.Default);
@@ -223,6 +229,23 @@ public partial class MainWindow
         }
         if (stream.SinkMachine != here || _videoReceivers.ContainsKey(stream.Key) || _videoPending.ContainsKey(stream.Key))
             return;
+        // A reconnection and a restart can both ask at once: one request per stream at a time.
+        if (!_videoStarting.TryAdd(stream.Key, 0))
+            return;
+        try
+        {
+            await StartProfileStreamCoreAsync(stream);
+        }
+        finally
+        {
+            _videoStarting.TryRemove(stream.Key, out _);
+        }
+    }
+
+    private readonly ConcurrentDictionary<string, byte> _videoStarting = new();
+
+    private async Task StartProfileStreamCoreAsync(Core.Model.StreamSpec stream)
+    {
         var monitor = PlatformServices.DisplayDetector().DetectDisplays().FirstOrDefault(d => d.Id == stream.SinkDisplay);
         if (monitor is null)
         {
