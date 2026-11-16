@@ -253,10 +253,16 @@ public sealed class VideoWindow : IDisposable
                 BufferCount = 2,
                 SwapEffect = SwapEffect.FlipDiscard,
                 Scaling = Scaling.Stretch,
+                Flags = SwapChainFlags.FrameLatencyWaitableObject,
             });
             factory.MakeWindowAssociation(_hwnd, WindowAssociationFlags.IgnoreAll);
-            using (var dxgiDevice = _video.Device.QueryInterface<IDXGIDevice1>())
-                dxgiDevice.MaximumFrameLatency = 1; // never queue pictures ahead of the screen
+            // Never a picture queued ahead of the screen, and the wait for its turn done on its own (a handle), not
+            // inside Present: Present waiting there held the whole device, the decoder included.
+            using (var swapChain2 = _swapChain.QueryInterface<IDXGISwapChain2>())
+            {
+                swapChain2.MaximumFrameLatency = 1;
+                _frameWait = swapChain2.FrameLatencyWaitableObject;
+            }
         }
         _ready.Set();
 
@@ -364,6 +370,13 @@ public sealed class VideoWindow : IDisposable
     private int _pictureWidth, _pictureHeight;
     private (int, int) _pictureSize, _converterSize;
     private volatile bool _newPicture;
+    private nint _frameWait;
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WaitForSingleObject(nint handle, uint milliseconds);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(nint handle);
 
     /// <summary>
     /// The other machine reports its pointer somewhere else: drawn again over the last picture (the screen is
@@ -396,6 +409,9 @@ public sealed class VideoWindow : IDisposable
             }
             if (_closing)
                 break;
+            // The screen's turn, before drawing (so the newest picture is drawn, and Present never waits).
+            if (_frameWait != 0)
+                WaitForSingleObject(_frameWait, 100);
             if (!_newPicture)
                 Interlocked.Increment(ref _repaints);
             _newPicture = false;
@@ -444,7 +460,7 @@ public sealed class VideoWindow : IDisposable
                 _frameView = null;
                 _backBuffer?.Dispose();
                 _backBuffer = null;
-                _swapChain.ResizeBuffers(2, (uint)rw, (uint)rh, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
+                _swapChain.ResizeBuffers(2, (uint)rw, (uint)rh, Format.B8G8R8A8_UNorm, SwapChainFlags.FrameLatencyWaitableObject);
                 return false; // the picture is converted again at the new size with the next frame
             }
         }
@@ -527,6 +543,9 @@ public sealed class VideoWindow : IDisposable
             _backBuffer?.Dispose();
             _swapChain?.Dispose();
             _swapChain = null;
+            if (_frameWait != 0)
+                CloseHandle(_frameWait);
+            _frameWait = 0;
         }
         _ready.Dispose();
         _repaintWanted.Dispose();
