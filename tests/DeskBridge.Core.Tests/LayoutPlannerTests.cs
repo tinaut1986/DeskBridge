@@ -247,4 +247,25 @@ public class LayoutPlannerTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void A_virtual_display_shown_above_the_laptop_panel_goes_above_the_panel_on_the_laptop()
+    {
+        // The owner's desk: displays 2, 3, 1 in a row; the laptop panel (2880x1800 at 175%, matched to 1920 wide)
+        // under display 3, which shows the laptop.
+        var config = new DeskBridgeConfig(
+            [
+                new MachineConfig("skynet", "SKYNET", "192.168.1.52",
+                    [new DisplayConfig("2", 1920, 1080, X: -1920), new DisplayConfig("3", 1920, 1080), new DisplayConfig("1", 1920, 1080, X: 1920)],
+                    HasInput: true),
+                new MachineConfig("laptop-oscar", "LAPTOP", "192.168.1.140", [new DisplayConfig("1", 2880, 1800, Scale: 175)],
+                    DeskPositions: new Dictionary<string, VirtualPosition> { ["1"] = new(0, 1080) },
+                    DeskWidths: new Dictionary<string, int> { ["1"] = 1920 }),
+            ],
+            [new ProfileConfig("work", [new DisplayAssignment("skynet", "3", "laptop-oscar")])]);
+
+        var plan = LayoutPlanner.Plan(config, "work");
+        var v = Assert.Single(plan.VirtualDisplays);
+        Assert.Equal((1920, 1080, 0, -1080), (v.Width, v.Height, v.X, v.Y));
+    }
 }

@@ -36,6 +36,7 @@ public sealed class KeyboardMouseShare : IDisposable
     private readonly GlobalInputHook _hook;
     private readonly Task _sender;
     private string? _target; // where queued items go
+    private int _localButtons; // mouse buttons held on this PC (bit per button)
 
     public KeyboardMouseShare(
         IReadOnlyList<DisplayRect> displays,
@@ -75,7 +76,9 @@ public sealed class KeyboardMouseShare : IDisposable
         {
             if (m.Message == NativeMessages.MouseMove)
             {
-                switch (_logic.OnMouseMove(m.X, m.Y))
+                // A button held here (a window or a file being dragged on this PC): the cursor stays here, over
+                // displays showing another machine too, so the drag can go across them or be dropped on them.
+                switch (_logic.OnMouseMove(m.X, m.Y, dragging: _logic.Remote is null && _localButtons != 0))
                 {
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
@@ -93,7 +96,19 @@ public sealed class KeyboardMouseShare : IDisposable
                 }
             }
             if (_logic.Remote is null)
+            {
+                _localButtons = m.Message switch
+                {
+                    NativeMessages.LeftDown => _localButtons | 1,
+                    NativeMessages.LeftUp => _localButtons & ~1,
+                    NativeMessages.RightDown => _localButtons | 2,
+                    NativeMessages.RightUp => _localButtons & ~2,
+                    NativeMessages.MiddleDown => _localButtons | 4,
+                    NativeMessages.MiddleUp => _localButtons & ~4,
+                    _ => _localButtons,
+                };
                 return false;
+            }
 
             var e = m.Message switch
             {

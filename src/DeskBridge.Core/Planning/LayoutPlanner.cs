@@ -211,6 +211,12 @@ public static class LayoutPlanner
         {
             var mine = virtualDisplays.Where(v => v.Machine == borrower.Id).ToList();
 
+            // Shown on the coordinator's desk next to this machine's own displays: placed in this machine's desktop
+            // the same way round, so Windows moves the cursor (and dragged windows) between them as seen there.
+            var fromDesk = DeskPlaced(config, borrower, mine);
+            result.AddRange(fromDesk);
+            mine = mine.Where(v => fromDesk.All(f => f.Key != v.Key)).ToList();
+
             // Placed by hand: exactly where the user dragged them.
             var manual = mine
                 .Select(v => (Spec: v, Position: assignments[(v.ForMachine, v.ForDisplay)].Position))
@@ -220,7 +226,7 @@ public static class LayoutPlanner
             result.AddRange(manual);
 
             var occupied = borrower.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height))
-                .Concat(manual.Select(v => new DisplayRect(v.X, v.Y, v.Width, v.Height)))
+                .Concat(manual.Concat(fromDesk).Select(v => new DisplayRect(v.X, v.Y, v.Width, v.Height)))
                 .ToList();
             bool empty = occupied.Count == 0;
             var bounds = empty
@@ -263,4 +269,66 @@ public static class LayoutPlanner
         // Keep the plan's original order (by lent display).
         return virtualDisplays.Select(v => result.Single(r => r.Key == v.Key)).ToList();
     }
+
+    /// <summary>
+    /// Virtual displays of <paramref name="borrower"/> shown on displays of the coordinator, placed in the
+    /// borrower's desktop the way the coordinator's desk has them around the borrower's own displays: e.g. shown
+    /// on the monitor above the laptop panel, the virtual display goes above the panel on the laptop. The group
+    /// keeps its arrangement on the desk; the one closest to a display of the borrower anchors it, touching it.
+    /// </summary>
+    private static List<VirtualDisplaySpec> DeskPlaced(DeskBridgeConfig config, MachineConfig borrower, List<VirtualDisplaySpec> mine)
+    {
+        var coordinator = config.Machines.Single(m => m.HasInput);
+        if (borrower.HasInput || borrower.DeskPositions is not { Count: > 0 } desk)
+            return [];
+        var shown = mine
+            .Where(v => v.ForMachine == coordinator.Id)
+            .Select(v => (Spec: v, Display: coordinator.Displays.FirstOrDefault(d => d.Id == v.ForDisplay)))
+            .Where(x => x.Display is not null)
+            .Select(x => (x.Spec, Here: new DisplayRect(x.Display!.X, x.Display.Y, x.Display.Width, x.Display.Height)))
+            .ToList();
+        var own = borrower.Displays
+            .Where(d => desk.ContainsKey(d.Id))
+            .Select(d =>
+            {
+                int? chosen = borrower.DeskWidths is { } widths && widths.TryGetValue(d.Id, out var w) && w > 0 ? w : null;
+                var (dw, dh) = Input.InputLayout.DeskSize(d.Width, d.Height, d.Scale, chosen);
+                var p = desk[d.Id];
+                return (Own: new DisplayRect(d.X, d.Y, d.Width, d.Height), Desk: new DisplayRect(p.X, p.Y, dw, dh));
+            })
+            .ToList();
+        if (shown.Count == 0 || own.Count == 0)
+            return [];
+
+        var (anchor, display) = shown
+            .SelectMany(s => own.Select(o => (Shown: s, Own: o)))
+            .OrderBy(x => Gap(x.Shown.Here, x.Own.Desk))
+            .First();
+        var (spec, here) = anchor;
+        var (mineRect, onDesk) = display;
+        double scale = (double)onDesk.Width / mineRect.Width;
+        int x, y;
+        if (here.Bottom <= onDesk.Y || here.Y >= onDesk.Bottom)
+        {
+            // Above or below it: same edge, along it in proportion, still overlapping it so they touch.
+            y = here.Bottom <= onDesk.Y ? mineRect.Y - spec.Height : mineRect.Bottom;
+            x = Math.Clamp(mineRect.X + (int)Math.Round((here.X - onDesk.X) / scale), mineRect.X - spec.Width + 1, mineRect.Right - 1);
+        }
+        else
+        {
+            x = here.Right <= onDesk.X ? mineRect.X - spec.Width : mineRect.Right;
+            y = Math.Clamp(mineRect.Y + (int)Math.Round((here.Y - onDesk.Y) / scale), mineRect.Y - spec.Height + 1, mineRect.Bottom - 1);
+        }
+        int dx = x - here.X, dy = y - here.Y;
+        return shown.Select(s => s.Spec with { X = s.Here.X + dx, Y = s.Here.Y + dy }).ToList();
+    }
+
+    /// <summary>Distance between two rectangles (0 when they touch or overlap).</summary>
+    private static long Gap(DisplayRect a, DisplayRect b)
+    {
+        long gx = Math.Max(0, Math.Max(a.X - b.Right, b.X - a.Right));
+        long gy = Math.Max(0, Math.Max(a.Y - b.Bottom, b.Y - a.Bottom));
+        return gx + gy;
+    }
+
 }

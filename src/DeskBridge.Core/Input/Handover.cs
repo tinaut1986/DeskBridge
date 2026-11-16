@@ -63,14 +63,18 @@ public sealed class CoordinatorHandover
             _remote = targets.FirstOrDefault(t => t.SameAs(_remote));
     }
 
-    public MouseDecision OnMouseMove(int x, int y)
+    /// <param name="dragging">
+    /// A mouse button is held on this PC (something is being dragged here): the cursor does not leave, so a window
+    /// can be dragged across, or dropped on, a display that shows another machine.
+    /// </param>
+    public MouseDecision OnMouseMove(int x, int y, bool dragging = false)
     {
         if (_remote is { } remote)
         {
             int dx = x - _parkX, dy = y - _parkY;
             return dx == 0 && dy == 0 ? new MouseDecision.Pass() : new MouseDecision.Forward(remote.Machine, dx, dy);
         }
-        if (_displays.Count == 0 || _targets.Count == 0)
+        if (_displays.Count == 0 || _targets.Count == 0 || dragging)
             return new MouseDecision.Pass();
 
         // A display that shows another machine's screen: that machine gets the cursor at the same spot.
@@ -84,8 +88,8 @@ public sealed class CoordinatorHandover
             (_parkX, _parkY) = (lent.X + lent.Width / 2, lent.Y + lent.Height / 2);
             _remote = target;
             RemoteSide = PlacementSide.Right;
-            return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY, [shown],
-                1 / target.ScaleX, 1 / target.ScaleY);
+            return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY,
+                AreaOf(target.Machine) ?? [shown], 1 / target.ScaleX, 1 / target.ScaleY);
         }
 
         foreach (var (cx, cy) in Beyond(x, y))
@@ -106,7 +110,7 @@ public sealed class CoordinatorHandover
             var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, tx, ty);
             double fraction = EdgeGeometry.AtEdge(_displays, side, px, py) ? EdgeGeometry.Fraction(_displays, side, px, py) : 0.5;
             return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), side, fraction, _parkX, _parkY,
-                target.Confine ? target.Displays : null, 1 / target.ScaleX, 1 / target.ScaleY);
+                target.Confine ? AreaOf(target.Machine) : null, 1 / target.ScaleX, 1 / target.ScaleY);
         }
         return new MouseDecision.Pass();
     }
@@ -135,9 +139,19 @@ public sealed class CoordinatorHandover
     /// </summary>
     private List<DisplayRect> PeersOf(InputTarget target) =>
         _displays
-            .Concat(_targets.Where(t => t.Lent is null && !t.SameAs(target)).SelectMany(t => t.Placed))
+            .Concat(_targets.Where(t => t.Lent is null && t.Machine != target.Machine).SelectMany(t => t.Placed))
             .Select(target.ToClient)
             .ToList();
+
+    /// <summary>
+    /// Every display of that machine used from here (placed on the desk or shown on a display here): over there
+    /// the cursor moves freely between them, as that machine's own desktop has them (dragging windows across too).
+    /// </summary>
+    private List<DisplayRect>? AreaOf(string machine)
+    {
+        var area = _targets.Where(t => t.Machine == machine && (t.Confine || t.Lent is not null)).SelectMany(t => t.Displays).Distinct().ToList();
+        return area.Count > 0 ? area : null;
+    }
 
     /// <summary>
     /// The other machine sent the cursor back at (<paramref name="x"/>, <paramref name="y"/>) in its own
@@ -155,15 +169,20 @@ public sealed class CoordinatorHandover
             return new MouseDecision.Here(ex, ey);
         }
 
-        var (dx, dy) = remote.ToDesk(rx, ry);
+        // Mapped back through the display of that machine it left from (each has its own place and scale here).
+        var from = _targets
+            .Where(t => t.Machine == remote.Machine && (t.Confine || t.Lent is not null))
+            .OrderBy(t => t.Displays.Min(d => Distance(d, rx, ry)))
+            .FirstOrDefault() ?? remote;
+        var (dx, dy) = from.ToDesk(rx, ry);
         if (!InputLayout.Contains(_displays, dx, dy)
-            && _targets.FirstOrDefault(t => t.Lent is null && !t.SameAs(remote) && t.Contains(dx, dy)) is { } next)
+            && _targets.FirstOrDefault(t => t.Lent is null && t.Machine != remote.Machine && t.Contains(dx, dy)) is { } next)
         {
             _remote = next;
             var (cx, cy) = next.ToClient(dx, dy);
             var (nx, ny) = EdgeGeometry.ClampToDisplays(next.Displays, cx, cy);
             return new MouseDecision.Enter(next.Machine, nx, ny, PeersOf(next), RemoteSide, 0.5, _parkX, _parkY,
-                next.Confine ? next.Displays : null, 1 / next.ScaleX, 1 / next.ScaleY);
+                next.Confine ? AreaOf(next.Machine) : null, 1 / next.ScaleX, 1 / next.ScaleY);
         }
         var (hx, hy) = EdgeGeometry.ClampToDisplays(_displays, dx, dy);
         return new MouseDecision.Here(hx, hy);
@@ -177,6 +196,13 @@ public sealed class CoordinatorHandover
             MouseDecision.Enter enter => (enter.X, enter.Y),
             _ => (0, 0),
         };
+
+    private static long Distance(DisplayRect d, int x, int y)
+    {
+        long dx = x < d.X ? d.X - x : x >= d.Right ? x - d.Right + 1 : 0;
+        long dy = y < d.Y ? d.Y - y : y >= d.Bottom ? y - d.Bottom + 1 : 0;
+        return dx * dx + dy * dy;
+    }
 
     /// <summary>Takes the cursor back by hand (hotkey): it reappears where it left.</summary>
     public (int X, int Y) ReturnHere()
