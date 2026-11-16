@@ -30,6 +30,7 @@ por la sesión que ya tienen abierta (el portátil no acepta conexiones entrante
 deskbridge remote <equipo> log [n]               últimas líneas del log de ese equipo
 deskbridge remote <equipo> update <exe> [versión] instala esa versión y reinicia DeskBridge allí
 deskbridge remote <equipo> displays | probe-vdd | probe-video
+deskbridge remote <equipo> drag-test             mueve una ventana de prueba 10 s por la pantalla que envía
 deskbridge remote <equipo> ui <carpeta>          captura PNG de cada página de su ventana
 deskbridge probe <equipo> [segundos]
 deskbridge video-test | video-net-test
@@ -40,9 +41,10 @@ deskbridge video-test | video-net-test
   administrador, sigue siéndolo).
 - El log de cada equipo también está en `%LOCALAPPDATA%\DeskBridge\logs\` (el de la CLI remota se reinicia con
   cada arranque). Un cierre inesperado deja `crash.txt`, que se muestra en el siguiente arranque.
-- Las cifras útiles del log: en el emisor, `capture to screen and back N ms` (ida y vuelta real) y
-  `N of M frames encoded` (los demás no cambiaron); en el
-  receptor, `fps shown` y `late frames`; en el sonido, `kbps, loudest N dB`.
+- Las cifras útiles del log: en el emisor, `capture to screen and back N ms` (ida y vuelta real),
+  `frames/s encoded` y `encoder holds a picture N ms`; en el
+  receptor, `fps shown`, `late frames` (por tiempo o con la siguiente esperando) y `decode and show`. `drag-test`
+  da cifras de una ventana en movimiento sin nadie delante (sin pasar por el ratón); en el sonido, `kbps, loudest N dB`.
 - Capturas de la interfaz sin tocar la instalación real: `DeskBridge.exe --snapshot <carpeta> --config <json> --local <json>`
   (con una clave falsa en el `local`).
 

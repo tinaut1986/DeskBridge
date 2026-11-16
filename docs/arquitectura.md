@@ -36,6 +36,14 @@
     después del último cambio (el codificador devuelve cada fotograma uno más tarde, y así afina la imagen) y
     uno por segundo con la pantalla quieta. El puntero va aparte: el receptor guarda la última imagen y la
     vuelve a pintar con el puntero en su sitio. Un cursor de texto parpadeando ya cuesta unos 13 fps;
+  - en el receptor, un hilo decodifica y otro muestra la imagen más reciente; la espera al refresco del monitor
+    se hace con un *swap chain* con espera (`FrameLatencyWaitableObject`), nunca dentro de `Present`, que bloqueaba
+    todo el dispositivo (también el decodificador) y congelaba el vídeo al arrastrar una ventana;
+  - **puntero local**: el coordinador hace las mismas cuentas que el otro equipo con cada movimiento
+    (`PointerMirror`) y pinta el puntero al momento, como el Escritorio remoto; cuando el ratón para, manda la
+    posición real que llega con el vídeo. La forma del puntero viaja con su punto activo;
+  - los hilos de captura, codificación, vídeo y ganchos de ratón van en el planificador multimedia de Windows
+    (MMCSS) y el proceso con prioridad superior a la normal, para que un equipo cargado no dé tirones;
   - un fotograma no se pinta si ya ha llegado el siguiente, ni si va más de 80 ms por detrás del mejor de los
     últimos 30 s (`LateFrames`): así no se acumula cola y la deriva de los relojes no importa.
 - **Entrada** (Core/Input + Gui/Sharing): ganchos de bajo nivel en el coordinador. `InputTarget` describe cada
