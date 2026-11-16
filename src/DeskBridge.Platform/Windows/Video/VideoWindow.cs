@@ -55,6 +55,49 @@ public sealed class VideoWindow : IDisposable
     private int _width, _height;
     private volatile bool _resized;
 
+    /// <summary>Where the coordinator itself puts the other machine's pointer (see <see cref="SetLocalPointer"/>).</summary>
+    private sealed record LocalPosition(int X, int Y, long Tick);
+
+    private volatile LocalPosition? _local;
+    private int _repaintPosted;
+    private (int X, int Y, bool Visible) _streamPointer;
+    private int _hotX, _hotY;
+    private const uint WmRepaint = WmUser + 1;
+
+    /// <summary>The mouse rests this long before the real position (from the stream) is trusted again.</summary>
+    private const int RestMs = 300;
+
+    /// <summary>
+    /// The pointer the coordinator draws itself has drifted from the real one (a program or the other machine's
+    /// own touchpad moved it): monitor (X, Y) and where the pointer really is on it (its hot spot, in pixels of the
+    /// picture).
+    /// </summary>
+    public static event Action<int, int, int, int>? PointerCorrected;
+
+    /// <summary>
+    /// The other machine's pointer as the coordinator moves it, drawn at once (like Remote Desktop) instead of
+    /// waiting for where the other machine reports it a round trip later: on the video window over the monitor
+    /// at (<paramref name="monitorX"/>, <paramref name="monitorY"/>), at <paramref name="position"/> (pixels of the
+    /// picture); every other window goes back to the reported pointer. Null for none anywhere. Cheap: called from
+    /// the mouse hook.
+    /// </summary>
+    public static void SetLocalPointer(int monitorX, int monitorY, (int X, int Y)? position)
+    {
+        foreach (var window in Windows.Values)
+        {
+            bool here = position is not null && window._monitor is { } m && m.X == monitorX && m.Y == monitorY;
+            var next = here ? new LocalPosition(position!.Value.X, position.Value.Y, Environment.TickCount64) : null;
+            if (next is null && window._local is null)
+                continue;
+            window._local = next;
+            if (Interlocked.Exchange(ref window._repaintPosted, 1) == 0)
+                PostMessageW(window._hwnd, WmRepaint, 0, 0);
+        }
+    }
+
+    /// <summary>No video window draws a pointer of its own any more.</summary>
+    public static void ClearLocalPointer() => SetLocalPointer(int.MinValue, int.MinValue, null);
+
     /// <summary>
     /// Whether the window at that screen point is one of these video windows (and not another window of this PC on
     /// top of it, such as one dropped over a display that shows another machine, or the taskbar).
@@ -152,6 +195,7 @@ public sealed class VideoWindow : IDisposable
 
     private void Run()
     {
+        Priority.MultimediaThread();
         var instance = GetModuleHandleW(null);
         string className = ClassName.Value;
 
@@ -235,6 +279,10 @@ public sealed class VideoWindow : IDisposable
             case WmSize:
                 _resized = true;
                 break;
+            case WmRepaint:
+                Volatile.Write(ref _repaintPosted, 0);
+                Repaint(_streamPointer);
+                return 0;
             case WmSetCursor when _monitor is not null:
                 SetCursor(0); // the remote pointer is drawn in the picture
                 return 1;
@@ -254,7 +302,10 @@ public sealed class VideoWindow : IDisposable
     public void SetPointerImage(PointerImage image)
     {
         lock (_drawLock)
+        {
             _pendingPointerImage = image;
+            (_hotX, _hotY) = (image.HotX, image.HotY);
+        }
     }
 
     /// <summary>
@@ -313,6 +364,22 @@ public sealed class VideoWindow : IDisposable
     private void Show((int X, int Y, bool Visible) pointer)
     {
         int width = _pictureWidth, height = _pictureHeight;
+        _streamPointer = pointer;
+        if (_local is { } local)
+        {
+            // Drawn where the coordinator moved it. Once the mouse rests, where the other machine really has it wins
+            // (it can differ: a program moved it, or a move was handled a bit differently over there).
+            int realX = pointer.X + _hotX, realY = pointer.Y + _hotY;
+            if (pointer.Visible && Environment.TickCount64 - local.Tick > RestMs && (realX, realY) != (local.X, local.Y) && _monitor is { } m)
+            {
+                _local = local with { X = realX, Y = realY };
+                PointerCorrected?.Invoke(m.X, m.Y, realX, realY);
+            }
+            else
+            {
+                pointer = (local.X - _hotX, local.Y - _hotY, pointer.Visible);
+            }
+        }
         _backBuffer ??= _swapChain!.GetBuffer<ID3D11Texture2D>(0);
         _video.Context.CopyResource(_backBuffer, _picture!);
         if (_pendingPointerImage is { } image)

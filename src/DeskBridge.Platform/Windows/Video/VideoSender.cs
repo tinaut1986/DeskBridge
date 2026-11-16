@@ -82,6 +82,7 @@ public sealed class VideoSender : IAsyncDisposable
 
     private void CaptureLoop()
     {
+        Priority.MultimediaThread();
         // The pipeline is built again when the monitor changes size or the GPU is reset; a stream only ends when
         // that keeps failing.
         var failures = new Queue<DateTime>();

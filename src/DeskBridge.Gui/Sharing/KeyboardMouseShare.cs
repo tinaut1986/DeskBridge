@@ -42,6 +42,48 @@ public sealed class KeyboardMouseShare : IDisposable
     private int _parkedX, _parkedY; // where the local cursor waits while the other machine has it
     private int _settleFromX, _settleFromY;
     private Task _pointerChain = Task.CompletedTask;
+    private readonly PointerMirror _mirror = new();
+    private IReadOnlyList<InputTarget> _targets;
+
+    /// <summary>
+    /// Starts the coordinator's copy of the other machine's cursor (see <see cref="PointerMirror"/>): only where
+    /// the cursor is confined to known displays (always the case for a display shown here).
+    /// </summary>
+    private void Mirror(MouseDecision.Enter enter)
+    {
+        if (enter.Area is { } area)
+            _mirror.Enter(enter.X, enter.Y, area, enter.Peers, enter.SpeedX, enter.SpeedY, enter.Holes, enter.AreaDesk);
+        else
+            _mirror.Clear();
+        PublishPointer();
+    }
+
+    /// <summary>Tells the video windows where to draw the other machine's pointer themselves (or nowhere).</summary>
+    private void PublishPointer()
+    {
+        if (_mirror.Position is { } p && _targets.FirstOrDefault(t => t.Lent is not null && t.Machine == _logic.Remote
+                && p.X >= t.Displays[0].X && p.X < t.Displays[0].Right && p.Y >= t.Displays[0].Y && p.Y < t.Displays[0].Bottom) is { } target)
+        {
+            var shown = target.Displays[0];
+            VideoWindow.SetLocalPointer(target.Lent!.Value.X, target.Lent.Value.Y, (p.X - shown.X, p.Y - shown.Y));
+        }
+        else
+        {
+            VideoWindow.ClearLocalPointer();
+        }
+    }
+
+    /// <summary>The video showed the pointer somewhere else once the mouse rested: carry on from there.</summary>
+    private void OnPointerCorrected(int monitorX, int monitorY, int x, int y)
+    {
+        lock (_gate)
+        {
+            if (_logic.Remote is not { } remote
+                || _targets.FirstOrDefault(t => t.Machine == remote && t.Lent is { } l && l.X == monitorX && l.Y == monitorY) is not { } target)
+                return;
+            _mirror.Correct(target.Displays[0].X + x, target.Displays[0].Y + y);
+        }
+    }
 
     /// <summary>
     /// Hides or shows this PC's pointer off the hook's thread (swapping system cursors takes a while, and the hook
@@ -78,9 +120,11 @@ public sealed class KeyboardMouseShare : IDisposable
         {
             WindowsOverVideo = () => VideoWindow.WindowsAbove().Select(w => new DisplayRect(w.X, w.Y, w.Width, w.Height)).ToList(),
         };
+        _targets = targets;
         _sessionOf = sessionOf;
         _log = log;
         _remoteChanged = remoteChanged;
+        VideoWindow.PointerCorrected += OnPointerCorrected;
         _hook = new GlobalInputHook(OnMouse, OnKey);
         _sender = Task.Run(SendLoopAsync);
     }
@@ -93,6 +137,7 @@ public sealed class KeyboardMouseShare : IDisposable
         {
             var before = _logic.Remote;
             _logic.Update(displays, targets);
+            _targets = targets;
             if (before is not null && _logic.Remote is null)
                 lost = before;
         }
@@ -129,10 +174,16 @@ public sealed class KeyboardMouseShare : IDisposable
                         var how = enter.Area is null ? "past the edge" : "onto its display (on the desk, or shown here)";
                         Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
                         Pointer(hide: true); // not left in sight here while the other machine has the cursor
+                        Mirror(enter);
                         _remoteChanged(enter.Machine);
                         return true;
                     case MouseDecision.Forward forward:
                         EnqueueMove(forward.Dx, forward.Dy);
+                        if (_mirror.Position is not null)
+                        {
+                            _mirror.Move(forward.Dx, forward.Dy);
+                            PublishPointer();
+                        }
                         return true;
                     default:
                         return _logic.Remote is not null; // a move to the park point itself
@@ -224,6 +275,8 @@ public sealed class KeyboardMouseShare : IDisposable
                 Settle(_parkedX, _parkedY);
                 InputInjector.SetCursor(x, y);
                 Pointer(hide: false);
+                _mirror.Clear();
+                PublishPointer();
                 Enqueue(new ReleaseItem());
             }
             else if (!k.Down && _localDown.Remove(k.VirtualKey))
@@ -256,10 +309,13 @@ public sealed class KeyboardMouseShare : IDisposable
                     _target = next.Machine;
                     Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area, next.SpeedX, next.SpeedY, next.Holes, next.AreaDesk)));
                     Task.Run(() => _log($"[input] keyboard and mouse from {from} on to {next.Machine} at ({next.X}, {next.Y})"));
+                    Mirror(next);
                     if (next.Machine != from)
                         _remoteChanged(next.Machine);
                     return;
                 case MouseDecision.Here here:
+                    _mirror.Clear();
+                    PublishPointer();
                     Settle(_parkedX, _parkedY);
                     InputInjector.SetCursor(here.X, here.Y);
                     Pointer(hide: false);
@@ -275,7 +331,11 @@ public sealed class KeyboardMouseShare : IDisposable
         if (reason is not null)
             _log(reason);
         lock (_gate)
+        {
             _logic.ForceLocal();
+            _mirror.Clear();
+            PublishPointer();
+        }
         Pointer(hide: false);
         _remoteChanged(null);
     }
@@ -368,6 +428,8 @@ public sealed class KeyboardMouseShare : IDisposable
         if (remote is not null && _sessionOf(remote) is { } session)
             _ = session.NotifyAsync(new InputReleaseMessage());
         _hook.Dispose();
+        VideoWindow.PointerCorrected -= OnPointerCorrected;
+        VideoWindow.ClearLocalPointer();
         Pointer(hide: false);
         _stop.Cancel();
         try

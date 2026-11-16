@@ -50,6 +50,10 @@ public sealed class VideoDevice : IDisposable
         using (var multithread = device!.QueryInterface<ID3D11Multithread>())
             multithread.SetMultithreadProtected(true);
 
+        // Ahead of other programs' work on the GPU (an emulator, a game): ignored where Windows does not allow it.
+        using (var dxgiDevice = device.QueryInterfaceOrNull<IDXGIDevice>())
+            dxgiDevice?.SetGPUThreadPriority(7);
+
         var manager = MediaFactory.MFCreateDXGIDeviceManager();
         manager.ResetDevice(device).CheckError();
         return new VideoDevice(adapter!, device, context!, manager);

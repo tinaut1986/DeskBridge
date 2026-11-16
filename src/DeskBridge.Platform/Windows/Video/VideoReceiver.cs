@@ -71,6 +71,7 @@ public sealed class VideoReceiver : IAsyncDisposable
 
     private void Run()
     {
+        Priority.MultimediaThread();
         VideoDevice? video = null;
         VideoWindow? window = null;
         H264Decoder? decoder = null;
