@@ -64,6 +64,12 @@ public partial class MainWindow
         UpdateFrames();
     }
 
+    private void VideoAtOnce_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        SaveUserSettings(_settings with { VideoAtOnce = VideoAtOnceBox.IsChecked == true });
+        Platform.Windows.Video.VideoWindow.Immediate = _settings.VideoAtOnce;
+    }
+
     private void CloseFrames()
     {
         _framesTimer?.Stop();
