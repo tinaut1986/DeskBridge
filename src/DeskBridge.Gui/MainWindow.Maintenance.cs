@@ -179,6 +179,8 @@ public partial class MainWindow
     /// </summary>
     private void WatchSession()
     {
+        if (App.TakeLastCrash() is { } crash)
+            AddLog("[error] the previous run " + crash);
         AddLog(Platform.Windows.Input.PointerOverlay.Needed ? "[session] this is a Remote Desktop session" : "[session] console session");
         Microsoft.Win32.SystemEvents.SessionSwitch += (_, e) =>
             AddLog(e.Reason switch
