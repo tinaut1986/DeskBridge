@@ -19,6 +19,12 @@ public enum VideoPacket : byte
     /// <summary>Sender → receiver: a new pointer picture (<see cref="PointerImage"/>), drawn at the Pointer position.</summary>
     PointerShape = 4,
 
+    /// <summary>Sender → receiver, on an audio stream: sample rate (int32) and channels (int16) of the PCM that follows.</summary>
+    AudioFormat = 6,
+
+    /// <summary>Sender → receiver, on an audio stream: 16-bit little-endian PCM, interleaved.</summary>
+    Audio = 7,
+
     /// <summary>Receiver → sender: the next frame must be a key frame (decoder (re)started).</summary>
     KeyFrameRequest = 10,
 

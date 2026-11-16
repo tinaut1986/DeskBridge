@@ -493,6 +493,24 @@
                             </CheckBox>
                         </Border>
 
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'Sound'}" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="PlayAudioBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Coordinator: play here the sound of the other machines'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Only from the machines that send it.'}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="SendAudioBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Send the sound of this PC to the coordinator'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Everything Windows plays here (notifications, music, videos) is heard on the coordinator, and this PC’s speakers are muted meanwhile.'}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+
                         <TextBlock Style="{StaticResource Section}" Text="{l:T 'Clipboard'}" />
                         <Border Style="{StaticResource Row}">
                             <CheckBox x:Name="ClipboardSendBox" Style="{StaticResource Switch}" Click="Sharing_Click">

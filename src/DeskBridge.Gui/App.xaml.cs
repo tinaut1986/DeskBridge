@@ -13,6 +13,7 @@ public partial class App : Application
     {
         Updater.CleanUpAfterUpdate(e.Args);
         DeskBridge.Platform.Windows.Input.CursorHider.Show(); // in case the app ended while the pointer was hidden
+        DeskBridge.Platform.Windows.Audio.MutedDevices.RestoreLeftOver(); // and with this PC's output muted
 
         // A crash leaves its story behind (crash.txt in the log folder), shown in the log at the next start, so it
         // can be read remotely; and the pointer is never left hidden.

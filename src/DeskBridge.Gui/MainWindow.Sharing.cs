@@ -38,6 +38,8 @@ public partial class MainWindow
         ShareInputBox.IsChecked = _settings.ShareInput;
         AcceptInputBox.IsChecked = _settings.AcceptInput;
         AcceptUpdatesBox.IsChecked = _settings.AcceptUpdates;
+        SendAudioBox.IsChecked = _settings.SendAudio;
+        PlayAudioBox.IsChecked = _settings.PlayAudio;
         FilesFolderBox.Text = _settings.EffectiveFilesFolder;
 
         if (_options.SnapshotDir is null)
@@ -127,8 +129,11 @@ public partial class MainWindow
             ShareInput = ShareInputBox.IsChecked == true,
             AcceptInput = AcceptInputBox.IsChecked == true,
             AcceptUpdates = AcceptUpdatesBox.IsChecked == true,
+            SendAudio = SendAudioBox.IsChecked == true,
+            PlayAudio = PlayAudioBox.IsChecked == true,
         });
         UpdateInputSharing();
+        UpdateAudio();
         if (_clipboard is not null)
             _clipboard.SendEnabled = _settings.ClipboardSend;
     }

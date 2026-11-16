@@ -122,6 +122,11 @@ public partial class MainWindow
     /// <summary>On a thread-pool thread: a machine opened a video connection to this one.</summary>
     private void OnVideoOpened(VideoChannel channel)
     {
+        if (channel.StreamKey == AudioKey)
+        {
+            OnAudioOpened(channel);
+            return;
+        }
         if (!_videoPending.TryRemove(channel.StreamKey, out var target) || target.Machine != channel.RemoteMachine)
         {
             AddLog($"[video] unexpected video connection from {channel.RemoteMachine} ({channel.StreamKey}), closed");
@@ -339,6 +344,7 @@ public partial class MainWindow
 
     private async Task StopAllVideoAsync()
     {
+        await StopAllAudioAsync();
         foreach (var (key, sender) in _videoSenders.ToArray())
         {
             _videoSenders.TryRemove(key, out _);
