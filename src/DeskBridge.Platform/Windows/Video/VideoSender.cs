@@ -17,6 +17,9 @@ public sealed class VideoSender : IAsyncDisposable
 {
     private const int MaxQueued = 3;
 
+    /// <summary>How many times per frame the screen is checked for a new picture.</summary>
+    private const int LooksPerFrame = 4;
+
     /// <summary>
     /// Frames still encoded after the screen stops changing: the encoder gives back each frame one later, and a
     /// few more sharpen the picture. Short, or a blinking text cursor (every half second) would keep it busy.
@@ -145,7 +148,12 @@ public sealed class VideoSender : IAsyncDisposable
             var format = new VideoFormat(w, h, _fps, _bitrateMbps, video.GpuName, encoder.Name);
             _channel.SendAsync(VideoPacket.Format, JsonSerializer.SerializeToUtf8Bytes(format), default, _stop.Token).GetAwaiter().GetResult();
 
-            using var pacer = new FramePacer(_fps);
+            // The screen is looked at several times per frame, and a new picture is encoded as soon as it is there
+            // (looking once per frame, not in step with when Windows draws, added half a frame of delay on average).
+            // Still at most one frame per frame time (a little less, for timing jitter).
+            using var pacer = new FramePacer(Math.Min(_fps * LooksPerFrame, 480));
+            var frameGap = TimeSpan.FromSeconds(0.75 / Math.Max(1, _fps));
+            bool fresh = false;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             _clock = clock;
             (int, int, bool) pointer = default;
@@ -155,21 +163,23 @@ public sealed class VideoSender : IAsyncDisposable
             // The first picture after the capture starts always goes (the duplication delivers the whole screen).
             var lastChange = clock.Elapsed;
             var lastEncoded = TimeSpan.Zero;
-            int encoded = 0, ticks = 0;
+            int encoded = 0;
             while (!_stop.IsCancellationRequested)
             {
                 pacer.Wait();
                 if (clock.Elapsed >= nextReport)
                 {
                     var latency = TakeLatency();
-                    _log($"[video] encoder: {encoder.Stats}; {encoded} of {ticks} frames encoded (the rest unchanged)"
+                    _log($"[video] encoder: {encoder.Stats}; {encoded / 10.0:F1} frames/s encoded (only when the screen changes)"
                          + (latency is { } l ? $"; capture to screen and back {l.Average:F0} ms (worst {l.Max:F0}, {l.Samples} samples)" : ""));
                     nextReport = clock.Elapsed + TimeSpan.FromSeconds(10);
-                    (encoded, ticks) = (0, 0);
+                    encoded = 0;
                 }
-                ticks++;
                 if (capture.TryAcquire(0)) // never wait inside it: it holds the device lock
+                {
                     lastChange = clock.Elapsed;
+                    fresh = true;
+                }
                 if (capture.Changed)
                 {
                     _log("[video] the display changed size: starting the stream again");
@@ -193,8 +203,14 @@ public sealed class VideoSender : IAsyncDisposable
                 }
                 var now = clock.Elapsed;
                 bool keyFrame = _keyFrameWanted;
-                if (!keyFrame && now - lastChange > SettleTime && now - lastEncoded < IdleFrameEvery)
-                    continue; // nothing new on the screen
+                bool due = now - lastEncoded >= frameGap;
+                bool wanted = keyFrame
+                              || (fresh && due) // a new picture
+                              || (due && now - lastChange <= SettleTime) // sharpening the last one
+                              || now - lastEncoded >= IdleFrameEvery; // keeping the stream alive
+                if (!wanted)
+                    continue;
+                fresh = false;
                 if (keyFrame)
                 {
                     _keyFrameWanted = false;
