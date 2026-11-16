@@ -31,12 +31,33 @@ public sealed class InputReceiver(
 
     private void ShowPointer()
     {
+        if (CursorHider.Hidden)
+            CursorHider.Show();
         if (_overlay is null && PointerOverlay.Needed)
             _overlay = new PointerOverlay();
         _overlay?.MoveTo(_x, _y);
     }
 
-    private void HidePointer() => _overlay?.Hide();
+    /// <summary>
+    /// The cursor went back to the coordinator: this PC's pointer is hidden too (it would stay frozen where it
+    /// was, in sight on the coordinator's video of this display), until it is used again here or there.
+    /// </summary>
+    private void HidePointer()
+    {
+        _overlay?.Hide();
+        if (PointerOverlay.Needed)
+            return; // a Remote Desktop session draws no pointer of ours anyway
+        CursorHider.Hide();
+        // Someone using this PC's own mouse or touchpad gets the pointer back at once.
+        _localWatch ??= new GlobalInputHook(m =>
+        {
+            if (!m.Injected && CursorHider.Hidden)
+                CursorHider.Show();
+            return false;
+        }, _ => false);
+    }
+
+    private GlobalInputHook? _localWatch;
 
     public async Task HandleAsync(string from, ControlMessage message)
     {

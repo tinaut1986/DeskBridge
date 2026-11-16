@@ -12,6 +12,7 @@ public partial class App : Application
     private void OnStartup(object sender, StartupEventArgs e)
     {
         Updater.CleanUpAfterUpdate(e.Args);
+        DeskBridge.Platform.Windows.Input.CursorHider.Show(); // in case the app ended while the pointer was hidden
         var options = StartupOptions.Parse(e.Args);
 
         // Snapshots (development) may run next to a real instance; everything else is one per session.

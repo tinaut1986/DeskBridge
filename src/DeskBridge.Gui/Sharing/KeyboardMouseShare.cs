@@ -94,6 +94,7 @@ public sealed class KeyboardMouseShare : IDisposable
                         Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY, enter.Holes)));
                         var how = enter.Area is null ? "past the edge" : "onto its display (on the desk, or shown here)";
                         Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
+                        CursorHider.Hide(); // not left in sight here while the other machine has the cursor
                         _remoteChanged(enter.Machine);
                         return true;
                     case MouseDecision.Forward forward:
@@ -166,6 +167,7 @@ public sealed class KeyboardMouseShare : IDisposable
             {
                 cameBack = _logic.Remote;
                 var (x, y) = _logic.ReturnHere();
+                CursorHider.Show();
                 InputInjector.SetCursor(x, y);
                 Enqueue(new ReleaseItem());
             }
@@ -202,6 +204,7 @@ public sealed class KeyboardMouseShare : IDisposable
                         _remoteChanged(next.Machine);
                     return;
                 case MouseDecision.Here here:
+                    CursorHider.Show();
                     InputInjector.SetCursor(here.X, here.Y);
                     Task.Run(() => _log($"[input] keyboard and mouse back from {from}, at ({here.X}, {here.Y})"));
                     break;
@@ -216,6 +219,7 @@ public sealed class KeyboardMouseShare : IDisposable
             _log(reason);
         lock (_gate)
             _logic.ForceLocal();
+        CursorHider.Show();
         _remoteChanged(null);
     }
 
@@ -307,6 +311,7 @@ public sealed class KeyboardMouseShare : IDisposable
         if (remote is not null && _sessionOf(remote) is { } session)
             _ = session.NotifyAsync(new InputReleaseMessage());
         _hook.Dispose();
+        CursorHider.Show();
         _stop.Cancel();
         try
         {

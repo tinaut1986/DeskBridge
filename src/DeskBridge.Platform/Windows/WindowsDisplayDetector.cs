@@ -12,9 +12,16 @@ public sealed record DetectedDisplay(DisplayConfig Config, string DeviceName, st
 [SupportedOSPlatform("windows")]
 public sealed class WindowsDisplayDetector : IDisplayDetector
 {
+    /// <summary>
+    /// This PC's displays, without the Virtual Display Driver's monitors: those exist only while a profile shows
+    /// them on another machine, which manages them (they are not displays of this PC to lend or place).
+    /// </summary>
     public IReadOnlyList<DisplayConfig> DetectDisplays() => DetectDetailed().Select(d => d.Config).ToList();
 
-    public static IReadOnlyList<DetectedDisplay> DetectDetailed()
+    /// <summary>Every display on the desktop, virtual monitors included.</summary>
+    public static IReadOnlyList<DisplayConfig> DetectAll() => DetectDetailed(includeVirtual: true).Select(d => d.Config).ToList();
+
+    public static IReadOnlyList<DetectedDisplay> DetectDetailed(bool includeVirtual = false)
     {
         var result = new List<DetectedDisplay>();
         for (uint i = 0; ; i++)
@@ -23,6 +30,10 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
             if (!NativeMethods.EnumDisplayDevices(null, i, ref device, 0))
                 break;
             if ((device.StateFlags & NativeMethods.DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0)
+                continue;
+            bool virtualMonitor = device.DeviceID.Contains("MttVDD", StringComparison.OrdinalIgnoreCase)
+                                  || device.DeviceString.Contains("Virtual Display Driver", StringComparison.OrdinalIgnoreCase);
+            if (virtualMonitor && !includeVirtual)
                 continue;
 
             var mode = new DevMode { dmSize = (ushort)Marshal.SizeOf<DevMode>() };

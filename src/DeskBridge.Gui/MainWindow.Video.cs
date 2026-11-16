@@ -51,7 +51,7 @@ public partial class MainWindow
                     return new ErrorMessage(L.T("This machine does not know how to reach {machine}.", ("machine", from)));
 
                 // A planned virtual display (where it ended up), a physical display by id, or the main display.
-                var displays = PlatformServices.DisplayDetector().DetectDisplays();
+                var displays = Platform.Windows.WindowsDisplayDetector.DetectAll();
                 // (A virtual display that has gone away, e.g. the driver stopped: the main display instead.)
                 var found = start.Display.Contains('/') ? Platform.Windows.VirtualDisplays.MttVirtualDisplays.Find(start.Display) : null;
                 var placed = found ?? default;
@@ -80,7 +80,7 @@ public partial class MainWindow
                 if (_videoSenders.TryRemove(start.Key, out var previous))
                     await previous.DisposeAsync(); // asked again (the coordinator reconnected): one sender per stream
                 var sender = new VideoSender(channel, display.X, display.Y, start.Fps, start.BitrateMbps, AddLog);
-                var sent = PlatformServices.DisplayDetector().DetectDisplays().FirstOrDefault(d => d.X == display.X && d.Y == display.Y);
+                var sent = Platform.Windows.WindowsDisplayDetector.DetectAll().FirstOrDefault(d => d.X == display.X && d.Y == display.Y);
                 _videoSenders[start.Key] = sender;
                 _ = sender.Completion.ContinueWith(_ =>
                 {
