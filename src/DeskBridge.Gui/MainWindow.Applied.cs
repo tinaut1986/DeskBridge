@@ -128,6 +128,14 @@ public partial class MainWindow
     /// <summary>"Applied: work", in a warning colour when the edits would change it but are not applied yet.</summary>
     private void UpdateAppliedIndicator()
     {
+        UpdateAppliedText();
+        // Home shows the same, larger.
+        HomeAppliedText.Text = AppliedText.Text;
+        HomeAppliedText.Foreground = AppliedText.Foreground == MutedBrush ? ThemeManager.Resource("NormalText") : AppliedText.Foreground;
+    }
+
+    private void UpdateAppliedText()
+    {
         if (IsClientHere())
         {
             AppliedText.Text = _activeProfile is { } active ? L.T("Applied: {profile}", ("profile", active)) : "";

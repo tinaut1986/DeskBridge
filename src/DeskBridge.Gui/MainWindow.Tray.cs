@@ -97,7 +97,7 @@ public partial class MainWindow
                     await SendFilesAsync(m, dialog.FileNames);
             });
             item.Enabled = ready;
-            item.ToolTipText = ready ? null : L.T("Set up This PC first.");
+            item.ToolTipText = ready ? null : L.T("Set up Connection and security first.");
         }
         send.Enabled = send.DropDownItems.Count > 0;
         menu.Items.Add(send);
@@ -170,14 +170,14 @@ public partial class MainWindow
     // ------------------------------------------------------------------ settings
 
     private void CloseToTray_Click(object sender, RoutedEventArgs e) =>
-        SaveUserSettings(_settings with { CloseToTray = CloseToTrayMenu.IsChecked });
+        SaveUserSettings(_settings with { CloseToTray = CloseToTrayMenu.IsChecked == true });
 
     private void StartWithWindows_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (StartWithWindowsMenu.IsChecked && Environment.ProcessPath is { } exe)
+            if (StartWithWindowsMenu.IsChecked == true && Environment.ProcessPath is { } exe)
                 key.SetValue(RunValue, $"\"{exe}\" --minimized");
             else
                 key.DeleteValue(RunValue, throwOnMissingValue: false);

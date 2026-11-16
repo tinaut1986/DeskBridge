@@ -106,7 +106,7 @@ public sealed class ControlServer : IAsyncDisposable
             if (auth.Machine == _machine && !fromThisPc)
             {
                 // Two machines with the same id would be mistaken for one another (it happens if both keep a default name).
-                var sameName = L.T("The other machine uses the same name '{machine}' as this one. Change This PC is on one of them.", ("machine", _machine));
+                var sameName = L.T("The other machine uses the same name '{machine}' as this one. Rename one of the two computers in Windows.", ("machine", _machine));
                 _log(sameName);
                 await channel.SendAsync(new ErrorMessage(sameName), ct);
                 client.Dispose();

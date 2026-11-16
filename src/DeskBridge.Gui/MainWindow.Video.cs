@@ -181,6 +181,14 @@ public partial class MainWindow
         }, TaskScheduler.Default);
     }
 
+    private void VideoTest_Click(object sender, RoutedEventArgs e)
+    {
+        VideoTestMenu_SubmenuOpened(sender, e);
+        VideoTestMenu.PlacementTarget = VideoTestButton;
+        VideoTestMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        VideoTestMenu.IsOpen = true;
+    }
+
     private void VideoTestMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
         VideoTestMenu.Items.Clear();
