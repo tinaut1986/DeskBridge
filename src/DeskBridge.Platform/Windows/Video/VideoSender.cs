@@ -17,8 +17,12 @@ public sealed class VideoSender : IAsyncDisposable
 {
     private const int MaxQueued = 3;
 
-    /// <summary>How many times per frame the screen is checked for a new picture.</summary>
-    private const int LooksPerFrame = 4;
+    /// <summary>
+    /// How many times per frame the screen is checked for a new picture. Once: checking four times and encoding
+    /// each new picture at once (to save half a frame of delay) fed the encoder at an uneven pace, and it held
+    /// pictures back: a dragged window went in jerks, with most frames arriving too late to be shown.
+    /// </summary>
+    private const int LooksPerFrame = 1;
 
     /// <summary>
     /// Frames still encoded after the screen stops changing: the encoder gives back each frame one later, and a
@@ -148,9 +152,7 @@ public sealed class VideoSender : IAsyncDisposable
             var format = new VideoFormat(w, h, _fps, _bitrateMbps, video.GpuName, encoder.Name);
             _channel.SendAsync(VideoPacket.Format, JsonSerializer.SerializeToUtf8Bytes(format), default, _stop.Token).GetAwaiter().GetResult();
 
-            // The screen is looked at several times per frame, and a new picture is encoded as soon as it is there
-            // (looking once per frame, not in step with when Windows draws, added half a frame of delay on average).
-            // Still at most one frame per frame time (a little less, for timing jitter).
+            // At most one frame per frame time (a little less, for timing jitter); see LooksPerFrame.
             using var pacer = new FramePacer(Math.Min(_fps * LooksPerFrame, 480));
             var frameGap = TimeSpan.FromSeconds(0.75 / Math.Max(1, _fps));
             bool fresh = false;
