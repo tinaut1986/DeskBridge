@@ -7,13 +7,21 @@ namespace DeskBridge.Platform.Windows.Video;
 
 /// <summary>
 /// Sends one monitor over a video connection: captures it at a steady frame rate, encodes it on the GPU and
-/// sends every frame (the last picture again when nothing changed, so the stream never stalls; such frames
-/// cost almost nothing). If the network falls behind, queued frames are dropped and a key frame follows.
+/// sends the frames in which the screen changed. A still screen sends nothing (the pointer goes on its own),
+/// apart from a few frames after the last change, which let the encoder sharpen the picture it left (and push
+/// out any frame it still holds), and one per second to keep the stream alive. If the network falls behind,
+/// queued frames are dropped and a key frame follows.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class VideoSender : IAsyncDisposable
 {
     private const int MaxQueued = 3;
+
+    /// <summary>Frames still encoded after the screen stops changing.</summary>
+    private static readonly TimeSpan SettleTime = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>A still screen still sends one frame this often.</summary>
+    private static readonly TimeSpan IdleFrameEvery = TimeSpan.FromSeconds(1);
 
     private readonly VideoChannel _channel;
     private readonly Action<string> _log;
@@ -140,17 +148,24 @@ public sealed class VideoSender : IAsyncDisposable
             int pointerVersion = 0;
             string? paused = null;
             var nextReport = TimeSpan.FromSeconds(3);
+            // The first picture after the capture starts always goes (the duplication delivers the whole screen).
+            var lastChange = clock.Elapsed;
+            var lastEncoded = TimeSpan.Zero;
+            int encoded = 0, ticks = 0;
             while (!_stop.IsCancellationRequested)
             {
                 pacer.Wait();
                 if (clock.Elapsed >= nextReport)
                 {
                     var latency = TakeLatency();
-                    _log($"[video] encoder: {encoder.Stats}"
+                    _log($"[video] encoder: {encoder.Stats}; {encoded} of {ticks} frames encoded (the rest unchanged)"
                          + (latency is { } l ? $"; capture to screen and back {l.Average:F0} ms (worst {l.Max:F0}, {l.Samples} samples)" : ""));
                     nextReport = clock.Elapsed + TimeSpan.FromSeconds(10);
+                    (encoded, ticks) = (0, 0);
                 }
-                capture.TryAcquire(0); // never wait inside it: it holds the device lock
+                ticks++;
+                if (capture.TryAcquire(0)) // never wait inside it: it holds the device lock
+                    lastChange = clock.Elapsed;
                 if (capture.Changed)
                 {
                     _log("[video] the display changed size: starting the stream again");
@@ -172,13 +187,21 @@ public sealed class VideoSender : IAsyncDisposable
                     var (px, py, visible) = capture.Pointer;
                     _ = _channel.SendAsync(VideoPacket.Pointer, VideoChannel.PointerBody(px, py, visible), default, _stop.Token);
                 }
-                if (_keyFrameWanted)
+                var now = clock.Elapsed;
+                bool keyFrame = _keyFrameWanted;
+                if (!keyFrame && now - lastChange > SettleTime && now - lastEncoded < IdleFrameEvery)
+                    continue; // nothing new on the screen
+                if (keyFrame)
                 {
                     _keyFrameWanted = false;
                     encoder.RequestKeyFrame();
                 }
                 toNv12.Convert(capture.Frame, 0, encoder.NextInput());
-                encoder.Encode(clock.Elapsed.Ticks, TimeSpan.FromMilliseconds(200));
+                if (encoder.Encode(now.Ticks, TimeSpan.FromMilliseconds(200)))
+                {
+                    lastEncoded = now;
+                    encoded++;
+                }
             }
         }
         finally

@@ -110,11 +110,19 @@ public sealed class VideoReceiver : IAsyncDisposable
 
                     case VideoPacket.Pointer:
                         pointer = VideoChannel.ParsePointer(p.Body);
+                        // A still screen sends no frames: the pointer is drawn again over the last picture, unless a
+                        // frame is already on its way (it draws it anyway).
+                        if (_channel.Pending <= PointerPacketBytes)
+                            window?.Repaint(pointer);
                         break;
 
                     case VideoPacket.PointerShape:
                         if (PointerImage.FromBody(p.Body) is { } image)
+                        {
                             window?.SetPointerImage(image);
+                            if (_channel.Pending <= PointerPacketBytes)
+                                window?.Repaint(pointer);
+                        }
                         break;
 
                     case VideoPacket.Frame when decoder is not null:
