@@ -63,6 +63,9 @@ public sealed class VideoSender : IAsyncDisposable
     /// <summary>The desktop position of the monitor sent (its top-left corner).</summary>
     public (int X, int Y) Monitor => (_monitorX, _monitorY);
 
+    /// <summary>The size of the picture sent (0 until the capture starts).</summary>
+    public (int Width, int Height) Size { get; private set; }
+
     /// <summary>Why the stream ended (null while it runs or after a normal stop).</summary>
     public string? Failure { get; private set; }
 
@@ -147,6 +150,7 @@ public sealed class VideoSender : IAsyncDisposable
             using var video = VideoDevice.Create(found.Adapter);
             using var capture = DesktopCapture.Open(video, found.Output);
             int w = capture.Width & ~1, h = capture.Height & ~1;
+            Size = (capture.Width, capture.Height);
             using var toNv12 = new VideoConverter(video, capture.Width, capture.Height, w, h, _fps);
             using var encoder = new H264Encoder(video, w, h, _fps, _bitrateMbps, Enqueue);
             _encoder = encoder;

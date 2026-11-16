@@ -73,9 +73,9 @@ public partial class MainWindow
     {
         if (_videoSenders.Values.FirstOrDefault() is not { } sender)
             return new ErrorMessage("This PC is not sending any display.");
-        var display = DeskBridge.Platform.PlatformServices.DisplayDetector().DetectDisplays().FirstOrDefault(d => d.X == sender.Monitor.X && d.Y == sender.Monitor.Y);
-        if (display is null)
-            return new ErrorMessage("The display being sent is not there.");
+        if (sender.Size is not { Width: > 0 } size)
+            return new ErrorMessage("The display being sent is not captured yet.");
+        var display = (sender.Monitor.X, sender.Monitor.Y, size.Width, size.Height);
 
         var window = new Window
         {
