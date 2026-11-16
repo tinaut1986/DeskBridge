@@ -247,7 +247,7 @@ public sealed class AgentHost : IAsyncDisposable
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
 
-            case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage:
+            case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage or InputCursorMessage:
                 if (InputHandler is { } input)
                     await input(from, request);
                 return new OkMessage();

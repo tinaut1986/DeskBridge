@@ -23,6 +23,7 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(InputEventsMessage), "inputEvents")]
 [JsonDerivedType(typeof(InputLeaveMessage), "inputLeave")]
 [JsonDerivedType(typeof(InputReleaseMessage), "inputRelease")]
+[JsonDerivedType(typeof(InputCursorMessage), "inputCursor")]
 [JsonDerivedType(typeof(RelayMessage), "relay")]
 [JsonDerivedType(typeof(UpdateStartMessage), "updateStart")]
 [JsonDerivedType(typeof(UpdateChunkMessage), "updateChunk")]
@@ -93,7 +94,15 @@ public sealed record InputEnterMessage(PlacementSide Side, double Fraction, int?
     IReadOnlyList<DisplayRect>? AreaDesk = null) : ControlMessage;
 
 /// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
-public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events) : ControlMessage;
+/// <param name="Seq">Numbers the batches (when the coordinator draws the pointer itself), for <see cref="InputCursorMessage"/>.</param>
+public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events, long? Seq = null) : ControlMessage;
+
+/// <summary>
+/// Where the cursor really is after the batch <paramref name="Seq"/> (this machine's coordinates, as the
+/// coordinator's layout has them): the coordinator, which draws the pointer itself, corrects its copy by the
+/// difference (Windows rounds absolute moves, the lock screen or a touchpad moves the cursor...).
+/// </summary>
+public sealed record InputCursorMessage(long Seq, int X, int Y) : ControlMessage;
 
 /// <summary>The cursor went back to the coordinator, at this position along the edge facing it.</summary>
 /// <param name="X">Where it crossed, in this machine's coordinates (when the coordinator sent its displays).</param>

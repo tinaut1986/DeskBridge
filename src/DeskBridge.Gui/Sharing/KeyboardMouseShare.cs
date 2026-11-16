@@ -43,6 +43,44 @@ public sealed class KeyboardMouseShare : IDisposable
     private int _settleFromX, _settleFromY;
     private Task _pointerChain = Task.CompletedTask;
     private readonly PointerMirror _mirror = new();
+    private long _seq;
+    private readonly Queue<(long Seq, int X, int Y)> _sentPositions = new(); // where the copy was after each batch sent
+    private long _lastCorrectionLog;
+
+    /// <summary>
+    /// The other machine says where the cursor really ended after batch <paramref name="cursor"/>.Seq: the copy moves
+    /// by the difference from where it was then (it keeps the moves sent since, so no jump back by the network delay).
+    /// </summary>
+    public void OnCursor(string from, InputCursorMessage cursor)
+    {
+        lock (_gate)
+        {
+            if (_logic.Remote != from)
+                return;
+            (long Seq, int X, int Y)? then = null;
+            while (_sentPositions.Count > 0 && _sentPositions.Peek().Seq <= cursor.Seq)
+                then = _sentPositions.Dequeue();
+            if (then is not { } t || t.Seq != cursor.Seq || _mirror.Position is not { } now)
+                return;
+            int dx = cursor.X - t.X, dy = cursor.Y - t.Y;
+            if (dx == 0 && dy == 0)
+                return;
+            _mirror.Correct(now.X + dx, now.Y + dy);
+            // The positions recorded since were off by the same amount.
+            int n = _sentPositions.Count;
+            for (int i = 0; i < n; i++)
+            {
+                var p = _sentPositions.Dequeue();
+                _sentPositions.Enqueue((p.Seq, p.X + dx, p.Y + dy));
+            }
+            PublishPointer();
+            if ((Math.Abs(dx) > 16 || Math.Abs(dy) > 16) && Environment.TickCount64 - _lastCorrectionLog > 5000)
+            {
+                _lastCorrectionLog = Environment.TickCount64;
+                Task.Run(() => _log($"[input] {from} has the cursor {dx}, {dy} px from where it was drawn: corrected"));
+            }
+        }
+    }
     private IReadOnlyList<InputTarget> _targets;
 
     /// <summary>
@@ -51,6 +89,7 @@ public sealed class KeyboardMouseShare : IDisposable
     /// </summary>
     private void Mirror(MouseDecision.Enter enter)
     {
+        _sentPositions.Clear();
         if (enter.Area is { } area)
             _mirror.Enter(enter.X, enter.Y, area, enter.Peers, enter.SpeedX, enter.SpeedY, enter.Holes, enter.AreaDesk);
         else
@@ -371,11 +410,20 @@ public sealed class KeyboardMouseShare : IDisposable
 
             List<Item> items;
             string? target;
+            long? seq = null;
             lock (_gate)
             {
                 items = [.. _queue];
                 _queue.Clear();
                 target = _target;
+                // Where the pointer copy is once this batch is played over there (see OnCursor).
+                if (_mirror.Position is { } p && items.Any(i => i is EventItem { Event.Kind: InputKind.MouseMove }))
+                {
+                    seq = ++_seq;
+                    _sentPositions.Enqueue((seq.Value, p.X, p.Y));
+                    while (_sentPositions.Count > 256)
+                        _sentPositions.Dequeue();
+                }
             }
             if (target is null)
                 continue;
@@ -406,7 +454,7 @@ public sealed class KeyboardMouseShare : IDisposable
                     await session.NotifyAsync(item is EnterItem enter ? enter.Message : new InputReleaseMessage(), ct);
                 }
                 if (events.Count > 0)
-                    await session.NotifyAsync(new InputEventsMessage(events), ct);
+                    await session.NotifyAsync(new InputEventsMessage(events, seq), ct);
                 await Task.Delay(3, ct); // at most a few hundred messages a second; moves merge meanwhile
             }
             catch (ControlException)

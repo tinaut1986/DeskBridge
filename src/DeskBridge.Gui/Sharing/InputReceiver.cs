@@ -94,11 +94,17 @@ public sealed class InputReceiver(
     }
 
     private GlobalInputHook? _localWatch;
+    private long? _lastSeq;
+    private long _lastReport;
+
+    /// <summary>At most this often the coordinator hears where the cursor really is (see InputCursorMessage).</summary>
+    private const int ReportMs = 100;
     private IReadOnlyList<DisplayRect>? _areaDesk;
 
     public async Task HandleAsync(string from, ControlMessage message)
     {
         InputLeaveMessage? leave = null;
+        InputCursorMessage? report = null;
         lock (_gate)
         {
             switch (message)
@@ -129,6 +135,14 @@ public sealed class InputReceiver(
                     // desktop this process cannot read it: from where it was put.
                     if (SecureDesktop() is null)
                         (_x, _y) = InputInjector.CursorPosition();
+                    // Where the previous batch really left it (its moves are played by now), for the coordinator's pointer.
+                    if (_lastSeq is long done && Environment.TickCount64 - _lastReport >= ReportMs)
+                    {
+                        _lastReport = Environment.TickCount64;
+                        report = new InputCursorMessage(done, _x - _offset.X, _y - _offset.Y);
+                    }
+                    if (events.Seq is not null)
+                        _lastSeq = events.Seq;
                     foreach (var e in events.Events)
                     {
                         if (e.Kind != InputKind.MouseMove)
@@ -172,6 +186,16 @@ public sealed class InputReceiver(
         }
 
         activeChanged(_from);
+        if (report is not null && leave is null && sessionOf(from) is { } reportTo)
+        {
+            try
+            {
+                await reportTo.NotifyAsync(report);
+            }
+            catch (ControlException)
+            {
+            }
+        }
         if (leave is not null && sessionOf(from) is { } session)
         {
             try

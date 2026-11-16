@@ -77,6 +77,11 @@ public partial class MainWindow
             _share?.OnLeave(from, leave);
             return Task.CompletedTask;
         }
+        if (message is InputCursorMessage cursor)
+        {
+            _share?.OnCursor(from, cursor);
+            return Task.CompletedTask;
+        }
         return Receiver().HandleAsync(from, message);
     }
 
