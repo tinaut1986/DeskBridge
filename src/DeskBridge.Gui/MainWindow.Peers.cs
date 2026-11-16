@@ -39,7 +39,7 @@ public partial class MainWindow
         {
             if (id == _vm.LocalMachine.Trim() || _agent.Directory.Find(id) is not { } session || !_welcomed.Add(session))
                 continue;
-            ResumeProfileStreams(id);
+            _ = ReapplyToAsync(id);
             _ = WelcomeAsync(id, session);
         }
     }

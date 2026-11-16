@@ -103,7 +103,11 @@ public partial class MainWindow
         menu.Items.Add(send);
 
         // Always reachable, even when a full-screen stream covers the display with DeskBridge's window.
-        var stopVideo = new Forms.ToolStripMenuItem(L.T("Stop showing other machines' screens"), null, (_, _) => _ = StopProfileStreamsAsync())
+        var stopVideo = new Forms.ToolStripMenuItem(L.T("Stop showing other machines' screens"), null, (_, _) =>
+        {
+            ForgetApplied();
+            _ = StopProfileStreamsAsync();
+        })
         {
             Enabled = !_videoReceivers.IsEmpty,
         };

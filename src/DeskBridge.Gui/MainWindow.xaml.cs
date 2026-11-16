@@ -71,7 +71,10 @@ public partial class MainWindow : Window
 
         UpdateAgentStatus();
         if (options.StartAgent)
+        {
             RestartAgent();
+            _ = Task.Delay(1500).ContinueWith(_ => Dispatcher.InvokeAsync(RestoreAppliedAsync), TaskScheduler.Default);
+        }
         if (options.SnapshotDir is { } dir)
         {
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -407,6 +410,7 @@ public partial class MainWindow : Window
         {
             _activeProfile = profile;
             UpdateAgentStatus();
+            UpdateAppliedIndicator();
         });
         try
         {
@@ -522,6 +526,7 @@ public partial class MainWindow : Window
             _redrawPending = false;
             DrawLayout();
             DrawMouseMap();
+            UpdateAppliedIndicator();
             UpdateSummary();
             _vm.RaiseDisplaysTitle(); // the selected machine may have been renamed
         });
@@ -868,7 +873,10 @@ public partial class MainWindow : Window
         {
             var results = await Coordinator.SwitchProfileAsync(config, local, profile.Name.Trim(), _agent?.Directory);
             if (results.Any(r => r.Ok))
+            {
+                RememberApplied(profile.Name.Trim(), config);
                 await StartProfileStreamsAsync(LayoutPlanner.Plan(config, profile.Name.Trim()));
+            }
             foreach (var r in results)
             {
                 AddLog($"{r.Machine}: {(r.Ok ? "" : L.T("ERROR") + " ")}{r.Message}");
