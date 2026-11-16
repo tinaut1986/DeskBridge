@@ -197,22 +197,10 @@ public partial class MainWindow
                && command.Contains(exe, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Two overlapping screens, drawn instead of shipping an .ico for now.</summary>
+    /// <summary>The app's icon at the size the notification area uses (the .ico has one drawn for each size).</summary>
     private static Drawing.Icon CreateIcon()
     {
-        using var bitmap = new Drawing.Bitmap(32, 32);
-        using (var g = Drawing.Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Drawing.Color.Transparent);
-            using var back = new Drawing.SolidBrush(Drawing.Color.FromArgb(0xEA, 0x58, 0x0C));
-            using var front = new Drawing.SolidBrush(Drawing.Color.FromArgb(0x25, 0x63, 0xEB));
-            using var edge = new Drawing.Pen(Drawing.Color.White, 2);
-            g.FillRectangle(back, 12, 3, 18, 13);
-            g.FillRectangle(front, 2, 12, 20, 14);
-            g.DrawRectangle(edge, 2, 12, 20, 14);
-            g.FillRectangle(front, 9, 27, 6, 3);
-        }
-        return Drawing.Icon.FromHandle(bitmap.GetHicon());
+        using var stream = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/deskbridge.ico")).Stream;
+        return new Drawing.Icon(stream, Forms.SystemInformation.SmallIconSize);
     }
 }

@@ -11,12 +11,18 @@
     <!-- WinForms' advice for WinForms apps; this is a WPF app (WinForms only for the tray icon), where the manifest is the place. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <RootNamespace>DeskBridge.Gui</RootNamespace>
+    <!-- The .exe's own icon (Explorer, taskbar pins); the same file is a resource for the windows and the tray. -->
+    <ApplicationIcon>Assets\deskbridge.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Keep WPF's Application, MessageBox, Clipboard... unambiguous. -->
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\deskbridge.ico" />
   </ItemGroup>
 
   <ItemGroup>
