@@ -13,19 +13,40 @@ namespace DeskBridge.Core.Input;
 /// stays within it.
 /// </param>
 /// <param name="Confine">Over there the cursor stays within <paramref name="Displays"/> (one display placed on its own).</param>
+/// <param name="ScaleX">
+/// Desk units (the coordinator's pixels) per pixel of that machine: below 1 for a display scaled up by Windows
+/// (a 2880-pixel panel at 200% takes 1440 on the desk, like its visual size), or for a bigger picture shown on a
+/// smaller display here. Coordinate on the desk = coordinate there × scale + offset.
+/// </param>
 public sealed record InputTarget(string Machine, IReadOnlyList<DisplayRect> Displays, int OffsetX, int OffsetY, DisplayRect? Lent = null,
-    bool Confine = false)
+    bool Confine = false, double ScaleX = 1, double ScaleY = 1)
 {
     /// <summary>The same target after a refresh (lists are rebuilt, so records do not compare equal).</summary>
     public bool SameAs(InputTarget other) =>
         Machine == other.Machine && Lent == other.Lent && Confine == other.Confine && OffsetX == other.OffsetX
-        && OffsetY == other.OffsetY && Displays.SequenceEqual(other.Displays);
+        && OffsetY == other.OffsetY && ScaleX == other.ScaleX && ScaleY == other.ScaleY && Displays.SequenceEqual(other.Displays);
+
+    /// <summary>A point of that machine on the coordinator's desk.</summary>
+    public (int X, int Y) ToDesk(int x, int y) => ((int)Math.Round(x * ScaleX) + OffsetX, (int)Math.Round(y * ScaleY) + OffsetY);
+
+    /// <summary>A point of the coordinator's desk in that machine's coordinates.</summary>
+    public (int X, int Y) ToClient(int x, int y) => ((int)Math.Floor((x - OffsetX) / ScaleX), (int)Math.Floor((y - OffsetY) / ScaleY));
+
+    public DisplayRect ToDesk(DisplayRect r) => new((int)Math.Round(r.X * ScaleX) + OffsetX, (int)Math.Round(r.Y * ScaleY) + OffsetY,
+        (int)Math.Round(r.Width * ScaleX), (int)Math.Round(r.Height * ScaleY));
+
+    public DisplayRect ToClient(DisplayRect r) => new((int)Math.Floor((r.X - OffsetX) / ScaleX), (int)Math.Floor((r.Y - OffsetY) / ScaleY),
+        (int)Math.Round(r.Width / ScaleX), (int)Math.Round(r.Height / ScaleY));
 
     /// <summary>A point of the coordinator's desktop is over one of this machine's displays.</summary>
-    public bool Contains(int x, int y) => InputLayout.Contains(Displays, x - OffsetX, y - OffsetY);
+    public bool Contains(int x, int y)
+    {
+        var (cx, cy) = ToClient(x, y);
+        return InputLayout.Contains(Displays, cx, cy);
+    }
 
     /// <summary>This machine's displays in the coordinator's desktop coordinates.</summary>
-    public IReadOnlyList<DisplayRect> Placed => Displays.Select(d => d with { X = d.X + OffsetX, Y = d.Y + OffsetY }).ToList();
+    public IReadOnlyList<DisplayRect> Placed => Displays.Select(ToDesk).ToList();
 }
 
 /// <summary>
@@ -79,15 +100,26 @@ public static class InputLayout
     /// <paramref name="position"/>: the cursor reaches it past the edge where it touches the coordinator's
     /// displays and stays on it until it is pushed back out.
     /// </summary>
-    public static InputTarget Desk(string machine, DisplayRect display, VirtualPosition position) =>
-        new(machine, [display], position.X - display.X, position.Y - display.Y, Confine: true);
+    /// <param name="scale">Desk units per pixel of that display: 100 / its Windows scale in percent.</param>
+    public static InputTarget Desk(string machine, DisplayRect display, VirtualPosition position, double scale = 1) =>
+        new(machine, [display], position.X - (int)Math.Round(display.X * scale), position.Y - (int)Math.Round(display.Y * scale),
+            Confine: true, ScaleX: scale, ScaleY: scale);
+
+    /// <summary>How big a display of another machine is on the coordinator's desk: its size as Windows scales it.</summary>
+    public static (int Width, int Height) DeskSize(int width, int height, int scalePercent) =>
+        scalePercent is > 0 and not 100 ? ((int)Math.Round(width * 100.0 / scalePercent), (int)Math.Round(height * 100.0 / scalePercent)) : (width, height);
 
     /// <summary>
     /// A display of the coordinator (<paramref name="lent"/>) showing <paramref name="shown"/>, a display of
     /// <paramref name="machine"/>: entering it moves the cursor there.
     /// </summary>
-    public static InputTarget Lent(string machine, DisplayRect lent, DisplayRect shown) =>
-        new(machine, [shown], lent.X - shown.X, lent.Y - shown.Y, lent);
+    public static InputTarget Lent(string machine, DisplayRect lent, DisplayRect shown)
+    {
+        // The picture fills the display here (scaled as needed): the same proportions both ways.
+        double sx = (double)lent.Width / shown.Width, sy = (double)lent.Height / shown.Height;
+        return new(machine, [shown], lent.X - (int)Math.Round(shown.X * sx), lent.Y - (int)Math.Round(shown.Y * sy), lent,
+            ScaleX: sx, ScaleY: sy);
+    }
 
     /// <summary>
     /// The target for a machine: its displays' top-left corner at <paramref name="position"/> in the

@@ -165,6 +165,15 @@ try
                         Console.WriteLine(line);
                     return 0;
                 }
+                case "displays":
+                {
+                    var reply = await session.RequestAsync(Via(new GetDisplaysMessage()));
+                    if (reply is not DisplaysMessage list)
+                        return Fail(reply is ErrorMessage e ? e.Message : reply.GetType().Name);
+                    foreach (var d in list.Displays)
+                        Console.WriteLine($"{d.Id}: {d.Width}x{d.Height}@{d.RefreshHz} at ({d.X},{d.Y}) scale {d.Scale}%");
+                    return 0;
+                }
                 case "probe-vdd":
                 {
                     var reply = await session.RequestAsync(Via(new ProbeMessage("vdd")));

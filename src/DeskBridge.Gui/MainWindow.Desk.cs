@@ -34,6 +34,17 @@ public partial class MainWindow
 
     private static DisplayRect RectOf(DisplayVm d) => new(d.X, d.Y, d.Width, d.Height);
 
+    /// <summary>
+    /// Another machine's display as it sits on the desk: its visual size (a 2880-pixel panel at 200% takes 1440),
+    /// its own arrangement scaled the same way.
+    /// </summary>
+    private static DisplayRect DeskRectOf(DisplayVm d)
+    {
+        var (w, h) = InputLayout.DeskSize(d.Width, d.Height, d.Scale);
+        double s = d.Scale is > 0 ? 100.0 / d.Scale : 1;
+        return new DisplayRect((int)Math.Round(d.X * s), (int)Math.Round(d.Y * s), w, h);
+    }
+
     private void DrawLayout()
     {
         var canvas = LayoutCanvas;
@@ -64,7 +75,7 @@ public partial class MainWindow
         foreach (var m in others)
             foreach (var d in m.Displays)
                 if (m.DeskPositions.TryGetValue(d.Id.Trim(), out var p))
-                    desk.Add((m, d, new DisplayRect(p.X, p.Y, d.Width, d.Height)));
+                    desk.Add((m, d, DeskRectOf(d) with { X = p.X, Y = p.Y }));
         var deskBounds = InputLayout.Bounds(desk.Select(x => x.Rect).ToList());
 
         // Beside it, each machine with the displays left apart (in their own arrangement), one under another.
@@ -77,11 +88,14 @@ public partial class MainWindow
             var left = m.Displays.Where(d => !m.DeskPositions.ContainsKey(d.Id.Trim())).ToList();
             if (left.Count == 0)
                 continue;
-            var own = InputLayout.Bounds(left.Select(RectOf).ToList());
+            var own = InputLayout.Bounds(left.Select(DeskRectOf).ToList());
             int labelSpace = gap;
             apartLabels.Add((m, apartX, apartY));
             foreach (var d in left)
-                apart.Add((m, d, new DisplayRect(apartX + d.X - own.X, apartY + labelSpace + d.Y - own.Y, d.Width, d.Height)));
+            {
+                var r = DeskRectOf(d);
+                apart.Add((m, d, r with { X = apartX + r.X - own.X, Y = apartY + labelSpace + r.Y - own.Y }));
+            }
             apartY += labelSpace + own.Height + gap;
         }
 
@@ -170,7 +184,8 @@ public partial class MainWindow
         });
         text.Children.Add(new TextBlock
         {
-            Text = shows != machine && assignment is not null ? StreamLabel(assignment) : $"{display.Width}x{display.Height}",
+            Text = shows != machine && assignment is not null ? StreamLabel(assignment)
+                : display.Scale is > 0 and not 100 ? $"{display.Width}x{display.Height} · {display.Scale}%" : $"{display.Width}x{display.Height}",
             FontSize = 11,
             Foreground = InfoBrush,
             HorizontalAlignment = HorizontalAlignment.Center,

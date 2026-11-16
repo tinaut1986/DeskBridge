@@ -80,7 +80,7 @@ public sealed class KeyboardMouseShare : IDisposable
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
                         _target = enter.Machine;
-                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area)));
+                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY)));
                         var how = enter.Area is null ? "past the edge" : "through the display showing it";
                         Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
                         _remoteChanged(enter.Machine);
@@ -173,7 +173,7 @@ public sealed class KeyboardMouseShare : IDisposable
                 case MouseDecision.Enter next:
                     // Straight on to another display placed on the desk (maybe of the same machine).
                     _target = next.Machine;
-                    Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area)));
+                    Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area, next.SpeedX, next.SpeedY)));
                     Task.Run(() => _log($"[input] keyboard and mouse from {from} on to {next.Machine} at ({next.X}, {next.Y})"));
                     if (next.Machine != from)
                         _remoteChanged(next.Machine);

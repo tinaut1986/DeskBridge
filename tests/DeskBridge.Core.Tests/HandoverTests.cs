@@ -222,6 +222,47 @@ public class HandoverTests
     }
 
     [Fact]
+    public void A_bigger_picture_on_a_smaller_display_maps_both_ways_with_the_same_proportions()
+    {
+        // The laptop's 2880x1800 display shown on the 1920x1080 middle display.
+        var lent = InputLayout.Lent("laptop-oscar", Desktop[1], new DisplayRect(0, 0, 2880, 1800));
+        var h = new CoordinatorHandover(Desktop, [lent]);
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(960, 540));
+        Assert.Equal((1440, 900), (enter.X, enter.Y));
+        Assert.Equal(1.5, enter.SpeedX, 3);       // one pixel here is 1.5 there
+        Assert.Equal(1.0 / 0.6, enter.SpeedY, 3);
+
+        // Its left edge leads to display 2, at the same height as seen on the desk.
+        var left = ClientHandover.Move(enter.Area!, enter.Peers, 5, 900, -10, 0);
+        Assert.True(left.Left);
+        Assert.Equal(new MouseDecision.Here(-3, 540), h.Back(0.5, left.X, left.Y));
+
+        // Nothing of the laptop spills over display 1 any more: its right edge is the edge of the middle display.
+        h.OnMouseMove(960, 540);
+        var right = ClientHandover.Move(enter.Area!, enter.Peers, 2875, 900, 10, 0);
+        Assert.True(right.Left);
+        Assert.Equal(new MouseDecision.Here(1923, 540), h.Back(0.5, right.X, right.Y));
+    }
+
+    [Fact]
+    public void A_laptop_panel_at_200_percent_takes_its_visual_size_on_the_desk()
+    {
+        var size = InputLayout.DeskSize(2880, 1800, 200);
+        Assert.Equal((1440, 900), size);
+        var panel = InputLayout.Desk("laptop-oscar", Laptop[0], new VirtualPosition(0, 1080), 0.5);
+        var h = new CoordinatorHandover(Desktop, [panel]);
+
+        Assert.IsType<MouseDecision.Pass>(h.OnMouseMove(1500, 1079)); // past its right end on the desk
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(1000, 1079));
+        Assert.Equal((2000, 0), (enter.X, enter.Y));
+        Assert.Equal(2, enter.SpeedX);
+
+        var up = ClientHandover.Move(enter.Area!, enter.Peers, 2000, 1, 0, -4);
+        Assert.Equal(new MouseDecision.Here(1000, 1078), h.Back(0.5, up.X, up.Y));
+    }
+
+    [Fact]
     public void Losing_the_target_brings_the_cursor_back()
     {
         var h = new CoordinatorHandover(Desktop, [LaptopAt(PlacementSide.Right)]);

@@ -16,8 +16,10 @@ public abstract record MouseDecision
     /// </summary>
     /// <param name="Side">The direction it crossed in, and <paramref name="Fraction"/> along that edge (for older versions).</param>
     /// <param name="Area">Where the cursor may go over there; null: all that machine's displays.</param>
+    /// <param name="SpeedX">Pixels there per pixel moved here (a display scaled up by Windows moves faster in pixels).</param>
     public sealed record Enter(string Machine, int X, int Y, IReadOnlyList<DisplayRect> Peers,
-        PlacementSide Side, double Fraction, int ParkX, int ParkY, IReadOnlyList<DisplayRect>? Area = null) : MouseDecision;
+        PlacementSide Side, double Fraction, int ParkX, int ParkY, IReadOnlyList<DisplayRect>? Area = null,
+        double SpeedX = 1, double SpeedY = 1) : MouseDecision;
 
     /// <summary>The cursor is on another machine: swallow and send this relative move.</summary>
     public sealed record Forward(string Machine, int Dx, int Dy) : MouseDecision;
@@ -77,13 +79,13 @@ public sealed class CoordinatorHandover
             if (target.Lent is not { } lent || !(x >= lent.X && x < lent.Right && y >= lent.Y && y < lent.Bottom))
                 continue;
             var shown = target.Displays[0];
-            int ex = shown.X + (int)((long)(x - lent.X) * shown.Width / lent.Width);
-            int ey = shown.Y + (int)((long)(y - lent.Y) * shown.Height / lent.Height);
+            var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, target.ToClient(x, y).X, target.ToClient(x, y).Y);
             // Parked in the middle of that display (hidden behind the video), far from any edge.
             (_parkX, _parkY) = (lent.X + lent.Width / 2, lent.Y + lent.Height / 2);
             _remote = target;
             RemoteSide = PlacementSide.Right;
-            return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY, [shown]);
+            return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY, [shown],
+                1 / target.ScaleX, 1 / target.ScaleY);
         }
 
         foreach (var (cx, cy) in Beyond(x, y))
@@ -100,10 +102,11 @@ public sealed class CoordinatorHandover
             _remote = target;
             RemoteSide = side;
 
-            var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, cx - target.OffsetX, cy - target.OffsetY);
+            var (tx, ty) = target.ToClient(cx, cy);
+            var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, tx, ty);
             double fraction = EdgeGeometry.AtEdge(_displays, side, px, py) ? EdgeGeometry.Fraction(_displays, side, px, py) : 0.5;
             return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), side, fraction, _parkX, _parkY,
-                target.Confine ? target.Displays : null);
+                target.Confine ? target.Displays : null, 1 / target.ScaleX, 1 / target.ScaleY);
         }
         return new MouseDecision.Pass();
     }
@@ -133,7 +136,7 @@ public sealed class CoordinatorHandover
     private List<DisplayRect> PeersOf(InputTarget target) =>
         _displays
             .Concat(_targets.Where(t => t.Lent is null && !t.SameAs(target)).SelectMany(t => t.Placed))
-            .Select(d => d with { X = d.X - target.OffsetX, Y = d.Y - target.OffsetY })
+            .Select(target.ToClient)
             .ToList();
 
     /// <summary>
@@ -152,14 +155,15 @@ public sealed class CoordinatorHandover
             return new MouseDecision.Here(ex, ey);
         }
 
-        int dx = rx + remote.OffsetX, dy = ry + remote.OffsetY;
+        var (dx, dy) = remote.ToDesk(rx, ry);
         if (!InputLayout.Contains(_displays, dx, dy)
             && _targets.FirstOrDefault(t => t.Lent is null && !t.SameAs(remote) && t.Contains(dx, dy)) is { } next)
         {
             _remote = next;
-            var (nx, ny) = EdgeGeometry.ClampToDisplays(next.Displays, dx - next.OffsetX, dy - next.OffsetY);
+            var (cx, cy) = next.ToClient(dx, dy);
+            var (nx, ny) = EdgeGeometry.ClampToDisplays(next.Displays, cx, cy);
             return new MouseDecision.Enter(next.Machine, nx, ny, PeersOf(next), RemoteSide, 0.5, _parkX, _parkY,
-                next.Confine ? next.Displays : null);
+                next.Confine ? next.Displays : null, 1 / next.ScaleX, 1 / next.ScaleY);
         }
         var (hx, hy) = EdgeGeometry.ClampToDisplays(_displays, dx, dy);
         return new MouseDecision.Here(hx, hy);

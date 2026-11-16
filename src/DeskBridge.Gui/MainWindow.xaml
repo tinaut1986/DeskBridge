@@ -266,6 +266,7 @@
                                 <DataGridTextColumn Header="Hz" Binding="{Binding RefreshHz}" Width="50" />
                                 <DataGridTextColumn Header="X" Binding="{Binding X}" Width="60" />
                                 <DataGridTextColumn Header="Y" Binding="{Binding Y}" Width="60" />
+                                <DataGridTextColumn Header="%" Binding="{Binding Scale}" Width="50" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>

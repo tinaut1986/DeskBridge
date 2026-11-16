@@ -23,6 +23,7 @@ public sealed class InputReceiver(
     private IReadOnlyList<DisplayRect> _displays = [];
     private IReadOnlyList<DisplayRect>? _peers; // the coordinator's displays here (null: older coordinator, by side)
     private int _x, _y;
+    private double _speedX = 1, _speedY = 1, _restX, _restY;
 
     // In a Remote Desktop session the pointer DeskBridge moves is not drawn by the client: draw our own.
     private PointerOverlay? _overlay;
@@ -51,6 +52,9 @@ public sealed class InputReceiver(
                     _from = from;
                     _side = enter.Side;
                     _peers = enter.Peers;
+                    // Moves arrive in the coordinator's pixels: scaled to this display (keeping the fractions).
+                    (_speedX, _speedY) = (enter.SpeedX ?? 1, enter.SpeedY ?? 1);
+                    (_restX, _restY) = (0, 0);
                     (_x, _y) = enter is { X: { } ex, Y: { } ey, Peers: not null }
                         ? EdgeGeometry.ClampToDisplays(_displays, ex, ey)
                         : ClientHandover.Enter(_displays, enter.Side, enter.Fraction);
@@ -68,9 +72,14 @@ public sealed class InputReceiver(
                             _injector.Play(e);
                             continue;
                         }
+                        _restX += e.X * _speedX;
+                        _restY += e.Y * _speedY;
+                        int mx = (int)Math.Truncate(_restX), my = (int)Math.Truncate(_restY);
+                        _restX -= mx;
+                        _restY -= my;
                         var move = _peers is { } peers
-                            ? ClientHandover.Move(_displays, peers, _x, _y, e.X, e.Y)
-                            : ClientHandover.Move(_displays, _side, _x, _y, e.X, e.Y);
+                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my)
+                            : ClientHandover.Move(_displays, _side, _x, _y, mx, my);
                         if (move.Left)
                         {
                             leave = _peers is null ? new InputLeaveMessage(move.Fraction) : new InputLeaveMessage(move.Fraction, move.X, move.Y);

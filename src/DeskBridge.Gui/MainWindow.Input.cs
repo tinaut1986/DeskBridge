@@ -37,7 +37,8 @@ public partial class MainWindow
             .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()))
             .SelectMany(m => m.Displays
                 .Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()))
-                .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height), m.DeskPositions[d.Id.Trim()])));
+                .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height), m.DeskPositions[d.Id.Trim()],
+                    d.Scale is > 0 ? 100.0 / d.Scale : 1)));
         // Displays here that show another machine's screen: entering one moves the cursor to that machine.
         var shown = _lentDisplays.Values.Where(l => connected.Contains(l.Machine) && local.Contains(l.Here)).ToList();
         var lent = shown.Select(l => InputLayout.Lent(l.Machine, l.Here, l.There));

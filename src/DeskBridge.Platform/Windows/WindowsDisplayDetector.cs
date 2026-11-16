@@ -35,12 +35,28 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
                 (int)mode.dmPelsHeight,
                 mode.dmDisplayFrequency is 0 or 1 ? 60 : (int)mode.dmDisplayFrequency,
                 mode.dmPositionX,
-                mode.dmPositionY);
+                mode.dmPositionY,
+                ScaleOf(mode.dmPositionX, mode.dmPositionY));
             bool primary = (device.StateFlags & NativeMethods.DISPLAY_DEVICE_PRIMARY_DEVICE) != 0;
             result.Add(new DetectedDisplay(config, device.DeviceName, device.DeviceString, primary));
         }
 
         return result.OrderBy(d => int.TryParse(d.Config.Id, out var n) ? n : int.MaxValue).ToList();
+    }
+
+    /// <summary>Windows' scale of the monitor at that desktop position, in percent (100 when it cannot be read).</summary>
+    private static int ScaleOf(int x, int y)
+    {
+        try
+        {
+            var monitor = NativeMethods.MonitorFromPoint(new NativeMethods.Point { X = x + 1, Y = y + 1 }, 2 /* nearest */);
+            if (monitor != 0 && NativeMethods.GetDpiForMonitor(monitor, 0 /* effective */, out uint dpi, out _) == 0 && dpi > 0)
+                return (int)Math.Round(dpi * 100.0 / 96);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+        return 100;
     }
 
     /// <summary>
@@ -105,6 +121,18 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
         public const uint DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x1;
         public const uint DISPLAY_DEVICE_PRIMARY_DEVICE = 0x4;
         public const int ENUM_CURRENT_SETTINGS = -1;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Point
+        {
+            public int X, Y;
+        }
+
+        [DllImport("user32.dll")]
+        public static extern nint MonitorFromPoint(Point point, uint flags);
+
+        [DllImport("shcore.dll")]
+        public static extern int GetDpiForMonitor(nint monitor, int type, out uint dpiX, out uint dpiY);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "EnumDisplayDevicesW")]
         [return: MarshalAs(UnmanagedType.Bool)]

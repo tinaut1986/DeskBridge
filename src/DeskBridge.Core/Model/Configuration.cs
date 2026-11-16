@@ -4,7 +4,8 @@ namespace DeskBridge.Core.Model;
 /// <param name="Id">Identifier unique within its machine, e.g. "1", "2", "3".</param>
 /// <param name="X">Left edge in the machine's desktop coordinates (as arranged in Windows display settings).</param>
 /// <param name="Y">Top edge in the machine's desktop coordinates.</param>
-public sealed record DisplayConfig(string Id, int Width, int Height, int RefreshHz = 60, int X = 0, int Y = 0);
+/// <param name="Scale">Windows' scale for it, in percent (a small high-resolution panel is often at 150 or 200).</param>
+public sealed record DisplayConfig(string Id, int Width, int Height, int RefreshHz = 60, int X = 0, int Y = 0, int Scale = 100);
 
 /// <summary>A computer taking part in DeskBridge.</summary>
 /// <param name="Id">Stable identifier, e.g. "desktop".</param>

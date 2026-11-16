@@ -81,8 +81,10 @@ public sealed record InputEvent(InputKind Kind, int X = 0, int Y = 0, int Code =
 /// <param name="X">Where the cursor enters, in this machine's desktop coordinates (0.2.1 and later).</param>
 /// <param name="Peers">The coordinator's displays in this machine's coordinates: the cursor goes back when pushed into them.</param>
 /// <param name="Area">Where the cursor may go on this machine (the display shown on the coordinator); null: all its displays.</param>
+/// <param name="SpeedX">Pixels to move here per pixel moved on the coordinator (displays of different scales).</param>
 public sealed record InputEnterMessage(PlacementSide Side, double Fraction, int? X = null, int? Y = null,
-    IReadOnlyList<DisplayRect>? Peers = null, IReadOnlyList<DisplayRect>? Area = null) : ControlMessage;
+    IReadOnlyList<DisplayRect>? Peers = null, IReadOnlyList<DisplayRect>? Area = null,
+    double? SpeedX = null, double? SpeedY = null) : ControlMessage;
 
 /// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
 public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events) : ControlMessage;

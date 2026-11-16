@@ -40,7 +40,7 @@ public abstract class ObservableObject : INotifyPropertyChanged
 public sealed class DisplayVm : ObservableObject
 {
     private string _id = "1";
-    private int _width = 1920, _height = 1080, _refreshHz = 60, _x, _y;
+    private int _width = 1920, _height = 1080, _refreshHz = 60, _x, _y, _scale = 100;
 
     public string Id { get => _id; set => Set(ref _id, value); }
     public int Width { get => _width; set { if (Set(ref _width, value)) Raise(nameof(Summary)); } }
@@ -49,10 +49,13 @@ public sealed class DisplayVm : ObservableObject
     public int X { get => _x; set => Set(ref _x, value); }
     public int Y { get => _y; set => Set(ref _y, value); }
 
+    /// <summary>Windows' scale for it, in percent.</summary>
+    public int Scale { get => _scale; set => Set(ref _scale, value); }
+
     public string Summary => $"{Width}x{Height} @ {RefreshHz} Hz";
 
     public static DisplayVm From(DisplayConfig d) =>
-        new() { Id = d.Id, Width = d.Width, Height = d.Height, RefreshHz = d.RefreshHz, X = d.X, Y = d.Y };
+        new() { Id = d.Id, Width = d.Width, Height = d.Height, RefreshHz = d.RefreshHz, X = d.X, Y = d.Y, Scale = d.Scale };
 
     public void CopyFrom(DisplayConfig d)
     {
@@ -61,9 +64,10 @@ public sealed class DisplayVm : ObservableObject
         RefreshHz = d.RefreshHz;
         X = d.X;
         Y = d.Y;
+        Scale = d.Scale;
     }
 
-    public DisplayConfig ToConfig() => new(Id.Trim(), Width, Height, RefreshHz, X, Y);
+    public DisplayConfig ToConfig() => new(Id.Trim(), Width, Height, RefreshHz, X, Y, Scale is > 0 ? Scale : 100);
 }
 
 public sealed class MachineVm : ObservableObject
