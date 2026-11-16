@@ -3,56 +3,124 @@
 ## Piezas
 
 ```
-             ┌──────────────── Coordinador (sobremesa) ────────────────┐
-             │  Perfil activo → LayoutPlanner → LayoutPlan              │
-             │  InputRouter: cursor en pantalla N → equipo X            │
-             └──────────────┬───────────────────────────────────────────┘
-                            │ canal de control (TCP, JSON)
-        ┌───────────────────┴───────────────────┐
-        ▼                                       ▼
-   Agente sobremesa                        Agente portátil
-   PlanApplier (su parte del plan)         PlanApplier (su parte del plan)
-   ├ IVirtualDisplayDriver                 ├ IVirtualDisplayDriver
-   ├ IStreamSender   ── vídeo ──────────►  ├ IStreamReceiver
-   └ IStreamReceiver ◄────────── vídeo ──  └ IStreamSender
+        ┌──────────── Coordinador (sobremesa: teclado, ratón, 3 monitores) ────────────┐
+        │  Perfil → LayoutPlanner → LayoutPlan (el mismo en todos los equipos)          │
+        │  Ganchos de teclado y ratón → CoordinatorHandover → a quién va la entrada      │
+        │  VideoReceiver (monitor prestado) · AudioPlayer (sonido) · AudioSender (micro) │
+        └───────────▲───────────────────────────────────────────────────────▲──────────┘
+                    │ sesión de control (TCP, JSON cifrado)                  │ conexiones de vídeo/sonido
+                    │ la abre el portátil (su cortafuegos bloquea entradas)  │ (binarias, cifradas)
+        ┌───────────┴────────────────── Portátil ────────────────────────────┴──────────┐
+        │  Pantalla virtual (Virtual Display Driver) → VideoSender (captura + H.264)     │
+        │  InputReceiver → SendInput · AudioSender (lo que suena) · AudioPlayer (VB-CABLE) │
+        └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **`AgentHost`** (Core): el agente. Escucha en el canal de control y ejecuta lo que pide el coordinador: aplicar un perfil o informar de sus monitores. Funciona siempre en segundo plano: lo lleva dentro la interfaz gráfica, o se arranca con `deskbridge agent`.
-- **`Coordinator`** (Core): lo que hace el coordinador. Envía el perfil a todos los agentes, incluido el suyo, y pide los monitores a un equipo remoto.
-- **`LayoutPlanner`** (Core): lógica pura. A partir de la configuración y un perfil calcula las pantallas virtuales que debe crear cada equipo, los streams (origen → monitor de destino) y las rutas de entrada. Todos los agentes calculan el mismo plan a partir de la misma configuración.
-- **`PlanApplier`** (Core): aplica la parte del plan del equipo local. Primero para los streams, luego ajusta las pantallas virtuales, emite y recibe.
-- **`IVirtualDisplayDriver`**: crea y quita monitores virtuales. Implementación prevista: [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), un driver IDD firmado y open source. No vamos a escribir un driver propio: firmarlo es un infierno.
-- **`IStreamSender` / `IStreamReceiver`**: captura, codificación y reproducción.
-  - v1: orquestar **Sunshine** (emite) y **Moonlight** (recibe). Una instancia por pantalla, en puertos distintos.
-  - v2 (opcional): pila propia con Desktop Duplication API, NVENC/AMF/QuickSync, UDP y Direct3D. Más control y menos latencia, pero meses de trabajo.
-- **`IInputRouter`**: captura el teclado y el ratón en el coordinador y los reenvía cuando el cursor entra en una pantalla prestada, al estilo de Input Leap o Mouse Without Borders. Es la parte que no existe hecha y la que más valor aporta.
+- **`AgentHost`** (Core): el agente, dentro de la aplicación. Atiende la sesión de control: aplicar un perfil,
+  informar de los monitores, portapapeles, archivos, entrada, vídeo, mantenimiento.
+- **`LayoutPlanner`** (Core): lógica pura. De la configuración y un perfil saca las pantallas virtuales de cada
+  equipo y dónde van, los streams (origen → monitor de destino), las rutas de entrada y la pantalla principal
+  de cada equipo. Todos los agentes calculan el mismo plan.
+- **`MttVirtualDisplays`** (Platform): crea y coloca los monitores del
+  [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver) por su pipe. Solo cambia el
+  número de monitores cuando hace falta (recargar el driver muchas veces lo deja en error).
+- **Vídeo propio** (Platform/Windows/Video): DXGI Desktop Duplication → procesador de vídeo D3D11 (BGRA→NV12) →
+  H.264 por hardware (Media Foundation; Quick Sync, NVENC…) → `VideoChannel` → DXVA → procesador (NV12→BGRA) →
+  ventana con swap chain *flip model* a pantalla completa. Detalles que importan:
+  - nunca esperar dentro de `AcquireNextFrame` (bloquea el dispositivo); `Present(0)` y latencia de cola 1;
+  - Intel necesita conservar la petición de entrada tras `MF_E_NOTACCEPTING`;
+  - el H.264 de 1080 líneas se decodifica en 1088: se recorta al tamaño enviado;
+  - **espacios de color explícitos** en los dos extremos (RGB 0-255; YUV BT.709 16-235). Sin eso Intel y NVIDIA
+    usan valores por defecto distintos y la imagen sale lavada;
+  - la captura tiene **su propio dispositivo** D3D11 y espera dentro de `AcquireNextFrame` a que Windows tenga
+    imagen nueva (esperar ahí bloquea su dispositivo, no el del codificador); el codificador la lee por una
+    textura compartida con *keyed mutex*. Así cada imagen se codifica en cuanto Windows la compone;
+  - **solo se codifican los fotogramas en que cambia la pantalla** (Desktop Duplication lo dice), más 100 ms
+    después del último cambio (el codificador devuelve cada fotograma uno más tarde, y así afina la imagen) y
+    uno por segundo con la pantalla quieta. El puntero va aparte: el receptor guarda la última imagen y la
+    vuelve a pintar con el puntero en su sitio. Un cursor de texto parpadeando ya cuesta unos 13 fps;
+  - en el receptor, un hilo decodifica y otro muestra la imagen más reciente; la espera al refresco del monitor
+    se hace con un *swap chain* con espera (`FrameLatencyWaitableObject`), nunca dentro de `Present`, que bloqueaba
+    todo el dispositivo (también el decodificador) y congelaba el vídeo al arrastrar una ventana;
+  - **puntero local**: el coordinador hace las mismas cuentas que el otro equipo con cada movimiento
+    (`PointerMirror`) y pinta el puntero al momento, como el Escritorio remoto. Cada tanda de movimientos va
+    numerada y el otro equipo contesta (hasta 10 veces por segundo) dónde quedó de verdad el cursor tras una
+    tanda (`InputCursorMessage`): el coordinador desplaza su copia esa diferencia (redondeos de Windows, la
+    pantalla de bloqueo, un touchpad). La forma del puntero viaja con su punto activo;
+  - opción para mostrar el vídeo sin esperar al refresco del monitor (*tearing*; `AllowTearing`);
+  - los hilos de captura, codificación, vídeo y ganchos de ratón van en el planificador multimedia de Windows
+    (MMCSS) y el proceso con prioridad superior a la normal, para que un equipo cargado no dé tirones;
+  - probado sin ganancia (rama `feat/encoder-flush`): meter una copia tras cada imagen para que el codificador la
+    suelte antes, y pedirle máxima velocidad. Quick Sync tarda ~10 ms por imagen en movimiento y no acepta la
+    copia hasta acabar la anterior;
+  - un fotograma no se pinta si ya ha llegado el siguiente, ni si va más de 80 ms por detrás del mejor de los
+    últimos 30 s (`LateFrames`): así no se acumula cola y la deriva de los relojes no importa.
+- **Entrada** (Core/Input + Gui/Sharing): ganchos de bajo nivel en el coordinador. `InputTarget` describe cada
+  pantalla de otro equipo vista desde el coordinador (en el escritorio, con escala por DPI, o prestada en un
+  monitor). El cursor se mueve de verdad en el otro equipo (para que se arrastren ventanas) dentro de su "área";
+  entre sus pantallas sigue la geometría del escritorio del coordinador (`AreaDesk`). Las ventanas del
+  coordinador encima del vídeo son "agujeros" por los que vuelve. El puntero que no se usa se oculta. Si
+  Windows descarta el movimiento simulado (una app de administrador en primer plano), el cursor se coloca con
+  `SetCursorPos`.
+- **Sonido** (Platform/Windows/Audio, NAudio + Concentus): captura WASAPI *loopback* de la salida
+  predeterminada (sigue funcionando aunque la salida esté silenciada, así que el portátil se silencia mientras
+  envía), Opus en tramas de 10 ms (128 kbps; voz a 48 kbps), reproducción con búfer corto que se vacía si se
+  acumula. En una salida 7.1 se reproduce en estéreo (un formato de más de 2 canales sin máscara se rechaza).
+  El micrófono va al revés y se reproduce en "CABLE Input" de VB-CABLE; mientras tanto "CABLE Output" es el
+  micrófono predeterminado (`IPolicyConfig`, la interfaz interna que usa el panel de sonido) y luego se devuelve
+  el del usuario.
+- **Pantalla principal**: el coordinador hace principal otra pantalla mientras la suya muestra otro equipo; cada
+  equipo puede elegir la suya por perfil (en el portátil, incluso su pantalla virtual). Cambiar la principal
+  mueve el origen de Windows: las disposiciones guardan las coordenadas de la colocación original y
+  `DeskOffset` convierte (entrada, vídeo, *Detectar*). La original se guarda en un fichero y se devuelve al cerrar.
+- **Escritorio seguro** (pantalla de bloqueo, avisos de UAC), opcional: un programa normal no puede capturarlo
+  ni escribir en él. El servicio `DeskBridgeHelper` (SYSTEM) mantiene un ayudante (`--secure-helper`) en la
+  sesión de la consola, con su token; el ayudante sigue el escritorio de entrada (`OpenInputDesktop`,
+  `SetThreadDesktop`). DeskBridge le habla por una *named pipe* (asíncrona: en una síncrona una escritura esperaba
+  detrás de la lectura) que solo abren SYSTEM y Administradores con el token elevado: un programa sin permisos
+  no puede usarlo para pulsar "Sí" en un aviso de UAC. Mientras el escritorio seguro tiene la entrada, DeskBridge
+  le pasa teclado y ratón, y el ayudante captura y codifica la pantalla enviada y la manda por una segunda pipe;
+  DeskBridge la reenvía por el canal cifrado mientras su propio emisor calla (después reenvía formato y fotograma
+  clave). El servicio ejecuta una copia en `Program Files` (un archivo que el usuario pudiera cambiar daría SYSTEM
+  a cualquier programa suyo), que DeskBridge como administrador pone al día en cada actualización.
+- **Rebordes de color**: la ventana de vídeo dibuja el suyo en la GPU (`ClearView`); el resto de pantallas
+  llevan cuatro tiras Win32 opacas de 3 px. Una ventana transparente a pantalla completa hacía que Windows
+  recompusiera todos los monitores y el vídeo bajaba a 20-30 fps.
 
-## Canal de control
+## Canales
 
-- TCP, un mensaje JSON por línea (`DeskBridge.Core/Control`), con un límite de 1 MiB por mensaje.
-- Cada agente escucha. El coordinador se conecta a cada agente, también al suyo por `127.0.0.1`, y envía `applyProfile` con **la configuración completa** y el perfil. La configuración solo se edita en el coordinador.
-- Autenticación por desafío y respuesta: el agente envía un nonce y el coordinador responde con HMAC-SHA256(clave, nonce + equipos). La clave compartida está en `deskbridge.local.json` y nunca viaja por la red.
-- El agente anuncia su id y el coordinador lo comprueba, así se detecta una IP equivocada en la configuración.
-- **Protocolo v2**: autenticación mutua (cada lado demuestra con un HMAC que tiene la clave, así un falso agente no recibe nada) y después cada mensaje va cifrado y autenticado con AES-GCM. Las claves de sesión se derivan con HKDF de la clave compartida y de los nonces de ambos lados, y el nonce es un contador por dirección, así que un mensaje alterado, repetido o reordenado corta la conexión.
-- Varias peticiones por conexión, y cualquier equipo puede hablar con cualquier otro (portapapeles y archivos). Solo el coordinador puede aplicar perfiles.
+- **Control**: TCP, un mensaje JSON por línea. Autenticación mutua con HMAC de la clave compartida, claves de
+  sesión por HKDF y cada mensaje cifrado con AES-GCM (nonce = contador por dirección). La clave nunca viaja.
+- **Vídeo y sonido** (`VideoChannel`): la misma autenticación y luego paquetes binarios cifrados (longitud,
+  AES-GCM). Los abre siempre el equipo que no es el coordinador (clave de stream: `laptop/v1->skynet/3`,
+  `audio`, `mic`). Tipos: formato, fotograma, puntero, forma del puntero, sonido, petición de fotograma clave,
+  "mostrado" (para medir la latencia) y fin.
+- **Mantenimiento remoto** (con la opción activada en el equipo): el coordinador puede instalar una versión nueva
+  (siempre en `%LOCALAPPDATA%\DeskBridge\bin\DeskBridge.exe`, así el cortafuegos no vuelve a preguntar), pedir el
+  log, sondear el driver, capturar la interfaz…
 
 ## Decisiones
 
-- **Mismo binario en todos los equipos.** No hay servidor ni cliente fijos: cada agente emite y recibe a la vez según el perfil.
-- **Por defecto, la pantalla virtual copia la resolución y la frecuencia del monitor físico** que la va a mostrar, para que la imagen sea exacta píxel a píxel. Cada pantalla prestada puede cambiar la resolución, los Hz y el bitrate (`stream` en la asignación). El planificador avisa si la proporción no coincide, porque saldrían bandas negras, o si se envían más Hz de los que muestra el monitor.
-- **Bitrate por defecto**: unos 0,16 bits por píxel y fotograma, que son ~20 Mbps para 1080p60.
-- **Las pantallas no asignadas no existen.** Una pantalla virtual sin stream haría que Windows abriera ventanas donde no se ven.
-- **El monitor prestado sigue activo en su dueño.** Lo necesita para mostrar el vídeo. El agente lo tapa con una ventana a pantalla completa y evita que el cursor y las ventanas locales entren en él.
+- **Mismo binario en todos los equipos**, sin servidor ni cliente fijos; el coordinador es el que tiene el
+  teclado y el ratón.
+- **La pantalla virtual copia la resolución y la frecuencia del monitor que la muestra**; cada pantalla prestada
+  puede cambiar resolución, Hz y bitrate (por defecto ~20 Mbps para 1080p60; una pantalla quieta no envía casi nada).
+- **Lo que comparte un portátil de empresa está desactivado por defecto** (portapapeles, archivos, sonido,
+  micrófono, actualizaciones remotas).
+- **Sin drivers propios**: VDD y VB-CABLE son de terceros, firmados; DeskBridge se instala por usuario. El
+  único servicio es el opcional del escritorio seguro.
 
 ## Hoja de ruta
 
-1. **Fase 0, esqueleto** (hecho): configuración, planificador, CLI y tests.
-2. **Prueba de concepto manual**: Virtual Display Driver + Sunshine en el portátil y Moonlight en el sobremesa. Medir latencia y nitidez por Wi-Fi 6 a 1080p60.
-3. **`IVirtualDisplayDriver` real**: crear y quitar N pantallas de VDD desde el agente y colocarlas en la posición que calcula el planificador.
-4. **Canal de control** (hecho): agente en cada equipo, cambio de perfil, lectura remota de monitores; cifrado y autenticación mutua.
-5. **Interfaz gráfica** (hecho): mapa con las pantallas virtuales donde quedarán, asignación y ajustes por pantalla, equipos, idioma, modo noche, actualización, bandeja del sistema y arranque con Windows.
-6. **Portapapeles y archivos** (hecho): texto e imágenes, y envío de archivos cifrado y verificado. Desactivado por defecto.
-7. **Streaming v1**: lanzar y parar instancias de Sunshine y Moonlight por pantalla, con la ventana de Moonlight sin bordes en el monitor correcto y la resolución, los Hz y el bitrate del perfil (`--resolution`, `--fps`, `--bitrate`). El sonido del equipo emisor viaja con el stream.
-8. **`IInputRouter`**: paso del ratón entre zonas, teclado y atajos para cambiar de perfil.
-9. **Micrófono y cámara**: ver [microfono-camara.md](microfono-camara.md).
-10. **Opcional**: pila de streaming propia y servicio SYSTEM para el escritorio seguro (UAC, Ctrl+Alt+Supr).
+Hecho: configuración y planificador; canal de control y de vídeo cifrados (vídeo solo cuando cambia la
+pantalla); interfaz con barra lateral en 11
+idiomas; portapapeles y archivos; teclado y ratón; pantallas virtuales; vídeo propio portátil → sobremesa;
+sonido y micrófono; ejecutar como administrador; pantalla principal por equipo; rebordes de color; instalación
+por usuario; actualizaciones (GitHub y remotas); puntero local; captura sincronizada; pantalla de bloqueo y
+avisos de UAC (servicio opcional).
+
+Pendiente:
+1. **Fase 4**: una pantalla del sobremesa mostrada en el portátil (el sentido contrario).
+2. **Color 4:4:4** para el texto de colores (HEVC/H.264 4:4:4 donde la GPU lo permita).
+3. **Cámara**: ver [microfono-camara.md](microfono-camara.md).
+4. Linux / Avalonia: en pausa.

@@ -12,8 +12,15 @@ public static class FileLog
     private static readonly object Gate = new();
     private static bool _cleaned;
 
-    public static string Directory { get; } =
+    public static string Directory { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskBridge", "logs");
+
+    /// <summary>The start of the file names ("deskbridge"; "secure" for the service and its helper).</summary>
+    public static string Prefix { get; set; } = "deskbridge";
+
+    /// <summary>Where the service and its helper (SYSTEM) write: readable by DeskBridge, written only by administrators.</summary>
+    public static string SecureDirectory { get; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "DeskBridge", "logs");
 
     public static bool Enabled { get; set; } = true;
 
@@ -29,11 +36,11 @@ public static class FileLog
                 if (!_cleaned)
                 {
                     _cleaned = true;
-                    foreach (var old in System.IO.Directory.EnumerateFiles(Directory, "deskbridge-*.log")
+                    foreach (var old in System.IO.Directory.EnumerateFiles(Directory, $"{Prefix}-*.log")
                                  .Where(f => File.GetLastWriteTime(f) < DateTime.Now.AddDays(-7)))
                         File.Delete(old);
                 }
-                File.AppendAllText(Path.Combine(Directory, $"deskbridge-{DateTime.Now:yyyy-MM-dd}.log"),
+                File.AppendAllText(Path.Combine(Directory, $"{Prefix}-{DateTime.Now:yyyy-MM-dd}.log"),
                     $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {line}{Environment.NewLine}", Encoding.UTF8);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

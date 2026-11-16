@@ -19,6 +19,12 @@ public enum VideoPacket : byte
     /// <summary>Sender → receiver: a new pointer picture (<see cref="PointerImage"/>), drawn at the Pointer position.</summary>
     PointerShape = 4,
 
+    /// <summary>Sender → receiver, on an audio stream: sample rate (int32) and channels (int16) of the PCM that follows.</summary>
+    AudioFormat = 6,
+
+    /// <summary>Sender → receiver, on an audio stream: 16-bit little-endian PCM, interleaved.</summary>
+    Audio = 7,
+
     /// <summary>Receiver → sender: the next frame must be a key frame (decoder (re)started).</summary>
     KeyFrameRequest = 10,
 
@@ -40,7 +46,7 @@ public sealed record VideoFormat(int Width, int Height, int Fps, int BitrateMbps
 /// (4-byte length, AES-GCM ciphertext and tag, a per-direction counter as nonce). No JSON and no base64,
 /// so a 1080p60 stream costs next to nothing to frame and encrypt.
 /// </summary>
-public sealed class VideoChannel : IAsyncDisposable
+public sealed class VideoChannel : IVideoLink
 {
     /// <summary>Largest packet accepted (a key frame of a 4K picture at a high bitrate fits easily).</summary>
     public const int MaxPacket = 16 * 1024 * 1024;
@@ -53,6 +59,25 @@ public sealed class VideoChannel : IAsyncDisposable
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private ulong _sendCounter, _receiveCounter;
     private readonly byte[] _header = new byte[4];
+
+    /// <summary>
+    /// Bytes already received and not read yet: more than nothing right after reading a frame means the next
+    /// one is already here, i.e. the reader is behind.
+    /// </summary>
+    public int Pending
+    {
+        get
+        {
+            try
+            {
+                return _tcp.Available;
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or System.Net.Sockets.SocketException)
+            {
+                return 0;
+            }
+        }
+    }
 
     /// <summary>The other machine's id.</summary>
     public string RemoteMachine { get; }

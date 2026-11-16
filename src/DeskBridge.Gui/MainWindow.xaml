@@ -2,11 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:DeskBridge.Gui.Localization"
-        Title="DeskBridge" Width="1180" Height="820" MinWidth="900" MinHeight="600"
+        xmlns:u="clr-namespace:DeskBridge.Gui.Updates"
+        Title="DeskBridge" Icon="Assets/deskbridge.ico" Width="1180" Height="820" MinWidth="900" MinHeight="600"
         AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
         Background="{DynamicResource AppBackground}" FontFamily="Segoe UI" FontSize="13">
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+
         <!-- Implicit styles extend the theme's (Fluent) ones instead of replacing them. -->
         <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Padding" Value="12,5" />
@@ -18,11 +21,6 @@
             <Setter Property="Foreground" Value="White" />
             <Setter Property="BorderBrush" Value="#1D4ED8" />
             <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <Style TargetType="GroupBox" BasedOn="{StaticResource {x:Type GroupBox}}">
-            <Setter Property="Padding" Value="8" />
-            <Setter Property="Margin" Value="0,0,0,10" />
-            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
         </Style>
         <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
             <Setter Property="AutoGenerateColumns" Value="False" />
@@ -56,68 +54,150 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Text -->
         <Style x:Key="Hint" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
             <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="PageTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource NormalText}" />
+            <Setter Property="Margin" Value="0,0,0,16" />
+        </Style>
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource NormalText}" />
+            <Setter Property="Margin" Value="2,18,0,8" />
+        </Style>
+        <Style x:Key="RowTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource NormalText}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- A settings card, as in Windows 11 Settings: one per option. -->
+        <Style x:Key="Row" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="MinHeight" Value="56" />
+        </Style>
+        <Style x:Key="Card" TargetType="Border" BasedOn="{StaticResource Row}">
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+
+        <!-- Check box drawn as an on/off switch, the label on the left. -->
+        <Style x:Key="Switch" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource NormalText}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter VerticalAlignment="Center" Margin="0,0,16,0" />
+                            <Border x:Name="Track" Grid.Column="1" Width="40" Height="20" CornerRadius="10" VerticalAlignment="Center"
+                                    Background="Transparent" BorderBrush="{DynamicResource MutedText}" BorderThickness="1">
+                                <Ellipse x:Name="Knob" Width="12" Height="12" Margin="4,0" HorizontalAlignment="Left" Fill="{DynamicResource MutedText}" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Track" Property="Background" Value="{DynamicResource Accent}" />
+                                <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                                <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="Knob" Property="Fill" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Navigation: the tab strip becomes a side bar (icon + name), the page fills the rest. -->
+        <Style x:Key="Nav" TargetType="TabControl">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <DockPanel Background="{DynamicResource NavBackground}">
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="20,18,0,18">
+                                    <TextBlock Text="&#xE7F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"
+                                               Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <TextBlock Text="DeskBridge" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource NormalText}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel IsItemsHost="True" Margin="8,0" />
+                            </DockPanel>
+                            <ContentPresenter Grid.Column="1" ContentSource="SelectedContent" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource NormalText}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Item" CornerRadius="6" Padding="12,9" Margin="0,1" Background="Transparent">
+                            <Grid>
+                                <Border x:Name="Marker" Width="3" Height="16" CornerRadius="2" Margin="-12,0,0,0"
+                                        HorizontalAlignment="Left" Background="{DynamicResource Accent}" Visibility="Hidden" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                                               VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Item" Property="Background" Value="{DynamicResource NavHover}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Item" Property="Background" Value="{DynamicResource NavSelected}" />
+                                <Setter TargetName="Marker" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Page" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="Padding" Value="32,24,32,24" />
         </Style>
     </Window.Resources>
 
     <!-- Own background: the Fluent window itself is transparent (Mica). -->
     <DockPanel Background="{DynamicResource AppBackground}">
-        <!-- Menu -->
-        <Menu DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" Padding="6,2">
-            <MenuItem Header="{l:T 'File'}" SubmenuOpened="FileMenu_SubmenuOpened">
-                <MenuItem x:Name="SendFilesMenu" Header="{l:T 'Send files to'}" />
-                <MenuItem Header="{l:T 'Open received files folder'}" Click="OpenFilesFolder_Click" />
-                <Separator />
-                <MenuItem Header="{l:T 'Quit'}" Click="Quit_Click" />
-            </MenuItem>
-            <MenuItem Header="{l:T 'Settings'}">
-                <MenuItem x:Name="LanguageMenu" Header="{l:T 'Language'}" />
-                <MenuItem x:Name="ThemeMenu" Header="{l:T 'Theme'}" />
-                <Separator />
-                <MenuItem Header="{l:T 'Update channel'}">
-                    <MenuItem x:Name="StableMenu" Header="{l:T 'Stable'}" IsCheckable="True" Click="Stable_Click" />
-                    <MenuItem x:Name="BetaMenu" Header="{l:T 'Beta'}" IsCheckable="True" Click="Beta_Click" />
-                </MenuItem>
-                <MenuItem Header="{l:T 'Check for updates now'}" Click="CheckUpdates_Click" />
-                <Separator />
-                <MenuItem x:Name="StartWithWindowsMenu" Header="{l:T 'Start with Windows'}" IsCheckable="True" Click="StartWithWindows_Click" />
-                <MenuItem x:Name="CloseToTrayMenu" Header="{l:T 'Keep running in the notification area when closed'}" IsCheckable="True" Click="CloseToTray_Click" />
-            </MenuItem>
-            <MenuItem Header="{l:T 'Help'}">
-                <MenuItem Header="{l:T 'About DeskBridge'}" Click="About_Click" />
-                <MenuItem Header="{l:T 'Project page'}" Click="ProjectPage_Click" />
-                <MenuItem Header="{l:T 'Open settings folder'}" Click="OpenSettingsFolder_Click" />
-                <MenuItem Header="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
-                <MenuItem Header="{l:T 'Collect diagnostics from all machines'}" Click="CollectDiagnostics_Click" />
-                    <MenuItem x:Name="VideoTestMenu" Header="{l:T 'Video test: show the screen of'}" SubmenuOpened="VideoTestMenu_SubmenuOpened">
-                        <MenuItem Header="…" IsEnabled="False" />
-                    </MenuItem>
-            </MenuItem>
-        </Menu>
-
-        <!-- Profile bar -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1" Padding="12,10">
-            <DockPanel LastChildFill="False">
-                <TextBlock Text="{l:T 'Profile'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
-                <ComboBox Width="200" ItemsSource="{Binding Model.Profiles}" DisplayMemberPath="Name"
-                          SelectedItem="{Binding SelectedProfile}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
-                <TextBlock Text="{l:T 'Name'}" VerticalAlignment="Center" Margin="4,0,6,0" Foreground="{DynamicResource MutedText}" />
-                <TextBox Width="150" Text="{Binding SelectedProfile.Name, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
-                <Button x:Name="NewProfileButton" Content="{l:T 'New'}" Click="NewProfile_Click" />
-                <Button x:Name="DuplicateProfileButton" Content="{l:T 'Duplicate'}" Click="DuplicateProfile_Click" />
-                <Button x:Name="DeleteProfileButton" Content="{l:T 'Delete'}" Click="DeleteProfile_Click" />
-
-                <Button x:Name="ApplyButton" DockPanel.Dock="Right" Content="{l:T 'Apply profile'}" Style="{StaticResource Primary}" Click="Apply_Click" Margin="0" />
-                <Button x:Name="SaveButton" DockPanel.Dock="Right" Content="{l:T 'Save'}" Click="Save_Click" />
-                <TextBlock x:Name="AppliedText" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,12,0"
-                           ToolTipService.ShowOnDisabled="True" />
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource NavBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="16,6">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding AgentStatus}" Foreground="{DynamicResource MutedText}" />
+                <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource NormalText}" />
             </DockPanel>
         </Border>
 
         <!-- Virtual Display Driver missing (shown when the applied profile needs it here) -->
-        <Border x:Name="DriverBanner" DockPanel.Dock="Top" Visibility="Collapsed" Padding="12,8"
+        <Border x:Name="DriverBanner" DockPanel.Dock="Top" Visibility="Collapsed" Padding="16,10"
                 Background="{DynamicResource BetaChipBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -125,113 +205,235 @@
                     <Button Content="{l:T 'More information'}" Click="DriverInfo_Click" />
                     <Button Content="{l:T 'Later'}" Click="DriverLater_Click" Margin="0" />
                 </StackPanel>
-                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource NormalText}"
                            Text="{l:T 'The applied profile shows displays of this PC on another machine. To create them, this PC needs the Virtual Display Driver (free and open source, MIT, signed). Install opens its control app (VDD Control, downloaded with winget if needed): press Install Driver there. Until then, its main display is shown instead.'}" />
             </DockPanel>
         </Border>
 
-        <!-- Status bar -->
-        <Border DockPanel.Dock="Bottom" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="12,6">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding AgentStatus}" Foreground="{DynamicResource MutedText}" />
-                <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
-            </DockPanel>
-        </Border>
-
-        <TabControl x:Name="Tabs" Margin="10" Padding="10" Background="{DynamicResource AppBackground}">
-            <!-- ============ Layout ============ -->
-            <TabItem Header="{l:T 'Layout'}" Padding="14,3">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="2*" MinHeight="180" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="3*" MinHeight="160" />
-                    </Grid.RowDefinitions>
-
-                    <Border Grid.Row="0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="6" Padding="10">
-                        <Canvas x:Name="LayoutCanvas" ClipToBounds="True" SizeChanged="LayoutCanvas_SizeChanged" />
-                    </Border>
-
-                    <StackPanel Grid.Row="1" Margin="0,10">
-                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
-                                   Text="{l:T 'Drag displays of other machines onto your desk to use them from here like more monitors (the cursor moves onto them where they touch). In the table, choose what each display shows in this profile.'}" />
-                        <!-- Where virtual displays go inside the borrowing machine is automatic now. -->
-                        <ItemsControl ItemsSource="{Binding PlacementRows}" Margin="0,0,0,6" Visibility="Collapsed">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="0,2">
-                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                        <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" DisplayMemberPath="Label" MinWidth="220" />
+        <TabControl x:Name="Tabs" Style="{StaticResource Nav}">
+            <!-- ============ Home ============ -->
+            <TabItem Header="{l:T 'Home'}" Tag="&#xE80F;">
+                <ScrollViewer Style="{StaticResource Page}">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Stretch">
+                        <TextBlock Style="{StaticResource PageTitle}" Text="{l:T 'Home'}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'This PC'}" />
+                                    <TextBlock Text="{Binding LocalMachine}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource NormalText}" Margin="0,4,0,8" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{Binding AgentStatus}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Style="{StaticResource Card}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="0,12,0,0" Content="{l:T 'Layout'}" Click="GoToLayout_Click" />
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Profile'}" />
+                                        <TextBlock x:Name="HomeAppliedText" FontSize="20" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <ItemsControl ItemsSource="{Binding Summary}">
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'Machines'}" />
+                        <ItemsControl ItemsSource="{Binding Model.Machines}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="Wrap" Margin="0,1" />
+                                    <Border Style="{StaticResource Row}">
+                                        <DockPanel>
+                                            <TextBlock Text="&#xE7F8;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20"
+                                                       Foreground="{DynamicResource MutedText}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                            <TextBlock DockPanel.Dock="Right" Style="{StaticResource Hint}" VerticalAlignment="Center" Text="{Binding Address}" />
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Style="{StaticResource RowTitle}" Text="{Binding Name}" />
+                                                <TextBlock Style="{StaticResource Hint}" Text="{Binding Id}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                    <DataGrid Grid.Row="2" x:Name="AssignmentGrid" ItemsSource="{Binding SelectedProfile.Assignments}"
-                              SelectionChanged="AssignmentGrid_SelectionChanged">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="{l:T 'Physical display'}" Binding="{Binding DisplayLabel}" IsReadOnly="True" Width="120" />
-                            <DataGridTextColumn Header="{l:T 'Owner'}" Binding="{Binding Owner.Name}" IsReadOnly="True" Width="150" />
-                            <DataGridTextColumn Header="{l:T 'Native mode'}" Binding="{Binding Display.Summary}" IsReadOnly="True" Width="150" />
-                            <DataGridTemplateColumn Header="{l:T 'Shows'}" Width="170">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding DataContext.Model.Machines, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  SelectedItem="{Binding UsedBy, UpdateSourceTrigger=PropertyChanged}" Margin="2" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="{l:T 'Stream resolution'}" Width="190">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
-                                                  ItemsSource="{Binding DataContext.ResolutionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  Text="{Binding Resolution, UpdateSourceTrigger=LostFocus}" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="{l:T 'Refresh (Hz)'}" Width="110">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
-                                                  ItemsSource="{Binding DataContext.RefreshOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  Text="{Binding Refresh, UpdateSourceTrigger=LostFocus}" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="{l:T 'Bitrate (Mbps)'}" Width="120">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="2"
-                                                  ItemsSource="{Binding DataContext.BitrateOptions, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  Text="{Binding Bitrate, UpdateSourceTrigger=LostFocus}" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
+            <!-- ============ Layout ============ -->
+            <TabItem Header="{l:T 'Layout'}" Tag="&#xE7F4;">
+                <Grid Margin="32,24,32,20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Title and the profile: which one, its menu, save and apply. -->
+                    <DockPanel Margin="0,0,0,16">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="AppliedText" VerticalAlignment="Center" Margin="0,0,12,0" ToolTipService.ShowOnDisabled="True" />
+                            <ComboBox Width="180" ItemsSource="{Binding Model.Profiles}" DisplayMemberPath="Name"
+                                      SelectedItem="{Binding SelectedProfile}" VerticalContentAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox x:Name="ProfileNameBox" Width="180" Margin="0,0,6,0" Visibility="Collapsed" VerticalContentAlignment="Center"
+                                     Text="{Binding SelectedProfile.Name, UpdateSourceTrigger=PropertyChanged}"
+                                     KeyDown="ProfileNameBox_KeyDown" LostFocus="ProfileNameBox_LostFocus" />
+                            <Button x:Name="ProfileMenuButton" MinWidth="0" Padding="10,5" ToolTip="{l:T 'Profile'}" Click="ProfileMenu_Click">
+                                <TextBlock Text="&#xE712;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
+                                <Button.ContextMenu>
+                                    <ContextMenu x:Name="ProfileMenu">
+                                        <MenuItem x:Name="NewProfileButton" Header="{l:T 'New'}" Click="NewProfile_Click" />
+                                        <MenuItem x:Name="DuplicateProfileButton" Header="{l:T 'Duplicate'}" Click="DuplicateProfile_Click" />
+                                        <MenuItem x:Name="RenameProfileButton" Header="{l:T 'Rename'}" Click="RenameProfile_Click" />
+                                        <Separator />
+                                        <MenuItem x:Name="DeleteProfileButton" Header="{l:T 'Delete'}" Click="DeleteProfile_Click" />
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                            <Button x:Name="SaveButton" Content="{l:T 'Save'}" Click="Save_Click" />
+                            <Button x:Name="ApplyButton" Content="{l:T 'Apply profile'}" Style="{StaticResource Primary}" Click="Apply_Click" Margin="0" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource PageTitle}" Margin="0" VerticalAlignment="Center" Text="{l:T 'Layout'}" />
+                    </DockPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="300" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- The desk -->
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Margin="2,12,0,0">
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                                           Text="{l:T 'Drag displays of other machines onto your desk to use them from here like more monitors (the cursor moves onto them where they touch). Select a display to choose what it shows in this profile.'}" />
+                                <!-- Where virtual displays go inside the borrowing machine is automatic now. -->
+                                <ItemsControl ItemsSource="{Binding PlacementRows}" Visibility="Collapsed">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" DisplayMemberPath="Label" MinWidth="220" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding Summary}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="Wrap" Margin="0,1" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <Border Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="10">
+                                <Canvas x:Name="LayoutCanvas" ClipToBounds="True" SizeChanged="LayoutCanvas_SizeChanged" />
+                            </Border>
+                        </DockPanel>
+
+                        <!-- The displays of the profile, and what the selected one shows -->
+                        <Border Grid.Column="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Section}" Margin="16,14,16,8" Text="{l:T 'Displays'}" />
+
+                                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="16,12,16,16"
+                                        DataContext="{Binding SelectedItem, ElementName=AssignmentGrid}">
+                                    <Grid>
+                                        <TextBlock Text="{l:T 'Select a display on the desk or in the list.'}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <StackPanel>
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <TextBlock Style="{StaticResource RowTitle}" FontWeight="SemiBold">
+                                                <Run Text="{Binding Owner.Name, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding DisplayLabel, Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,10" Text="{Binding Display.Summary}" />
+                                            <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Shows'}" />
+                                            <ComboBox Margin="0,4,0,10" HorizontalAlignment="Stretch"
+                                                      ItemsSource="{Binding DataContext.Model.Machines, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      SelectedItem="{Binding UsedBy, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Stream resolution'}" />
+                                            <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="0,4,0,10"
+                                                      ItemsSource="{Binding DataContext.ResolutionOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      Text="{Binding Resolution, UpdateSourceTrigger=LostFocus}" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="10" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Refresh (Hz)'}" />
+                                                    <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="0,4,0,0"
+                                                              ItemsSource="{Binding DataContext.RefreshOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              Text="{Binding Refresh, UpdateSourceTrigger=LostFocus}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Bitrate (Mbps)'}" />
+                                                    <ComboBox IsEditable="True" IsEnabled="{Binding IsLent}" Margin="0,4,0,0"
+                                                              ItemsSource="{Binding DataContext.BitrateOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              Text="{Binding Bitrate, UpdateSourceTrigger=LostFocus}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <ListBox x:Name="AssignmentGrid" ItemsSource="{Binding SelectedProfile.Assignments}" BorderThickness="0" Background="Transparent"
+                                         Margin="8,0,8,8" SelectionChanged="AssignmentGrid_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="4,3">
+                                                <TextBlock Foreground="{DynamicResource NormalText}">
+                                                    <Run Text="{Binding Owner.Name, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{Binding DisplayLabel, Mode=OneWay}" />
+                                                </TextBlock>
+                                                <TextBlock Style="{StaticResource Hint}">
+                                                    <Run Text="{l:T 'Shows'}" /><Run Text=": " /><Run Text="{Binding UsedBy, Mode=OneWay}" />
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
                 </Grid>
             </TabItem>
 
             <!-- ============ Machines ============ -->
-            <TabItem Header="{l:T 'Machines'}" Padding="14,3">
-                <Grid>
+            <TabItem Header="{l:T 'Machines'}" Tag="&#xE977;">
+                <Grid Margin="32,24,32,20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="5*" />
-                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="16" />
                         <ColumnDefinition Width="4*" />
                     </Grid.ColumnDefinitions>
+                    <TextBlock Grid.ColumnSpan="3" Style="{StaticResource PageTitle}" Text="{l:T 'Machines'}" />
 
-                    <DockPanel Grid.Column="0">
-                        <TextBlock DockPanel.Dock="Top" Text="{l:T 'Machines'}" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" />
+                    <DockPanel Grid.Row="1">
                         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,8"
                                    Text="{l:T 'The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.'}" />
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
@@ -249,8 +451,8 @@
                         </DataGrid>
                     </DockPanel>
 
-                    <DockPanel Grid.Column="2">
-                        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4" Text="{Binding DisplaysTitle}" />
+                    <DockPanel Grid.Row="1" Grid.Column="2">
+                        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Foreground="{DynamicResource NormalText}" Margin="0,0,0,4" Text="{Binding DisplaysTitle}" />
                         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,8"
                                    Text="{l:T 'Detect reads them from Windows on this PC, or asks the machine’s agent over the network. X and Y are the arrangement in the Windows display settings: displays can be side by side, stacked or in any other layout.'}" />
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
@@ -270,102 +472,230 @@
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
-
                 </Grid>
             </TabItem>
 
-            <!-- ============ This PC ============ -->
-            <TabItem Header="{l:T 'This PC'}" Padding="14,3">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+            <!-- ============ Sharing ============ -->
+            <TabItem Header="{l:T 'Sharing'}" Tag="&#xE72D;">
+                <ScrollViewer Style="{StaticResource Page}">
+                    <StackPanel MaxWidth="900">
+                        <TextBlock Style="{StaticResource PageTitle}" Text="{l:T 'Sharing'}" />
 
-                    <GroupBox Grid.Row="0" Grid.Column="1" Header="{l:T 'Sharing'}" Margin="10,0,0,10">
-                        <StackPanel>
-                            <CheckBox x:Name="ClipboardSendBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Send what I copy on this PC to the other machines'}" />
+                        <TextBlock Style="{StaticResource Section}" Margin="2,0,0,8" Text="{l:T 'Keyboard and mouse'}" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="ShareInputBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Coordinator: move the keyboard and mouse to another machine past the edge of the screens (Ctrl+Alt+Home brings them back)'}" />
                             </CheckBox>
-                            <CheckBox x:Name="ClipboardReceiveBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Put in this PC’s clipboard what is copied on the other machines'}" />
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="AcceptInputBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Let the coordinator control this PC with its keyboard and mouse'}" />
                             </CheckBox>
-                            <CheckBox x:Name="ShareInputBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Coordinator: move the keyboard and mouse to another machine past the edge of the screens (Ctrl+Alt+Home brings them back)'}" />
+                        </Border>
+
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'Sound'}" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="PlayAudioBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Coordinator: play here the sound of the other machines'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Only from the machines that send it.'}" />
+                                </StackPanel>
                             </CheckBox>
-                            <CheckBox x:Name="AcceptInputBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Let the coordinator control this PC with its keyboard and mouse'}" />
+                        </Border>
+                        <StackPanel x:Name="AudioVolumesPanel" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="SendAudioBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Send the sound of this PC to the coordinator'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Everything Windows plays here (notifications, music, videos) is heard on the coordinator, and this PC’s speakers are muted meanwhile.'}" />
+                                </StackPanel>
                             </CheckBox>
-                            <CheckBox x:Name="AcceptUpdatesBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Let the coordinator install new versions of DeskBridge on this PC (to troubleshoot it remotely)'}" />
+                        </Border>
+
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'Microphone'}" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="ShareMicBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Coordinator: let the other machines use the microphone of this PC'}" />
                             </CheckBox>
-                            <CheckBox x:Name="AcceptFilesBox" Margin="0,3" Click="Sharing_Click">
-                                <TextBlock TextWrapping="Wrap" Text="{l:T 'Accept files sent from the other machines'}" />
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <StackPanel>
+                                <CheckBox x:Name="UseRemoteMicBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Use the coordinator’s microphone on this PC'}" />
+                                        <TextBlock Style="{StaticResource Hint}" Text="{l:T 'It comes out of the CABLE Output microphone of VB-CABLE, which is the default microphone of this PC while it is in use; your own one comes back afterwards.'}" />
+                                    </StackPanel>
+                                </CheckBox>
+                                <DockPanel x:Name="CableMissingPanel" Margin="0,10,0,0">
+                                    <Button DockPanel.Dock="Right" Content="{l:T 'Download VB-CABLE'}" Click="CablePage_Click" Margin="0" />
+                                    <TextBlock Foreground="{DynamicResource WarningText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"
+                                               Text="{l:T 'VB-CABLE is not installed on this PC (free; install it as administrator and restart).'}" />
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'Clipboard'}" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="ClipboardSendBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Send what I copy on this PC to the other machines'}" />
                             </CheckBox>
-                            <DockPanel Margin="22,4,0,0">
-                                <TextBlock Text="{l:T 'Save them in'}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="ClipboardReceiveBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Put in this PC’s clipboard what is copied on the other machines'}" />
+                            </CheckBox>
+                        </Border>
+
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'Files'}" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="AcceptFilesBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Accept files sent from the other machines'}" />
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Save them in'}" Margin="0,0,16,0" />
                                 <Button DockPanel.Dock="Right" Content="{l:T 'Open'}" Click="OpenFilesFolder_Click" Margin="6,0,0,0" />
                                 <Button DockPanel.Dock="Right" Content="{l:T 'Choose…'}" Click="ChooseFilesFolder_Click" Margin="6,0,0,0" />
                                 <TextBox x:Name="FilesFolderBox" IsReadOnly="True" VerticalContentAlignment="Center" />
                             </DockPanel>
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
-                                       Text="{l:T 'To send files, drop them on this window or use File, Send files to. Everything travels encrypted. On a work computer, check your company’s rules before sharing its clipboard or files.'}" />
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <Button x:Name="SendFilesButton" DockPanel.Dock="Right" Content="{l:T 'Send files to'}" Click="SendFiles_Click" Margin="0">
+                                    <Button.ContextMenu>
+                                        <ContextMenu x:Name="SendFilesMenu" />
+                                    </Button.ContextMenu>
+                                </Button>
+                                <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,16,0"
+                                           Text="{l:T 'To send files, drop them on this window or use Send files to. Everything travels encrypted. On a work computer, check your company’s rules before sharing its clipboard or files.'}" />
+                            </DockPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============ Connection and security ============ -->
+            <TabItem Header="{l:T 'Connection and security'}" Tag="&#xE72E;">
+                <ScrollViewer Style="{StaticResource Page}">
+                    <StackPanel MaxWidth="900">
+                        <TextBlock Style="{StaticResource PageTitle}" Text="{l:T 'Connection and security'}" />
+
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding LocalMachine}" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource NormalText}" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'This PC'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Machines are identified by their computer name.'}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Grid Width="280" Margin="0,0,8,0">
+                                        <TextBox FontFamily="Consolas" VerticalContentAlignment="Center"
+                                                 Visibility="{Binding IsChecked, ElementName=ShowKeyBox, Converter={StaticResource Visible}}"
+                                                 Text="{Binding LocalKey, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Text="••••••••••••••••••••" FontFamily="Consolas" VerticalAlignment="Center" Margin="10,0" Foreground="{DynamicResource NormalText}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsChecked, ElementName=ShowKeyBox}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <ToggleButton x:Name="ShowKeyBox" MinWidth="0" Padding="10,5" Margin="0,0,6,0" ToolTip="{l:T 'Show'}">
+                                        <TextBlock Text="&#xE7B3;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
+                                    </ToggleButton>
+                                    <Button Content="{l:T 'Generate'}" Click="GenerateKey_Click" />
+                                    <Button Content="{l:T 'Copy'}" Click="CopyKey_Click" Margin="0" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Shared key'}" Margin="0,0,16,0" />
+                            </DockPanel>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <TextBox DockPanel.Dock="Right" Width="100" VerticalContentAlignment="Center" VerticalAlignment="Center"
+                                         Text="{Binding LocalPort, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Control port'}" />
+                            </DockPanel>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <TextBox DockPanel.Dock="Right" Width="280" VerticalContentAlignment="Center" VerticalAlignment="Center"
+                                         Text="{Binding LocalConnectTo, UpdateSourceTrigger=PropertyChanged}" />
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Connect to'}" />
+                                    <TextBlock Style="{StaticResource Hint}"
+                                               Text="{l:T 'Address of the coordinator, e.g. 192.168.1.52. Only on a machine that cannot accept connections (a firewall you cannot change): it connects to the coordinator instead. Leave empty on the coordinator.'}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <TextBlock Style="{StaticResource Hint}" Margin="2,8,0,10"
+                                   Text="{l:T 'Every machine needs the same shared key: copy it here and paste it on the others. A machine that cannot accept connections also needs the coordinator’s address in Connect to. Machines are identified by their computer name and appear on the coordinator by themselves when they connect. The layout is only edited on the coordinator.'}" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="{l:T 'Save and restart agent'}" Style="{StaticResource Primary}" Click="SaveLocal_Click" />
+                            <TextBlock Text="{Binding AgentStatus}" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}" Margin="6,0" />
                         </StackPanel>
-                    </GroupBox>
 
-                    <GroupBox Grid.Row="0" Grid.Column="0" Header="{l:T 'This machine'}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="150" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'Remote maintenance'}" />
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="AcceptUpdatesBox" Style="{StaticResource Switch}" Click="Sharing_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Let the coordinator install new versions of DeskBridge on this PC (to troubleshoot it remotely)'}" />
+                            </CheckBox>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                            <TextBlock Grid.Row="0" Text="{l:T 'This PC'}" VerticalAlignment="Center" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,8" FontWeight="SemiBold" Text="{Binding LocalMachine}"
-                                       ToolTip="{l:T 'Machines are identified by their computer name.'}" />
+            <!-- ============ Updates ============ -->
+            <TabItem Header="{l:T 'Updates'}" Tag="&#xE895;">
+                <ScrollViewer Style="{StaticResource Page}">
+                    <StackPanel MaxWidth="900">
+                        <TextBlock Style="{StaticResource PageTitle}" Text="{l:T 'Updates'}" />
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="{l:T 'Check for updates now'}" Click="CheckUpdates_Click" Margin="0" VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Installed version'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{x:Static u:AppInfo.DisplayVersion}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <RadioButton x:Name="StableMenu" GroupName="Channel" Content="{l:T 'Stable'}" Click="Stable_Click" Margin="0,0,16,0" />
+                                    <RadioButton x:Name="BetaMenu" GroupName="Channel" Content="{l:T 'Beta'}" Click="Beta_Click" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Update channel'}" />
+                            </DockPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                            <TextBlock Grid.Row="1" Text="{l:T 'Shared key'}" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" FontFamily="Consolas" VerticalContentAlignment="Center"
-                                     Text="{Binding LocalKey, UpdateSourceTrigger=PropertyChanged}" />
-                            <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="8,4,0,4">
-                                <Button Content="{l:T 'Generate'}" Click="GenerateKey_Click" />
-                                <Button Content="{l:T 'Copy'}" Click="CopyKey_Click" Margin="0" />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="2" Text="{l:T 'Control port'}" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" Width="90" HorizontalAlignment="Left" VerticalContentAlignment="Center"
-                                     Text="{Binding LocalPort, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <TextBlock Grid.Row="3" Text="{l:T 'Connect to'}" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4" VerticalContentAlignment="Center"
-                                     ToolTip="{l:T 'Address of the coordinator, e.g. 192.168.1.52. Only on a machine that cannot accept connections (a firewall you cannot change): it connects to the coordinator instead. Leave empty on the coordinator.'}"
-                                     Text="{Binding LocalConnectTo, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Style="{StaticResource Hint}" Margin="0,6"
-                                       Text="{l:T 'Every machine needs the same shared key: copy it here and paste it on the others. A machine that cannot accept connections also needs the coordinator’s address in Connect to. Machines are identified by their computer name and appear on the coordinator by themselves when they connect. The layout is only edited on the coordinator.'}" />
-
-                            <StackPanel Grid.Row="5" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
-                                <Button Content="{l:T 'Save and restart agent'}" Style="{StaticResource Primary}" Click="SaveLocal_Click" />
-                                <TextBlock Text="{Binding AgentStatus}" VerticalAlignment="Center" Foreground="{DynamicResource MutedText}" Margin="6,0" />
-                            </StackPanel>
-                        </Grid>
-                    </GroupBox>
-
-                    <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="{l:T 'Log'}" Margin="0">
-                        <ListBox x:Name="LogList" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="12" BorderThickness="0"
+            <!-- ============ Log ============ -->
+            <TabItem Header="{l:T 'Log'}" Tag="&#xE9F9;">
+                <DockPanel Margin="32,24,32,20">
+                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource PageTitle}" Text="{l:T 'Log'}" />
+                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Button Content="{l:T 'Copy all'}" Click="CopyLogAll_Click" />
+                        <Button Content="{l:T 'Open log folder'}" Click="OpenLogFolder_Click" />
+                        <Button Content="{l:T 'Collect diagnostics from all machines'}" Click="CollectDiagnostics_Click" />
+                        <Button x:Name="VideoTestButton" Content="{l:T 'Video test: show the screen of'}" Click="VideoTest_Click" Margin="0">
+                            <Button.ContextMenu>
+                                <ContextMenu x:Name="VideoTestMenu" />
+                            </Button.ContextMenu>
+                        </Button>
+                    </WrapPanel>
+                    <Border Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="4">
+                        <ListBox x:Name="LogList" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="12" BorderThickness="0" Background="Transparent"
                                  SelectionMode="Extended" KeyDown="LogList_KeyDown">
                             <ListBox.ContextMenu>
                                 <ContextMenu>
@@ -376,8 +706,90 @@
                                 </ContextMenu>
                             </ListBox.ContextMenu>
                         </ListBox>
-                    </GroupBox>
-                </Grid>
+                    </Border>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ============ General ============ -->
+            <TabItem Header="{l:T 'General'}" Tag="&#xE713;">
+                <ScrollViewer Style="{StaticResource Page}">
+                    <StackPanel MaxWidth="900">
+                        <TextBlock Style="{StaticResource PageTitle}" Text="{l:T 'General'}" />
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <ComboBox x:Name="LanguageMenu" DockPanel.Dock="Right" Width="200" VerticalAlignment="Center" SelectionChanged="Language_SelectionChanged" />
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Language'}" />
+                            </DockPanel>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <ComboBox x:Name="ThemeMenu" DockPanel.Dock="Right" Width="200" VerticalAlignment="Center" SelectionChanged="Theme_SelectionChanged" />
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Theme'}" />
+                            </DockPanel>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="ShowFramesBox" Style="{StaticResource Switch}" Click="ShowFrames_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Mark each display with the colour of its machine'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'A thin border, in the colours of the Layout map: you can tell which machine each display shows. It does not take clicks and is left out of screenshots and screen sharing.'}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="VideoAtOnceBox" Style="{StaticResource Switch}" Click="VideoAtOnce_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Show the displays of other machines without waiting for the screen refresh'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'About 8 ms less delay on the displays that show another machine. While something moves fast, a horizontal line may show where two pictures meet.'}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="StartWithWindowsMenu" Style="{StaticResource Switch}" Click="StartWithWindows_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Start with Windows'}" />
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="RunAsAdminBox" Style="{StaticResource Switch}" Click="RunAsAdmin_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Run as administrator'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'On a machine controlled from the coordinator: needed for the keyboard and mouse to work in apps opened as administrator. DeskBridge starts as administrator when you sign in (a scheduled task); Windows asks for permission once, on this PC. Files cannot be dropped on its window meanwhile.'}" />
+                                    <TextBlock x:Name="AdminStatusText" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="SecureBox" Style="{StaticResource Switch}" Click="Secure_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Let the coordinator use the lock screen and administrator prompts'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Installs a small Windows service (DeskBridge Helper): with it, the lock screen and the administrator prompts of this PC are seen and used from the coordinator, the way AnyDesk does it. Windows does not let any normal program reach them. Needs &quot;Run as administrator&quot;; only DeskBridge running as administrator can use the service.'}" />
+                                    <TextBlock x:Name="SecureStatusText" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="CloseToTrayMenu" Style="{StaticResource Switch}" Click="CloseToTray_Click">
+                                <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Keep running in the notification area when closed'}" />
+                            </CheckBox>
+                        </Border>
+
+                        <TextBlock Style="{StaticResource Section}" Text="{l:T 'About DeskBridge'}" />
+                        <Border Style="{StaticResource Row}">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Content="{l:T 'Project page'}" Click="ProjectPage_Click" />
+                                    <Button Content="{l:T 'Open settings folder'}" Click="OpenSettingsFolder_Click" Margin="0" />
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource RowTitle}">
+                                        <Run Text="DeskBridge " /><Run Text="{x:Static u:AppInfo.DisplayVersion}" />
+                                    </TextBlock>
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Use several computers with one keyboard and mouse, and share their displays.'}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <Button HorizontalAlignment="Left" Margin="0,12,0,0" Content="{l:T 'Quit'}" Click="Quit_Click" />
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
     </DockPanel>

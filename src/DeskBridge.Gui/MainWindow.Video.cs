@@ -29,7 +29,7 @@ public partial class MainWindow
     /// Coordinator: displays of this PC showing another machine's display, by stream key (this PC's display, the
     /// machine, and its display in its own coordinates). The cursor goes to that machine when it enters them.
     /// </summary>
-    private readonly ConcurrentDictionary<string, (string Machine, Core.Planning.DisplayRect Here, Core.Planning.DisplayRect There)> _lentDisplays = new();
+    private readonly ConcurrentDictionary<string, (string Machine, string Display, Core.Planning.DisplayRect There)> _lentDisplays = new();
 
     /// <summary>Coordinator: streams being shown, by stream key.</summary>
     private readonly ConcurrentDictionary<string, VideoReceiver> _videoReceivers = new();
@@ -92,7 +92,9 @@ public partial class MainWindow
                 bool mirror = start.Display.Contains('/') && !(isVirtual && Platform.Windows.VirtualDisplays.MttVirtualDisplays.IsInstalled());
                 if (mirror)
                     AddLog($"[video] {start.Key}: no virtual display here (Virtual Display Driver missing or stopped): sending a copy of the main display");
-                return sent is null ? new OkMessage() : new VideoStartedMessage(sent.X, sent.Y, sent.Width, sent.Height, mirror);
+                // In this PC's original arrangement, as the coordinator's layout has it (see DeskOffset).
+                var (ox, oy) = DeskOffset();
+                return sent is null ? new OkMessage() : new VideoStartedMessage(sent.X - ox, sent.Y - oy, sent.Width, sent.Height, mirror);
             }
 
             case StopVideoMessage stop:
@@ -122,6 +124,11 @@ public partial class MainWindow
     /// <summary>On a thread-pool thread: a machine opened a video connection to this one.</summary>
     private void OnVideoOpened(VideoChannel channel)
     {
+        if (channel.StreamKey is AudioKey or MicKey)
+        {
+            OnAudioOpened(channel);
+            return;
+        }
         if (!_videoPending.TryRemove(channel.StreamKey, out var target) || target.Machine != channel.RemoteMachine)
         {
             AddLog($"[video] unexpected video connection from {channel.RemoteMachine} ({channel.StreamKey}), closed");
@@ -179,6 +186,14 @@ public partial class MainWindow
                 }
             }
         }, TaskScheduler.Default);
+    }
+
+    private void VideoTest_Click(object sender, RoutedEventArgs e)
+    {
+        VideoTestMenu_SubmenuOpened(sender, e);
+        VideoTestMenu.PlacementTarget = VideoTestButton;
+        VideoTestMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        VideoTestMenu.IsOpen = true;
     }
 
     private void VideoTestMenu_SubmenuOpened(object sender, RoutedEventArgs e)
@@ -294,8 +309,7 @@ public partial class MainWindow
                     _mirroredDisplays.TryRemove(stream.Key, out _);
                 }
                 ScheduleRedraw();
-                _lentDisplays[stream.Key] = (stream.SourceMachine,
-                    new Core.Planning.DisplayRect(monitor.X, monitor.Y, monitor.Width, monitor.Height),
+                _lentDisplays[stream.Key] = (stream.SourceMachine, stream.SinkDisplay,
                     new Core.Planning.DisplayRect(started.X, started.Y, started.Width, started.Height));
                 RefreshInputTargets();
             }
@@ -331,6 +345,7 @@ public partial class MainWindow
 
     private async Task StopAllVideoAsync()
     {
+        await StopAllAudioAsync();
         foreach (var (key, sender) in _videoSenders.ToArray())
         {
             _videoSenders.TryRemove(key, out _);

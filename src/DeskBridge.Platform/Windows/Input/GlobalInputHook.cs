@@ -40,6 +40,7 @@ public sealed class GlobalInputHook : IDisposable
 
     private void Run()
     {
+        Priority.MultimediaThread(); // a busy PC must not make the mouse late (or Windows skip the hook)
         _threadId = GetCurrentThreadId();
         _mouseProc = MouseProc;
         _keyProc = KeyProc;

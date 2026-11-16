@@ -157,6 +157,19 @@ public partial class MainWindow
         bool isSelected = assignment is not null && assignment == selected;
 
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // Primary display marks: of its own machine, and of the machine it shows (its virtual display there).
+        var primaryOf = PrimaryMarks(machine, display, shows, coordinator);
+        foreach (var of in primaryOf)
+        {
+            text.Children.Add(new TextBlock
+            {
+                Text = of == machine ? L.T("★ primary") : L.T("★ primary of {machine}", ("machine", of)),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColorOf(of)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+        }
         text.Children.Add(new TextBlock
         {
             Text = foreign ? $"{machine} · {display.Id}" : display.Id,
@@ -223,6 +236,7 @@ public partial class MainWindow
         Canvas.SetLeft(tile, frame.ToCanvasX(rect.X) + 3);
         Canvas.SetTop(tile, frame.ToCanvasY(rect.Y) + 3);
         canvas.Children.Add(tile);
+        tile.ContextMenu = PrimaryMenu(machine, display, shows, coordinator);
 
         if (foreign)
             MakeDeskDraggable(tile, machine, display, rect, onDesk, desk, deskBounds, frame, assignment);

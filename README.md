@@ -1,95 +1,86 @@
 # DeskBridge
 
-Usa varios equipos con un solo teclado y ratón, y **reparte las pantallas físicas entre ellos** como quieras.
+Usa varios equipos con un solo teclado y ratón, y **reparte las pantallas físicas entre ellos**: un monitor
+del sobremesa puede mostrar una pantalla del portátil, y el ratón pasa de uno a otro como si fueran un solo
+escritorio.
 
-Ejemplo: un sobremesa con 3 pantallas y un portátil.
+Ejemplo real: un sobremesa con 3 monitores y un portátil de empresa.
 
 | Perfil | Qué pasa |
 |---|---|
-| `personal` | Cada equipo con sus pantallas. El teclado y el ratón del sobremesa también controlan el portátil. |
-| `four-screens` | La pantalla del portátil pasa a ser la 4ª pantalla del sobremesa. |
-| `work` | El portátil trabaja en las pantallas 2 y 3 del sobremesa, y la pantalla del portátil muestra una del sobremesa. |
+| `personal` | El monitor 3 del sobremesa muestra una pantalla virtual del portátil; el ratón y el teclado del sobremesa manejan los dos equipos, el sonido del portátil sale por los cascos del sobremesa. |
+| `four-screens` | La pantalla del propio portátil queda colocada debajo de los monitores del sobremesa, como una pantalla más. |
 
 ## Cómo funciona (resumen)
 
-Cuando un equipo "presta" una pantalla física a otro:
+1. El equipo que **presta** su imagen crea una **pantalla virtual** (Virtual Display Driver) colocada donde dice el perfil.
+2. Esa pantalla se captura, se codifica en H.264 con la GPU y se envía cifrada por la red.
+3. El monitor del otro equipo muestra el vídeo a pantalla completa, con un retraso de unos 20-30 ms ida y vuelta.
+4. El teclado y el ratón del **coordinador** (el equipo con teclado y ratón) pasan al otro equipo al entrar en su pantalla.
+5. Opcionalmente, el sonido de un equipo se oye en el coordinador y el micrófono del coordinador se usa en el otro.
 
-1. El equipo que la **usa** crea una **pantalla virtual**. Por defecto tiene la misma resolución que la física; se puede cambiar.
-2. Esa pantalla virtual se captura, se codifica con la GPU (H.264/HEVC) y se envía por la red.
-3. El equipo **dueño** del monitor muestra el vídeo a pantalla completa en él.
-4. El teclado y el ratón del coordinador se reenvían al equipo correspondiente según la pantalla en la que esté el cursor.
+Más detalle en [docs/arquitectura.md](docs/arquitectura.md); para trabajar en el código, [docs/desarrollo.md](docs/desarrollo.md).
 
-Solo se transmite lo que se presta. En el perfil `work` son 3 streams 1080p60, unos 20 Mbps cada uno.
+## Instalación
 
-Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
+`DeskBridge.exe` es la misma aplicación en todos los equipos; no necesita .NET instalado.
+- Al abrirla por primera vez se copia a `%LOCALAPPDATA%\DeskBridge\bin\`, crea su acceso directo en el menú
+  Inicio y su entrada en **Configuración → Aplicaciones** (desde donde se desinstala). No pide permisos de administrador.
+- Se actualiza sola desde las [releases de GitHub](https://github.com/tinaut1986/DeskBridge/releases) (canal estable o beta).
+- Todos los equipos necesitan la **misma clave compartida** (página *Conexión y seguridad*). Un equipo que no
+  acepta conexiones entrantes (cortafuegos de empresa) pone además la dirección del coordinador en *Conectar a*:
+  él abre todas las conexiones.
 
 ## La aplicación
 
-`DeskBridge.exe` es **la misma aplicación en todos los equipos** y lleva dentro el **agente**: la parte que funciona en segundo plano y hace el trabajo real (pantallas virtuales, streams, entrada).
+Barra lateral con estas páginas:
 
-- **En el coordinador** (el equipo con teclado y ratón, normalmente el sobremesa):
-  - **Layout**: mapa visual de las pantallas de cada equipo. Para cada pantalla física eliges qué equipo la usa y, si se presta, con qué resolución, Hz y bitrate se envía. Abajo se resume cuántas pantallas virtuales crea cada equipo, el ancho de banda total y los avisos. Con *Apply profile* se aplica en todos los equipos.
-  - **Machines**: equipos, sus direcciones y sus monitores. *Detect* los lee de Windows en este PC, o se los pide al agente del otro equipo por la red. Cada equipo puede tener los monitores que sean.
-- **En el portátil**: en la pestaña **This PC** eliges `laptop`, pegas la clave compartida y guardas. El agente queda esperando órdenes del coordinador.
+- **Inicio**: este PC, estado del agente, perfil aplicado y equipos.
+- **Disposición** (en el coordinador): mapa con *tu escritorio* (los monitores del coordinador) y las pantallas de
+  los demás equipos.
+  - Arrastra una pantalla de otro equipo al escritorio para usarla desde allí; el ratón pasa por donde se tocan.
+  - Selecciona una pantalla (en el mapa o en la lista) para elegir qué muestra, la resolución, los Hz y el bitrate.
+  - **Clic derecho** en una pantalla: hacerla la **pantalla principal** de su equipo (menú Inicio, barra de
+    tareas, ventanas nuevas), o hacer principal del otro equipo lo que muestra. Las principales llevan "★".
+    Si el coordinador presta su pantalla principal, por defecto pasa a ser principal la más cercana.
+  - Menú "⋯" del perfil: nuevo, duplicar, cambiar nombre, eliminar. **Aplicar perfil** lo pone en marcha en todos los equipos.
+- **Equipos**: equipos, direcciones y monitores (*Detectar* los lee de Windows, también de otro equipo por la red).
+- **Compartir**, cada opción por equipo y casi todas desactivadas por defecto (uno de los equipos puede ser del trabajo):
+  - teclado y ratón (en el coordinador: llevarlos a otros equipos; en el otro: dejarse controlar). **Ctrl+Alt+Inicio** en el coordinador los recupera siempre;
+  - **sonido**: un equipo envía todo lo que reproduce al coordinador (y silencia sus altavoces); el coordinador lo
+    reproduce, con un volumen por equipo;
+  - **micrófono**: el coordinador presta su micrófono; el otro equipo lo recibe por **VB-CABLE** (hay que
+    instalarlo), y mientras se usa "CABLE Output" es su micrófono predeterminado;
+  - portapapeles (texto e imágenes) y archivos (se sueltan en la ventana o *Enviar archivos a*).
+- **Conexión y seguridad**: nombre del equipo, clave compartida (oculta), puerto, *Conectar a*, y permitir que el
+  coordinador instale versiones nuevas en este equipo (mantenimiento a distancia).
+- **Actualizaciones**: versión instalada, canal y buscar ahora.
+- **Registro**: el log, diagnósticos de todos los equipos y prueba de vídeo.
+- **General**: idioma (11), tema, iniciar con Windows, seguir en el área de notificación al cerrar,
+  **marcar cada pantalla con el color de su equipo** (un borde fino), **mostrar las pantallas de otros equipos
+  sin esperar al refresco** (menos retraso, a veces una línea de corte), **ejecutar como administrador** y
+  **permitir que el coordinador use la pantalla de bloqueo y los avisos de administrador** (instala un servicio).
 
-La configuración se guarda en `%APPDATA%\DeskBridge\`:
-- `deskbridge.json` es común y solo se edita en el coordinador;
-- `deskbridge.local.json` es de cada equipo y lleva su id y la clave;
-- `settings.json` guarda las preferencias de la interfaz (idioma y canal).
+**Ejecutar como administrador** (en el equipo controlado): Windows no deja que un programa normal envíe teclas o
+clics a una aplicación abierta como administrador. Con esta opción DeskBridge arranca elevado al iniciar sesión
+(una tarea programada; Windows pide permiso una vez). Si se abre a mano sin permisos, le pasa el relevo a la tarea.
 
-Las dos primeras se crean solas la primera vez, a partir de los monitores detectados.
+**Pantalla de bloqueo y avisos de UAC**: ningún programa normal puede verlos ni escribir en ellos. La opción
+instala el servicio "DeskBridge Helper" (como AnyDesk): con él se ven en el monitor prestado y se manejan desde el
+coordinador. Necesita "Ejecutar como administrador": el servicio solo atiende a DeskBridge con esos permisos.
 
-### Compartir portapapeles y archivos
-
-En **This PC > Sharing**, por equipo y desactivado por defecto, porque uno de los equipos puede ser del trabajo:
-- **Enviar lo que copio:** lo que copies en este PC (texto o imágenes) llega a los demás.
-- **Recibir lo que se copia:** lo que copien los demás aparece en el portapapeles de este PC.
-- **Aceptar archivos:** se guardan en la carpeta elegida, por defecto `Descargas\DeskBridge`. Para enviar, suelta los archivos en la ventana y elige el equipo, o usa **File > Send files to**.
-
-Todo viaja cifrado. Los archivos se verifican con SHA-256 y nunca sobrescriben a otro.
-
-### Bandeja del sistema y modo noche
-
-- Cerrar la ventana deja DeskBridge en el área de notificación, con el agente funcionando; **File > Quit** lo cierra de verdad.
-- **Settings > Start with Windows** lo arranca minimizado, que es lo que conviene en el portátil.
-- **Settings > Theme**: System (sigue a Windows), Light o Dark.
-
-### Idioma
-
-**Settings > Language**: "System" sigue el idioma de Windows, o eliges uno de los 11 disponibles, los mismos que NSA y llm-browser. Cambia al momento, sin reiniciar. Las claves son el texto en inglés y el inglés es el respaldo.
-- Los textos traducibles van en `L.T("...")` (código) y `{l:T '...'}` (XAML), y cada idioma es un JSON en `src/DeskBridge.Core/Locales/`.
-- Para ver qué falta en un idioma:
-  ```bash
-  dotnet run scripts/i18n-keys.cs -- --missing es
-  ```
-- Los tests fallan si a algún idioma le falta un texto, si los `{marcadores}` no coinciden o si sobra una clave que ya no se usa.
-
-### Actualizaciones
-
-DeskBridge se actualiza solo desde las GitHub Releases, como llm-browser:
-- comprueba al arrancar y cada 6 horas, o con **Settings > Check for updates now**;
-- descarga el nuevo `DeskBridge.exe`, lo verifica con el `SHA256SUMS.txt` de la release y lo cambia al reiniciar. Si cierras sin reiniciar, lo cambia al salir;
-- canal **Stable** o **Beta** en **Settings > Update channel**;
-- las novedades salen en tu idioma (`docs/release-notes/`; ver [su README](docs/release-notes/README.md)).
-
-Solo se actualizan las versiones publicadas; una compilación local nunca. Para ver la ventana sin publicar nada: `DESKBRIDGE_UPDATER_DEMO=<carpeta con vX.Y.Z*.md>`.
-
-> Mientras el repositorio sea **privado**, el actualizador no puede leer las releases (GitHub responde 404 sin autenticación). Hay que hacerlo público o añadir un token antes de la primera versión.
+La configuración vive en `%APPDATA%\DeskBridge\`: `deskbridge.json` (común, se edita en el coordinador y se
+reparte sola), `deskbridge.local.json` (id del equipo y clave) y `settings.json` (preferencias de este usuario).
 
 ## Estado
 
-- Hecho:
-  - configuración y planificador de perfiles, con ajustes de stream por pantalla y colocación de las pantallas virtuales;
-  - canal de control cifrado y con autenticación mutua;
-  - detección de monitores (local y remota);
-  - interfaz gráfica con agente integrado, en 11 idiomas, con modo noche, bandeja del sistema, arranque con Windows y actualización automática;
-  - portapapeles compartido (texto e imágenes) y envío de archivos entre equipos;
-  - CLI;
-  - tests.
-- Diseñado, pendiente de decidir: micrófono y cámara ([docs/microfono-camara.md](docs/microfono-camara.md)).
-- Simulado: las piezas reales (pantallas virtuales, streaming, entrada) son interfaces cuyas implementaciones de momento solo escriben en el log lo que harían.
+Funciona a diario entre un sobremesa (NVIDIA) y un portátil (Intel Arc): pantallas virtuales, vídeo propio de
+baja latencia, teclado y ratón, sonido, micrófono, portapapeles, archivos, actualizaciones remotas.
 
-Ver la [hoja de ruta](docs/arquitectura.md#hoja-de-ruta).
+El vídeo solo se envía cuando la pantalla cambia: una pantalla quieta apenas gasta red ni GPU.
+
+Pendiente, por orden: mostrar el sobremesa en el portátil (fase 4); color a resolución completa (4:4:4);
+cámara. Ver la [hoja de ruta](docs/arquitectura.md#hoja-de-ruta).
 
 ## Compilar y probar
 
@@ -103,33 +94,25 @@ dotnet test
 dotnet run --project src/DeskBridge.Gui
 ```
 
-### Línea de comandos
-
-`deskbridge` (proyecto `src/DeskBridge.App`) sirve para pruebas y scripts:
-
-```
-deskbridge validate | profiles | plan <profile> | simulate <profile> <machine>
-deskbridge displays [<machine>] | keygen | agent | switch <profile>
-```
-
-Con `--config` y `--local` se usan otros ficheros. Por ejemplo, para probar en un solo PC: `"address": "127.0.0.1"` y un `"controlPort"` distinto en cada equipo, y dos agentes con `--local` apuntando a dos ficheros locales.
+La línea de comandos (`src/DeskBridge.App`, `deskbridge.exe`) sirve para pruebas y para depurar otros equipos a
+distancia; ver [docs/desarrollo.md](docs/desarrollo.md).
 
 ## Publicar
 
-Mismo esquema que llm-browser y los ports de 3DS (`.github/workflows/build-release.yml`):
-- un tag `vX.Y.Z` compila `DeskBridge-X.Y.Z-win-x64.exe` (autocontenido y de un solo archivo: no necesita .NET instalado) y publica la release con su `SHA256SUMS.txt`;
-- si el commit del tag está en `main` es **Release**; si está en una rama `release/*` sin fusionar, es **Beta**;
-- antes del tag, escribe las notas en `docs/release-notes/`.
+Un tag `vX.Y.Z` compila `DeskBridge-X.Y.Z-win-x64.exe` (autocontenido, un solo archivo) y publica la release con
+su `SHA256SUMS.txt` (`.github/workflows/build-release.yml`). Si el commit está en `main` es estable; en una rama
+`release/*` sin fusionar, beta. Las notas, en los 11 idiomas, van antes en `docs/release-notes/`.
 
 ## Estructura
 
 ```
-src/DeskBridge.Core        Lógica sin dependencias de Windows: modelo, planificador, canal de control, agente,
-                           traducciones (Locales/) y lectura de releases
-src/DeskBridge.Windows     Piezas específicas de Windows (detección de monitores; luego driver virtual, entrada...)
-src/DeskBridge.Gui         Aplicación WPF (DeskBridge.exe)
+src/DeskBridge.Core        Sin dependencias de Windows: modelo, planificador, canal de control y de vídeo,
+                           agente, entrada (lógica), Opus, traducciones (Locales/), releases
+src/DeskBridge.Platform    Windows: monitores, pantallas virtuales, captura/codificación/vídeo (Direct3D 11,
+                           Media Foundation), entrada (ganchos, SendInput), sonido (WASAPI)
+src/DeskBridge.Gui         Aplicación WPF (DeskBridge.exe) con el agente dentro
 src/DeskBridge.App         CLI (deskbridge.exe)
 tests/DeskBridge.Core.Tests
 scripts/i18n-keys.cs       Lista los textos traducibles (o los que faltan en un idioma)
-docs/                      Arquitectura, hoja de ruta y notas de versión
+docs/                      Arquitectura, desarrollo, micrófono y cámara, notas de versión
 ```

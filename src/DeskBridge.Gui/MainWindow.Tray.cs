@@ -33,9 +33,70 @@ public partial class MainWindow
         };
         _tray.DoubleClick += (_, _) => ShowFromTray();
         _tray.ContextMenuStrip.Opening += (_, _) => BuildTrayMenu();
+        _adminTask = Elevation.TaskExists();
         FollowAutostart();
-        StartWithWindowsMenu.IsChecked = StartsWithWindows();
+        UpdateAdminUi();
+        InitSecure();
         CloseToTrayMenu.IsChecked = _settings.CloseToTray;
+    }
+
+    /// <summary>The sign-in task that starts DeskBridge as administrator exists (it replaces "Start with Windows").</summary>
+    private bool _adminTask;
+
+    private void UpdateAdminUi()
+    {
+        RunAsAdminBox.IsChecked = _adminTask;
+        AdminStatusText.Text = Elevation.IsElevated
+            ? L.T("DeskBridge is running as administrator now.")
+            : L.T("DeskBridge is running without administrator rights now.");
+        // The task starts it at sign-in already: no second start from the Run key.
+        StartWithWindowsMenu.IsChecked = _adminTask || StartsWithWindows();
+        StartWithWindowsMenu.IsEnabled = !_adminTask;
+    }
+
+    private void RunAsAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        bool wanted = RunAsAdminBox.IsChecked == true;
+        if (Environment.ProcessPath is not { } exe)
+            return;
+        AddLog(wanted ? "[admin] creating the sign-in task (Windows asks for permission on this PC)"
+                      : "[admin] deleting the sign-in task (Windows asks for permission on this PC)");
+        bool started = wanted ? Elevation.Enable(exe, AddLog) : Elevation.Disable(exe, AddLog);
+        if (!started)
+        {
+            RunAsAdminBox.IsChecked = _adminTask;
+            return;
+        }
+        if (wanted)
+            RemoveRunKey();
+        else
+            SetRunKey(exe);
+        // The task (or Explorer) starts the new copy in a few seconds, once this one has closed.
+        Quit();
+    }
+
+    private static void RemoveRunKey()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            key?.DeleteValue(RunValue, throwOnMissingValue: false);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or System.IO.IOException)
+        {
+        }
+    }
+
+    private static void SetRunKey(string exe)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+            key.SetValue(RunValue, $"\"{exe}\" --minimized");
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or System.IO.IOException)
+        {
+        }
     }
 
     /// <summary>
@@ -43,10 +104,15 @@ public partial class MainWindow
     /// coordinator (a new file under %LOCALAPPDATA%\DeskBridge\bin), or when the registered file is gone.
     /// A copy started by hand from elsewhere does not take it over.
     /// </summary>
-    private static void FollowAutostart()
+    private void FollowAutostart()
     {
         if (Environment.ProcessPath is not { } exe)
             return;
+        if (_adminTask)
+        {
+            RemoveRunKey(); // started by the sign-in task instead
+            return;
+        }
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
@@ -97,7 +163,7 @@ public partial class MainWindow
                     await SendFilesAsync(m, dialog.FileNames);
             });
             item.Enabled = ready;
-            item.ToolTipText = ready ? null : L.T("Set up This PC first.");
+            item.ToolTipText = ready ? null : L.T("Set up Connection and security first.");
         }
         send.Enabled = send.DropDownItems.Count > 0;
         menu.Items.Add(send);
@@ -106,7 +172,7 @@ public partial class MainWindow
         var stopVideo = new Forms.ToolStripMenuItem(L.T("Stop showing other machines' screens"), null, (_, _) =>
         {
             ForgetApplied();
-            _ = StopProfileStreamsAsync();
+            _ = StopProfileStreamsAsync().ContinueWith(_ => Dispatcher.InvokeAsync(RestorePrimary), TaskScheduler.Default);
         })
         {
             Enabled = !_videoReceivers.IsEmpty,
@@ -170,14 +236,14 @@ public partial class MainWindow
     // ------------------------------------------------------------------ settings
 
     private void CloseToTray_Click(object sender, RoutedEventArgs e) =>
-        SaveUserSettings(_settings with { CloseToTray = CloseToTrayMenu.IsChecked });
+        SaveUserSettings(_settings with { CloseToTray = CloseToTrayMenu.IsChecked == true });
 
     private void StartWithWindows_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (StartWithWindowsMenu.IsChecked && Environment.ProcessPath is { } exe)
+            if (StartWithWindowsMenu.IsChecked == true && Environment.ProcessPath is { } exe)
                 key.SetValue(RunValue, $"\"{exe}\" --minimized");
             else
                 key.DeleteValue(RunValue, throwOnMissingValue: false);
@@ -197,22 +263,10 @@ public partial class MainWindow
                && command.Contains(exe, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Two overlapping screens, drawn instead of shipping an .ico for now.</summary>
+    /// <summary>The app's icon at the size the notification area uses (the .ico has one drawn for each size).</summary>
     private static Drawing.Icon CreateIcon()
     {
-        using var bitmap = new Drawing.Bitmap(32, 32);
-        using (var g = Drawing.Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Drawing.Color.Transparent);
-            using var back = new Drawing.SolidBrush(Drawing.Color.FromArgb(0xEA, 0x58, 0x0C));
-            using var front = new Drawing.SolidBrush(Drawing.Color.FromArgb(0x25, 0x63, 0xEB));
-            using var edge = new Drawing.Pen(Drawing.Color.White, 2);
-            g.FillRectangle(back, 12, 3, 18, 13);
-            g.FillRectangle(front, 2, 12, 20, 14);
-            g.DrawRectangle(edge, 2, 12, 20, 14);
-            g.FillRectangle(front, 9, 27, 6, 3);
-        }
-        return Drawing.Icon.FromHandle(bitmap.GetHicon());
+        using var stream = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/deskbridge.ico")).Stream;
+        return new Drawing.Icon(stream, Forms.SystemInformation.SmallIconSize);
     }
 }

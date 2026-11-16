@@ -51,6 +51,10 @@ public static class ThemeManager
         r["AppBackground"] = Brush(dark ? "#1E1F24" : "#F5F6F8");
         r["CardBackground"] = Brush(dark ? "#2A2C33" : "#FFFFFF");
         r["CardBorder"] = Brush(dark ? "#3A3D46" : "#E5E7EB");
+        r["NavBackground"] = Brush(dark ? "#191A1F" : "#ECEEF2");
+        r["NavHover"] = Brush(dark ? "#262830" : "#E1E4EA");
+        r["NavSelected"] = Brush(dark ? "#2C2F38" : "#DADEE6");
+        r["Accent"] = Brush(dark ? "#4C8DFF" : "#2563EB");
         r["HeaderBackground"] = Brush(dark ? "#26282E" : "#F3F4F6");
         r["NotesBackground"] = Brush(dark ? "#24262C" : "#F9FAFB");
         r["NormalText"] = Brush(dark ? "#E6E6E6" : "#1F2937");
