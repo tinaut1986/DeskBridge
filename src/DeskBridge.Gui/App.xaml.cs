@@ -63,6 +63,7 @@ public partial class App : Application
                 && Elevation.TaskExists() && Elevation.HandOverToTask())
             {
                 _instance.Dispose();
+                _instance = null;
                 Shutdown();
                 return;
             }
