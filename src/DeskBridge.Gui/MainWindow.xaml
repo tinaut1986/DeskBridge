@@ -126,7 +126,7 @@
                     <Button Content="{l:T 'Later'}" Click="DriverLater_Click" Margin="0" />
                 </StackPanel>
                 <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"
-                           Text="{l:T 'The applied profile shows displays of this PC on another machine. To create them, this PC needs the Virtual Display Driver (free and open source, MIT, signed). Until then, its main display is shown instead.'}" />
+                           Text="{l:T 'The applied profile shows displays of this PC on another machine. To create them, this PC needs the Virtual Display Driver (free and open source, MIT, signed). Install opens its control app (VDD Control, downloaded with winget if needed): press Install Driver there. Until then, its main display is shown instead.'}" />
             </DockPanel>
         </Border>
 

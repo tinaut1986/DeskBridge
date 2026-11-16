@@ -44,6 +44,9 @@ public partial class MainWindow
                 return HandleUpdate(from, message);
             }
 
+            case ProbeMessage { What: "vdd" }:
+                return new ReportMessage(await Task.Run(Platform.Windows.VirtualDisplays.MttVirtualDisplays.Report, ct));
+
             case VideoProbeMessage probe when from == _agent?.Machine:
                 return await ProbeVideoAsync(probe.Machine, probe.Seconds, ct);
 

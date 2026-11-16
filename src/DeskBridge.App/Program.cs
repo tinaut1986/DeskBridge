@@ -165,6 +165,12 @@ try
                         Console.WriteLine(line);
                     return 0;
                 }
+                case "probe-vdd":
+                {
+                    var reply = await session.RequestAsync(Via(new ProbeMessage("vdd")));
+                    Console.WriteLine(reply is ReportMessage r ? r.Text : reply is ErrorMessage e ? e.Message : reply.GetType().Name);
+                    return 0;
+                }
                 case "update" when argList.Count >= 4:
                 {
                     var file = argList[3];

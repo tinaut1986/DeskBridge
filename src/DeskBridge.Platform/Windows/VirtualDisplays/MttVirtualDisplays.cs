@@ -42,6 +42,17 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             return;
         }
 
+        if (displays.Count > 0 && Input.PointerOverlay.Needed)
+        {
+            // A Remote Desktop session only gets Remote Desktop's own displays: virtual monitors appear on this PC's
+            // own (console) session, once the remote one is handed back to it (tscon <session> /dest:console).
+            log("[virtual displays] this is a Remote Desktop session, where Windows shows no virtual monitors: "
+                + "its main display is sent instead until the session is back on this PC's own screen");
+            foreach (var d in displays)
+                Placed[d.Key] = (0, 0);
+            return;
+        }
+
         if (Send($"SETDISPLAYCOUNT {displays.Count}", wantReply: false) is null)
         {
             log("[virtual displays] the Virtual Display Driver did not take the new monitor count");
@@ -91,6 +102,84 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
                 log($"[virtual displays] {displays[i].Key} = {devices[i]} {current.PelsWidth}x{current.PelsHeight}@{current.DisplayFrequency} at ({current.PositionX},{current.PositionY})");
             }
         }
+    }
+
+    /// <summary>What can be seen of the driver from here (troubleshooting): pipes, its answer, display devices.</summary>
+    public static string Report()
+    {
+        var lines = new List<string>();
+        try
+        {
+            var pipes = Directory.GetFiles(@"\\.\pipe\")
+                .Select(Path.GetFileName)
+                .Where(n => n is not null && (n.Contains("MTT", StringComparison.OrdinalIgnoreCase)
+                                              || n.Contains("Virtual", StringComparison.OrdinalIgnoreCase)
+                                              || n.Contains("VDD", StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            lines.Add("pipes: " + (pipes.Count == 0 ? "none matching MTT/Virtual/VDD" : string.Join(", ", pipes)));
+        }
+        catch (Exception ex)
+        {
+            lines.Add("pipes: " + ex.Message);
+        }
+
+        try
+        {
+            using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+            pipe.Connect(1500);
+            lines.Add($"connect {PipeName}: ok");
+            try
+            {
+                pipe.ReadMode = PipeTransmissionMode.Message;
+            }
+            catch (Exception ex)
+            {
+                lines.Add("message mode: " + ex.Message);
+            }
+            var bytes = Encoding.Unicode.GetBytes("PING");
+            pipe.Write(bytes, 0, bytes.Length);
+            pipe.Flush();
+            var buffer = new byte[1024];
+            var read = pipe.ReadAsync(buffer, 0, buffer.Length);
+            if (read.Wait(2000))
+                lines.Add($"PING -> {read.Result} bytes: '{Encoding.Unicode.GetString(buffer, 0, read.Result)}' / ascii '{Encoding.ASCII.GetString(buffer, 0, read.Result)}'");
+            else
+                lines.Add("PING -> no answer in 2 s");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"connect {PipeName}: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        var device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
+        for (uint i = 0; EnumDisplayDevicesW(null, i, ref device, 0); i++)
+        {
+            lines.Add($"display {device.DeviceName}: '{device.DeviceString}' flags 0x{device.StateFlags:X} id '{device.DeviceId}'");
+            device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
+        }
+        // Display devices Windows knows of (installed drivers, even when not part of this session).
+        try
+        {
+            using var pnp = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("pnputil.exe", "/enum-devices /class Display")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            })!;
+            var output = pnp.StandardOutput.ReadToEnd();
+            pnp.WaitForExit(5000);
+            foreach (var line in output.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("Microsoft PnP", StringComparison.Ordinal)))
+                lines.Add("pnp: " + line);
+        }
+        catch (Exception ex)
+        {
+            lines.Add("pnputil: " + ex.Message);
+        }
+        using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\MikeTheTech\VirtualDisplayDriver"))
+            lines.Add("registry HKLM\\SOFTWARE\\MikeTheTech\\VirtualDisplayDriver: " + (key is null ? "missing" : string.Join(", ", key.GetValueNames().Select(v => $"{v}={key.GetValue(v)}"))));
+        foreach (var path in new[] { @"C:\VirtualDisplayDriver\vdd_settings.xml", @"C:\Program Files\Virtual Display Driver" })
+            lines.Add($"{path}: {(File.Exists(path) || Directory.Exists(path) ? "exists" : "missing")}");
+        return string.Join("\n", lines);
     }
 
     /// <summary>The driver's monitors that are part of the desktop (\\.\DISPLAYn names), in order.</summary>

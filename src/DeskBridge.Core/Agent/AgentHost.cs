@@ -230,7 +230,7 @@ public sealed class AgentHost : IAsyncDisposable
                 return await target.RequestAsync(relay.Inner, ct);
             }
 
-            case UpdateStartMessage or UpdateChunkMessage or UpdateEndMessage or VideoProbeMessage:
+            case UpdateStartMessage or UpdateChunkMessage or UpdateEndMessage or VideoProbeMessage or ProbeMessage:
                 return MaintenanceHandler is { } maintenance
                     ? await maintenance(from, request, ct)
                     : new ErrorMessage(L.T("Unexpected request: {request}.", ("request", request.GetType().Name)));

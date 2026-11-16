@@ -29,6 +29,7 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(UpdateEndMessage), "updateEnd")]
 [JsonDerivedType(typeof(VideoProbeMessage), "videoProbe")]
 [JsonDerivedType(typeof(ReportMessage), "report")]
+[JsonDerivedType(typeof(ProbeMessage), "probe")]
 [JsonDerivedType(typeof(StartVideoMessage), "startVideo")]
 [JsonDerivedType(typeof(VideoStartedMessage), "videoStarted")]
 [JsonDerivedType(typeof(StopVideoMessage), "stopVideo")]
@@ -125,6 +126,9 @@ public sealed record UpdateEndMessage() : ControlMessage;
 
 /// <summary>From this PC only: receive a stream from <paramref name="Machine"/> without showing it, and report how it went.</summary>
 public sealed record VideoProbeMessage(string Machine, double Seconds) : ControlMessage;
+
+/// <summary>Asks a machine to look into something and report it as text (troubleshooting), e.g. "vdd".</summary>
+public sealed record ProbeMessage(string What) : ControlMessage;
 
 /// <summary>A text answer (a probe's report).</summary>
 public sealed record ReportMessage(string Text) : ControlMessage;

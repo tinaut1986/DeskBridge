@@ -46,19 +46,70 @@ public partial class MainWindow
         });
     }
 
-    private void InstallDriver_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// The winget package is the driver's control app (VDD Control, portable); the driver itself is installed from
+    /// it with its Install Driver button. So: download it if needed, then open it.
+    /// </summary>
+    private async void InstallDriver_Click(object sender, RoutedEventArgs e)
     {
+        WatchForDriver();
+        if (FindDriverControl() is { } existing)
+        {
+            OpenDriverControl(existing);
+            return;
+        }
         try
         {
-            // A visible console: winget shows the licence and progress, and Windows asks for administrator rights.
-            Process.Start(new ProcessStartInfo("cmd.exe", $"/k winget install --id={DriverWingetId} -e") { UseShellExecute = true });
-            AddLog(L.T("Installing the Virtual Display Driver with winget..."));
+            // A visible console: winget shows the licence and progress; it stays open only if something fails.
+            using var winget = Process.Start(new ProcessStartInfo("cmd.exe", $"/c winget install --id={DriverWingetId} -e || pause")
+            {
+                UseShellExecute = true,
+            });
+            AddLog(L.T("Downloading the Virtual Display Driver's control app with winget..."));
+            if (winget is not null)
+                await winget.WaitForExitAsync();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            OpenExternal(DriverPage);
         }
-        WatchForDriver();
+        if (FindDriverControl() is { } downloaded)
+            OpenDriverControl(downloaded);
+        else
+            OpenExternal(DriverPage); // no winget, or it failed: the project page has the downloads
+    }
+
+    private void OpenDriverControl(string exe)
+    {
+        AddLog(L.T("Opening VDD Control: press Install Driver there (Windows asks for administrator rights)."));
+        _vm.Status = L.T("In VDD Control, press Install Driver.");
+        try
+        {
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = System.IO.Path.GetDirectoryName(exe) });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            AddLog(ex.Message);
+        }
+    }
+
+    /// <summary>VDD Control as winget leaves it (a portable app under %LOCALAPPDATA%\Microsoft\WinGet\Packages).</summary>
+    private static string? FindDriverControl()
+    {
+        var packages = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet", "Packages");
+        try
+        {
+            return System.IO.Directory.Exists(packages)
+                ? System.IO.Directory.EnumerateDirectories(packages, DriverWingetId + "*")
+                    .SelectMany(d => System.IO.Directory.EnumerateFiles(d, "*.exe", System.IO.SearchOption.AllDirectories))
+                    .OrderByDescending(f => System.IO.Path.GetFileName(f).Contains("Control", StringComparison.OrdinalIgnoreCase))
+                    .ThenByDescending(f => System.IO.Path.GetFileName(f).Contains("VDD", StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault()
+                : null;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private void DriverInfo_Click(object sender, RoutedEventArgs e) => OpenExternal(DriverPage);
