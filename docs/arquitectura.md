@@ -44,6 +44,9 @@
     posición real que llega con el vídeo. La forma del puntero viaja con su punto activo;
   - los hilos de captura, codificación, vídeo y ganchos de ratón van en el planificador multimedia de Windows
     (MMCSS) y el proceso con prioridad superior a la normal, para que un equipo cargado no dé tirones;
+  - probado sin ganancia (rama `feat/encoder-flush`): meter una copia tras cada imagen para que el codificador la
+    suelte antes, y pedirle máxima velocidad. Quick Sync tarda ~10 ms por imagen en movimiento y no acepta la
+    copia hasta acabar la anterior;
   - un fotograma no se pinta si ya ha llegado el siguiente, ni si va más de 80 ms por detrás del mejor de los
     últimos 30 s (`LateFrames`): así no se acumula cola y la deriva de los relojes no importa.
 - **Entrada** (Core/Input + Gui/Sharing): ganchos de bajo nivel en el coordinador. `InputTarget` describe cada
