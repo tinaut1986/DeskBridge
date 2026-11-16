@@ -2,6 +2,12 @@ using DeskBridge.Core.Model;
 
 namespace DeskBridge.Core.Abstractions;
 
+/// <summary>Lists the physical monitors of the local machine.</summary>
+public interface IDisplayDetector
+{
+    IReadOnlyList<DisplayConfig> DetectDisplays();
+}
+
 /// <summary>Creates and removes virtual monitors on the local machine (Virtual Display Driver).</summary>
 public interface IVirtualDisplayDriver
 {

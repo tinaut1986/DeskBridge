@@ -1,0 +1,10 @@
+// This machine's settings (%APPDATA%\DeskBridge\deskbridge.local.json). The GUI creates it for you.
+// It never travels over the network and is not committed.
+{
+  // This machine's id in deskbridge.json ("desktop" or "laptop").
+  "machine": "desktop",
+  // The same on every machine. Generate one with: deskbridge keygen
+  "sharedKey": "PUT-THE-KEY-HERE",
+  // Must match the control port in deskbridge.json.
+  "controlPort": 47900
+}
