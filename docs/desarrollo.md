@@ -40,7 +40,8 @@ deskbridge video-test | video-net-test
   administrador, sigue siéndolo).
 - El log de cada equipo también está en `%LOCALAPPDATA%\DeskBridge\logs\` (el de la CLI remota se reinicia con
   cada arranque). Un cierre inesperado deja `crash.txt`, que se muestra en el siguiente arranque.
-- Las cifras útiles del log: en el emisor, `capture to screen and back N ms` (ida y vuelta real); en el
+- Las cifras útiles del log: en el emisor, `capture to screen and back N ms` (ida y vuelta real) y
+  `N of M frames encoded` (los demás no cambiaron); en el
   receptor, `fps shown` y `late frames`; en el sonido, `kbps, loudest N dB`.
 - Capturas de la interfaz sin tocar la instalación real: `DeskBridge.exe --snapshot <carpeta> --config <json> --local <json>`
   (con una clave falsa en el `local`).

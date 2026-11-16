@@ -32,6 +32,10 @@
   - el H.264 de 1080 líneas se decodifica en 1088: se recorta al tamaño enviado;
   - **espacios de color explícitos** en los dos extremos (RGB 0-255; YUV BT.709 16-235). Sin eso Intel y NVIDIA
     usan valores por defecto distintos y la imagen sale lavada;
+  - **solo se codifican los fotogramas en que cambia la pantalla** (Desktop Duplication lo dice), más 100 ms
+    después del último cambio (el codificador devuelve cada fotograma uno más tarde, y así afina la imagen) y
+    uno por segundo con la pantalla quieta. El puntero va aparte: el receptor guarda la última imagen y la
+    vuelve a pintar con el puntero en su sitio. Un cursor de texto parpadeando ya cuesta unos 13 fps;
   - un fotograma no se pinta si ya ha llegado el siguiente, ni si va más de 80 ms por detrás del mejor de los
     últimos 30 s (`LateFrames`): así no se acumula cola y la deriva de los relojes no importa.
 - **Entrada** (Core/Input + Gui/Sharing): ganchos de bajo nivel en el coordinador. `InputTarget` describe cada
@@ -73,7 +77,7 @@
 - **Mismo binario en todos los equipos**, sin servidor ni cliente fijos; el coordinador es el que tiene el
   teclado y el ratón.
 - **La pantalla virtual copia la resolución y la frecuencia del monitor que la muestra**; cada pantalla prestada
-  puede cambiar resolución, Hz y bitrate (por defecto ~20 Mbps para 1080p60, aunque una pantalla quieta gasta 1-2).
+  puede cambiar resolución, Hz y bitrate (por defecto ~20 Mbps para 1080p60; una pantalla quieta no envía casi nada).
 - **Lo que comparte un portátil de empresa está desactivado por defecto** (portapapeles, archivos, sonido,
   micrófono, actualizaciones remotas).
 - **Sin servicios ni drivers propios** de momento: VDD y VB-CABLE son de terceros, firmados; DeskBridge se
@@ -81,15 +85,15 @@
 
 ## Hoja de ruta
 
-Hecho: configuración y planificador; canal de control y de vídeo cifrados; interfaz con barra lateral en 11
+Hecho: configuración y planificador; canal de control y de vídeo cifrados (vídeo solo cuando cambia la
+pantalla); interfaz con barra lateral en 11
 idiomas; portapapeles y archivos; teclado y ratón; pantallas virtuales; vídeo propio portátil → sobremesa;
 sonido y micrófono; ejecutar como administrador; pantalla principal por equipo; rebordes de color; instalación
 por usuario; actualizaciones (GitHub y remotas).
 
 Pendiente:
-1. **Vídeo solo cuando cambia la pantalla** (Desktop Duplication ya lo dice): menos GPU y tráfico con la pantalla quieta.
-2. **Servicio de Windows (SYSTEM)** para ver y manejar los avisos de UAC y la pantalla de bloqueo, como AnyDesk.
-3. **Fase 4**: una pantalla del sobremesa mostrada en el portátil (el sentido contrario).
-4. **Color 4:4:4** para el texto de colores (HEVC/H.264 4:4:4 donde la GPU lo permita).
-5. **Cámara**: ver [microfono-camara.md](microfono-camara.md).
-6. Linux / Avalonia: en pausa.
+1. **Servicio de Windows (SYSTEM)** para ver y manejar los avisos de UAC y la pantalla de bloqueo, como AnyDesk.
+2. **Fase 4**: una pantalla del sobremesa mostrada en el portátil (el sentido contrario).
+3. **Color 4:4:4** para el texto de colores (HEVC/H.264 4:4:4 donde la GPU lo permita).
+4. **Cámara**: ver [microfono-camara.md](microfono-camara.md).
+5. Linux / Avalonia: en pausa.
