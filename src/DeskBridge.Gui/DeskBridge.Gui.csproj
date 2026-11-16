@@ -11,6 +11,8 @@
     <!-- WinForms' advice for WinForms apps; this is a WPF app (WinForms only for the tray icon), where the manifest is the place. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <RootNamespace>DeskBridge.Gui</RootNamespace>
+    <!-- The .exe's own icon (Explorer, taskbar pins); the same file is a resource for the windows and the tray. -->
+    <ApplicationIcon>Assets\deskbridge.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,8 +22,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Assets\deskbridge.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\DeskBridge.Core\DeskBridge.Core.csproj" />
     <ProjectReference Include="..\DeskBridge.Platform\DeskBridge.Platform.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
   </ItemGroup>
 
 </Project>

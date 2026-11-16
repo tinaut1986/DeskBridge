@@ -96,12 +96,15 @@ public partial class MainWindow
     /// <summary>A machine (re)connected: give it the applied profile again, then start its streams.</summary>
     private async Task ReapplyToAsync(string machine)
     {
+        // Connected before the applied profile was read back at start: nothing to give it yet, the restore does
+        // it (and must not find it already done).
+        if (_applied is null)
+            return;
         // At start the restore and the machine's connection can ask at the same moment: once is enough.
         if (_lastReapply.TryGetValue(machine, out var last) && DateTime.UtcNow - last < TimeSpan.FromSeconds(10))
             return;
         _lastReapply[machine] = DateTime.UtcNow;
-        if (_applied is not null)
-            await ApplyToMachineAsync(machine);
+        await ApplyToMachineAsync(machine);
         ResumeProfileStreams(machine);
     }
 
@@ -127,6 +130,14 @@ public partial class MainWindow
 
     /// <summary>"Applied: work", in a warning colour when the edits would change it but are not applied yet.</summary>
     private void UpdateAppliedIndicator()
+    {
+        UpdateAppliedText();
+        // Home shows the same, larger.
+        HomeAppliedText.Text = AppliedText.Text;
+        HomeAppliedText.Foreground = AppliedText.Foreground == MutedBrush ? ThemeManager.Resource("NormalText") : AppliedText.Foreground;
+    }
+
+    private void UpdateAppliedText()
     {
         if (IsClientHere())
         {

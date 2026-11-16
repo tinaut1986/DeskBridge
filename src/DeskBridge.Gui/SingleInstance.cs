@@ -28,8 +28,27 @@ public sealed class SingleInstance : IDisposable
     /// <param name="onShowRequested">Called (on a thread-pool thread) when another start asks this one to show up.</param>
     public static SingleInstance? Acquire(Action onShowRequested)
     {
-        var mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
-        var show = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        Mutex mutex;
+        bool createdNew;
+        try
+        {
+            mutex = new Mutex(initiallyOwned: true, MutexName, out createdNew);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Running as administrator: its objects are out of reach of a normal start, but it is there.
+            return null;
+        }
+        EventWaitHandle show;
+        try
+        {
+            show = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            mutex.Dispose();
+            return null;
+        }
         if (!createdNew)
         {
             show.Set();

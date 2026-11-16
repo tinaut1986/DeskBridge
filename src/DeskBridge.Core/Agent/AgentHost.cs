@@ -87,6 +87,9 @@ public sealed class AgentHost : IAsyncDisposable
     /// <summary>Raised (on a thread-pool thread) after a profile is applied, with its whole plan.</summary>
     public event Action<LayoutPlan>? PlanApplied;
 
+    /// <summary>A plan is about to be applied here (before its virtual displays are placed).</summary>
+    public event Action<LayoutPlan>? PlanApplying;
+
     private (DeskBridgeConfig Config, LayoutPlan Plan)? _lastApplied;
 
     /// <summary>
@@ -205,6 +208,7 @@ public sealed class AgentHost : IAsyncDisposable
                 try
                 {
                     log(L.T("Applying profile '{profile}'...", ("profile", apply.Profile)));
+                    PlanApplying?.Invoke(plan);
                     await applier.ApplyAsync(apply.Config, plan, local.Machine, ct);
                     ActiveProfile = plan.Profile;
                     _lastApplied = (apply.Config, plan);
@@ -243,7 +247,7 @@ public sealed class AgentHost : IAsyncDisposable
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
 
-            case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage:
+            case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage or InputCursorMessage:
                 if (InputHandler is { } input)
                     await input(from, request);
                 return new OkMessage();
@@ -268,7 +272,7 @@ public sealed class AgentHost : IAsyncDisposable
 
             case FileStartMessage or FileChunkMessage or FileEndMessage:
                 return files?.Handle(from, request)
-                    ?? new ErrorMessage(L.T("This machine does not accept files from other machines. It can be enabled in its This PC tab."));
+                    ?? new ErrorMessage(L.T("This machine does not accept files from other machines. It can be enabled on it, in Sharing."));
 
             default:
                 return new ErrorMessage(L.T("Unexpected request: {request}.", ("request", request.GetType().Name)));

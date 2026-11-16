@@ -31,6 +31,7 @@ public partial class MainWindow
         CollectNewDiagnostics();
         FixCoordinatorIfAClientIsMarkedAsIt();
         UpdateInputSharing();
+        UpdateAudio();
         if (_agent is null || !IsCoordinatorHere())
             return;
 

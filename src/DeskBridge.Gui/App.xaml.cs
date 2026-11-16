@@ -11,8 +11,16 @@ public partial class App : Application
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        if (RunSecureMode(e.Args))
+        {
+            Shutdown();
+            return;
+        }
         Updater.CleanUpAfterUpdate(e.Args);
+        DeskBridge.Platform.Windows.Priority.RaiseProcess(); // keyboard, mouse and video stay smooth on a busy PC
         DeskBridge.Platform.Windows.Input.CursorHider.Show(); // in case the app ended while the pointer was hidden
+        DeskBridge.Platform.Windows.Audio.MutedDevices.RestoreLeftOver(); // and with this PC's output muted
+        DeskBridge.Platform.Windows.Audio.DefaultMicrophone.Restore(null); // or VB-CABLE as its microphone
 
         // A crash leaves its story behind (crash.txt in the log folder), shown in the log at the next start, so it
         // can be read remotely; and the pointer is never left hidden.
@@ -25,12 +33,37 @@ public partial class App : Application
         };
         var options = StartupOptions.Parse(e.Args);
 
+        // Settings, Apps, Uninstall.
+        if (e.Args.Contains("--uninstall"))
+        {
+            Installation.Uninstall();
+            Shutdown();
+            return;
+        }
+        // A published build started from a download: it runs from its install folder.
+        if (options.SnapshotDir is null && Installation.MoveIntoPlace(e.Args))
+        {
+            Shutdown();
+            return;
+        }
+
         // Snapshots (development) may run next to a real instance; everything else is one per session.
         if (options.SnapshotDir is null)
         {
             _instance = SingleInstance.Acquire(() => Dispatcher.BeginInvoke(() => (MainWindow as MainWindow)?.ShowFromTray()));
             if (_instance is null)
             {
+                Shutdown();
+                return;
+            }
+            // "Run as administrator" is on but this copy was opened by hand (the Start menu) or restarted by an update
+            // without those rights: the task opens it again as administrator. Not for other copies started minimized
+            // (the task's own start at sign-in), so a task that cannot elevate never loops.
+            if (!Elevation.IsElevated && (!options.Minimized || e.Args.Contains("--after-update"))
+                && Elevation.TaskExists() && Elevation.HandOverToTask())
+            {
+                _instance.Dispose();
+                _instance = null;
                 Shutdown();
                 return;
             }
@@ -45,11 +78,50 @@ public partial class App : Application
         var window = new MainWindow(options, settings);
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
+        if (options.SnapshotDir is null)
+            _ = Task.Run(Installation.Register); // the Start menu shortcut and the Apps entry, with this version
 
         if (options.Minimized && options.SnapshotDir is null)
             new WindowInteropHelper(window).EnsureHandle(); // started with Windows: agent and clipboard run, window stays hidden
         else
             window.Show();
+    }
+
+    /// <summary>
+    /// The Windows service and its helper (both SYSTEM, see Secure.SecureService), and installing or removing the
+    /// service from an elevated copy started for it. True when this process was one of those.
+    /// </summary>
+    private static bool RunSecureMode(string[] args)
+    {
+        if (args.Contains("--service"))
+        {
+            UseSecureLog();
+            System.ServiceProcess.ServiceBase.Run(new Secure.HelperService());
+            return true;
+        }
+        if (args.Contains("--secure-helper"))
+        {
+            UseSecureLog();
+            Secure.SecureHelper.Run();
+            return true;
+        }
+        if (args.Contains("--install-service"))
+        {
+            Secure.SecureService.Install(Environment.ProcessPath!, FileLog.Write);
+            return true;
+        }
+        if (args.Contains("--uninstall-service"))
+        {
+            Secure.SecureService.Uninstall(FileLog.Write);
+            return true;
+        }
+        return false;
+    }
+
+    private static void UseSecureLog()
+    {
+        FileLog.Directory = FileLog.SecureDirectory;
+        FileLog.Prefix = "secure";
     }
 
     private static void RecordCrash(Exception? ex)

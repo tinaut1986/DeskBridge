@@ -50,6 +50,10 @@ public sealed class VideoDevice : IDisposable
         using (var multithread = device!.QueryInterface<ID3D11Multithread>())
             multithread.SetMultithreadProtected(true);
 
+        // Ahead of other programs' work on the GPU (an emulator, a game): ignored where Windows does not allow it.
+        using (var dxgiDevice = device.QueryInterfaceOrNull<IDXGIDevice>())
+            dxgiDevice?.SetGPUThreadPriority(7);
+
         var manager = MediaFactory.MFCreateDXGIDeviceManager();
         manager.ResetDevice(device).CheckError();
         return new VideoDevice(adapter!, device, context!, manager);
@@ -62,7 +66,8 @@ public sealed class VideoDevice : IDisposable
     }
 
     /// <summary>A GPU texture (default usage).</summary>
-    public ID3D11Texture2D CreateTexture(int width, int height, Format format, BindFlags bind = BindFlags.RenderTarget, int arraySize = 1) =>
+    public ID3D11Texture2D CreateTexture(int width, int height, Format format, BindFlags bind = BindFlags.RenderTarget, int arraySize = 1,
+        ResourceOptionFlags options = ResourceOptionFlags.None) =>
         Device.CreateTexture2D(new Texture2DDescription
         {
             Width = (uint)width,
@@ -73,6 +78,7 @@ public sealed class VideoDevice : IDisposable
             SampleDescription = new SampleDescription(1, 0),
             Usage = ResourceUsage.Default,
             BindFlags = bind,
+            MiscFlags = options,
         });
 
     public void Dispose()

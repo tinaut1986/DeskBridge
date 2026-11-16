@@ -8,6 +8,11 @@ namespace DeskBridge.Platform.Windows.Video;
 /// <summary>
 /// Colour conversion and scaling on the GPU's video engine (D3D11 video processor): BGRA from the screen to
 /// NV12 for the encoder, and NV12 from the decoder to the BGRA swap chain, keeping the aspect ratio.
+/// <para>
+/// Colour spaces are always stated: the screen's RGB is full range (0-255), the video's YUV is BT.709 in video
+/// range (16-235), the usual for HD. Left unstated, each GPU's video engine fills in its own defaults (Intel and
+/// NVIDIA do not agree), and the picture came out washed out on the other side.
+/// </para>
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class VideoConverter : IDisposable
@@ -68,6 +73,11 @@ public sealed class VideoConverter : IDisposable
     /// <summary>Converts <paramref name="input"/> (slice <paramref name="slice"/> of a texture array) into <paramref name="output"/>.</summary>
     public void Convert(ID3D11Texture2D input, uint slice, ID3D11Texture2D output)
     {
+        if (!_colorSpacesSet)
+        {
+            SetColorSpaces(input.Description.Format, output.Description.Format);
+            _colorSpacesSet = true;
+        }
         if (!_inputs.TryGetValue((input.NativePointer, slice), out var inView))
         {
             var desc = new VideoProcessorInputViewDescription
@@ -93,6 +103,33 @@ public sealed class VideoConverter : IDisposable
         var stream = new VideoProcessorStream { Enable = true, InputSurface = inView };
         _videoContext.VideoProcessorBlt(_processor, outView, 0, 1, [stream]).CheckError();
     }
+
+    private bool _colorSpacesSet;
+
+    private static bool IsYuv(Format format) => format is Format.NV12 or Format.P010 or Format.YUY2 or Format.Opaque420;
+
+    private void SetColorSpaces(Format input, Format output)
+    {
+        var rgb = ColorSpaceType.RgbFullG22NoneP709;
+        var yuv = ColorSpaceType.YcbcrStudioG22LeftP709;
+        using var context1 = _videoContext.QueryInterfaceOrNull<ID3D11VideoContext1>();
+        if (context1 is not null)
+        {
+            context1.VideoProcessorSetStreamColorSpace1(_processor, 0, IsYuv(input) ? yuv : rgb);
+            context1.VideoProcessorSetOutputColorSpace1(_processor, IsYuv(output) ? yuv : rgb);
+            return;
+        }
+        // Older systems: the same, in the D3D11.0 description (RGB 0-255; YCbCr BT.709, 16-235).
+        _videoContext.VideoProcessorSetStreamColorSpace(_processor, 0, Legacy(IsYuv(input)));
+        _videoContext.VideoProcessorSetOutputColorSpace(_processor, Legacy(IsYuv(output)));
+    }
+
+    private static VideoProcessorColorSpace Legacy(bool yuv) => new()
+    {
+        RGB_Range = 0,           // full
+        YCbCr_Matrix = 1,        // BT.709
+        Nominal_Range = yuv ? 1u : 2u, // 16-235 for video, 0-255 for the screen
+    };
 
     /// <summary>Views of textures that are going away (swap chain resized, decoder reallocated).</summary>
     public void ForgetViews()

@@ -63,3 +63,39 @@ public sealed class FramePacer : IDisposable
     [DllImport("kernel32.dll")]
     private static extern bool CloseHandle(nint handle);
 }
+
+/// <summary>Short, precise waits (a high-resolution waitable timer: Thread.Sleep rounds up to the 15.6 ms tick).</summary>
+[SupportedOSPlatform("windows")]
+internal sealed class PreciseDelay : IDisposable
+{
+    private readonly nint _timer = CreateWaitableTimerExW(0, null, 0x2 /* high resolution */, 0x1F0003);
+
+    public void Wait(double milliseconds)
+    {
+        if (milliseconds <= 0)
+            return;
+        long due = -(long)(milliseconds * 10_000); // relative, in 100 ns
+        if (_timer != 0 && SetWaitableTimer(_timer, ref due, 0, 0, 0, false))
+            WaitForSingleObject(_timer, 1000);
+        else
+            Thread.Sleep(TimeSpan.FromMilliseconds(milliseconds));
+    }
+
+    public void Dispose()
+    {
+        if (_timer != 0)
+            CloseHandle(_timer);
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint CreateWaitableTimerExW(nint attributes, string? name, uint flags, uint access);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool SetWaitableTimer(nint timer, ref long dueTime, int period, nint completion, nint arg, bool resume);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WaitForSingleObject(nint handle, uint milliseconds);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(nint handle);
+}

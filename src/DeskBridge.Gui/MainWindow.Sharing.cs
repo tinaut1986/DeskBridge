@@ -38,10 +38,19 @@ public partial class MainWindow
         ShareInputBox.IsChecked = _settings.ShareInput;
         AcceptInputBox.IsChecked = _settings.AcceptInput;
         AcceptUpdatesBox.IsChecked = _settings.AcceptUpdates;
+        SendAudioBox.IsChecked = _settings.SendAudio;
+        PlayAudioBox.IsChecked = _settings.PlayAudio;
+        ShareMicBox.IsChecked = _settings.ShareMic;
+        UseRemoteMicBox.IsChecked = _settings.UseRemoteMic;
+        UpdateAudioUi();
         FilesFolderBox.Text = _settings.EffectiveFilesFolder;
 
         if (_options.SnapshotDir is null)
             WatchSession();
+        ShowFramesBox.IsChecked = _settings.ShowFrames;
+        VideoAtOnceBox.IsChecked = _settings.VideoAtOnce;
+        Platform.Windows.Video.VideoWindow.Immediate = _settings.VideoAtOnce;
+        StartFrames();
         if (_options.SnapshotDir is null)
             SourceInitialized += (_, _) => _clipboard = new ClipboardSync(this, SendClipboardAsync, AddLog) { SendEnabled = _settings.ClipboardSend };
     }
@@ -51,7 +60,7 @@ public partial class MainWindow
         // Real virtual displays; streams are started by the coordinator after the profile is applied (the
         // machine that connects to it opens every video connection), the rest is still simulated.
         var applier = Simulated.Applier(AddLog, new Platform.Windows.VirtualDisplays.MttVirtualDisplays(AddLog));
-        var agent = new AgentHost(local, applier, PlatformServices.DisplayDetector(), AddLog, _files);
+        var agent = new AgentHost(local, applier, new OriginalArrangement(PlatformServices.DisplayDetector()), AddLog, _files);
         agent.ClipboardHandler = (from, message) => Dispatcher.InvokeAsync(() =>
         {
             bool applied = _settings.ClipboardReceive && _clipboard?.Apply(message) == true;
@@ -64,6 +73,8 @@ public partial class MainWindow
         agent.VideoHandler = HandleVideoAsync;
         agent.MaintenanceHandler = HandleMaintenanceAsync;
         agent.PlanApplied += CheckVirtualDisplayDriver;
+        agent.PlanApplied += OnPlanAppliedForPrimary;
+        agent.PlanApplying += OnPlanApplyingForPrimary;
         agent.VideoOpened += OnVideoOpened;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not
@@ -127,8 +138,13 @@ public partial class MainWindow
             ShareInput = ShareInputBox.IsChecked == true,
             AcceptInput = AcceptInputBox.IsChecked == true,
             AcceptUpdates = AcceptUpdatesBox.IsChecked == true,
+            SendAudio = SendAudioBox.IsChecked == true,
+            PlayAudio = PlayAudioBox.IsChecked == true,
+            ShareMic = ShareMicBox.IsChecked == true,
+            UseRemoteMic = UseRemoteMicBox.IsChecked == true,
         });
         UpdateInputSharing();
+        UpdateAudio();
         if (_clipboard is not null)
             _clipboard.SendEnabled = _settings.ClipboardSend;
     }
@@ -153,6 +169,14 @@ public partial class MainWindow
     /// <summary>The machines files can be sent to: every other one.</summary>
     private IReadOnlyList<MachineVm> OtherMachines() =>
         _vm.Model.Machines.Where(m => m.Id.Trim() != _vm.LocalMachine.Trim()).ToList();
+
+    private void SendFiles_Click(object sender, RoutedEventArgs e)
+    {
+        FileMenu_SubmenuOpened(sender, e);
+        SendFilesMenu.PlacementTarget = SendFilesButton;
+        SendFilesMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        SendFilesMenu.IsOpen = true;
+    }
 
     private void FileMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
@@ -212,7 +236,7 @@ public partial class MainWindow
         if (ready)
             return;
         item.IsEnabled = false;
-        item.ToolTip = L.T("Set up This PC first.");
+        item.ToolTip = L.T("Set up Connection and security first.");
         ToolTipService.SetShowOnDisabled(item, true);
     }
 

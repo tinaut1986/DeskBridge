@@ -268,4 +268,20 @@ public class LayoutPlannerTests
         var v = Assert.Single(plan.VirtualDisplays);
         Assert.Equal((1920, 1080, 0, -1080), (v.Width, v.Height, v.X, v.Y));
     }
+
+    [Fact]
+    public void A_primary_display_shown_on_the_coordinator_is_that_machines_virtual_display()
+    {
+        // a (the coordinator) shows b's virtual display on its display 3; b's primary is that one, a's is its 2.
+        var config = TwoMachines(new DisplayConfig("3", 1920, 1080), null);
+        config = config with
+        {
+            Profiles = [config.Profiles[0] with { PrimaryDisplays = new Dictionary<string, string> { ["b"] = "shows:3", ["a"] = "2", ["c"] = "shows:9" } }],
+        };
+        var plan = LayoutPlanner.Plan(config, "p");
+        var shown = Assert.Single(plan.VirtualDisplaysOf("b"));
+        Assert.Equal(shown.Key, plan.PrimaryDisplayOf("b"));
+        Assert.Equal("2", plan.PrimaryDisplayOf("a"));
+        Assert.Null(plan.PrimaryDisplayOf("c")); // nothing shown there: dropped
+    }
 }
