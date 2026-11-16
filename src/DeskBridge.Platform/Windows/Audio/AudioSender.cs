@@ -170,7 +170,13 @@ public sealed class AudioSender : IAsyncDisposable, IAudioStream
         _capture = capture;
         _log($"[audio] capturing '{_device.FriendlyName}' ({_format.SampleRate} Hz, {_format.Channels} channels, "
              + (_opus is null ? "sent as PCM" : "sent as Opus") + ")");
-        if (_source == AudioSource.Output)
+        // VB-CABLE's input made the default output (its installer does that): what this PC plays would end up in
+        // the microphone it feeds, and muting it would silence that microphone. Captured, never muted, and said.
+        bool cable = _device.FriendlyName.Contains("VB-Audio", StringComparison.OrdinalIgnoreCase)
+                     || _device.FriendlyName.Contains("CABLE Input", StringComparison.OrdinalIgnoreCase);
+        if (_source == AudioSource.Output && cable)
+            _log("[audio] the default output of this PC is VB-CABLE: choose the real speakers as the default output in Windows (Settings, System, Sound)");
+        if (_source == AudioSource.Output && !cable)
         {
             try
             {

@@ -157,6 +157,22 @@ public sealed class AudioPlayer : IAsyncDisposable, IAudioStream
         using var enumerator = new MMDeviceEnumerator();
         var device = FindDevice(enumerator) ?? throw new InvalidOperationException($"there is no '{_deviceName}' output on this PC");
         _deviceId = device.ID;
+        if (_deviceName is not null)
+        {
+            // A given output (VB-CABLE's) muted would silence everything played into it.
+            try
+            {
+                if (device.AudioEndpointVolume.Mute)
+                {
+                    device.AudioEndpointVolume.Mute = false;
+                    MutedDevices.Forget(device.ID);
+                    _log($"[audio] '{device.FriendlyName}' was muted: unmuted");
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
         var mix = device.AudioClient.MixFormat;
 
         // Float at the output's own rate. The channels stay as sent (stereo or mono): Windows puts them on the
