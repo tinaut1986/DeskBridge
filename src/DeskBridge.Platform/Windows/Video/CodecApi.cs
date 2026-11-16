@@ -20,7 +20,9 @@ internal static unsafe class CodecApi
     public static readonly Guid BPictureCount = new("8d390aac-dc5c-4200-b57f-814d04babab2");
     public static readonly Guid ForceKeyFrame = new("398c1b98-8353-475a-9ef2-8f265d260345");
 
-    public const uint RateControlCbr = 0;
+    public static readonly Guid MaxBitRate = new("9651eae4-39b9-4ebf-85ef-d7f444ec7465");
+
+    public const uint RateControlCbr = 0, RateControlPeakConstrainedVbr = 1;
 
     [StructLayout(LayoutKind.Explicit, Size = 24)]
     private struct Variant

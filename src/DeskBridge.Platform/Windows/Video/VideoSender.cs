@@ -13,7 +13,7 @@ namespace DeskBridge.Platform.Windows.Video;
 [SupportedOSPlatform("windows")]
 public sealed class VideoSender : IAsyncDisposable
 {
-    private const int MaxQueued = 6;
+    private const int MaxQueued = 3;
 
     private readonly VideoChannel _channel;
     private readonly Action<string> _log;

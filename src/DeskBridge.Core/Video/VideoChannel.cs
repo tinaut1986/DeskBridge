@@ -66,8 +66,10 @@ public sealed class VideoChannel : IAsyncDisposable
         _send = new AesGcm(sendKey, TagBytes);
         _receive = new AesGcm(receiveKey, TagBytes);
         tcp.NoDelay = true;
-        tcp.SendBufferSize = 1024 * 1024;
-        tcp.ReceiveBufferSize = 1024 * 1024;
+        // Small socket buffers: when the network cannot keep up, frames wait in the sender's own queue (where
+        // they are dropped and a key frame follows) instead of piling up unseen in the socket (a growing delay).
+        tcp.SendBufferSize = 128 * 1024;
+        tcp.ReceiveBufferSize = 256 * 1024;
     }
 
     private static void Nonce(Span<byte> nonce, ulong counter)

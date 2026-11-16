@@ -72,8 +72,19 @@ public sealed class H264Encoder : IDisposable
         var settings = new List<string>();
         void Note(string name, bool ok) => settings.Add(ok ? name : name + " (not supported)");
         Note("low latency", CodecApi.SetBool(_transform, CodecApi.LowLatencyMode, true));
-        Note("CBR", CodecApi.SetUInt(_transform, CodecApi.RateControlMode, CodecApi.RateControlCbr));
-        Note($"{bitrateMbps} Mbps", CodecApi.SetUInt(_transform, CodecApi.MeanBitRate, (uint)(bitrateMbps * 1_000_000)));
+        // Variable bitrate with a ceiling: a still screen costs next to nothing (constant bitrate filled every
+        // frame up to the limit and kept the connection busy for nothing), motion gets up to the limit.
+        if (CodecApi.SetUInt(_transform, CodecApi.RateControlMode, CodecApi.RateControlPeakConstrainedVbr))
+        {
+            Note("VBR", true);
+            Note($"average {bitrateMbps / 2} Mbps", CodecApi.SetUInt(_transform, CodecApi.MeanBitRate, (uint)(bitrateMbps * 500_000)));
+            Note($"peak {bitrateMbps} Mbps", CodecApi.SetUInt(_transform, CodecApi.MaxBitRate, (uint)(bitrateMbps * 1_000_000)));
+        }
+        else
+        {
+            Note("CBR", CodecApi.SetUInt(_transform, CodecApi.RateControlMode, CodecApi.RateControlCbr));
+            Note($"{bitrateMbps} Mbps", CodecApi.SetUInt(_transform, CodecApi.MeanBitRate, (uint)(bitrateMbps * 1_000_000)));
+        }
         Note("no B-frames", CodecApi.SetUInt(_transform, CodecApi.BPictureCount, 0));
         Note($"GOP {fps * 2}", CodecApi.SetUInt(_transform, CodecApi.GopSize, (uint)(fps * 2)));
         Settings = string.Join(", ", settings);
