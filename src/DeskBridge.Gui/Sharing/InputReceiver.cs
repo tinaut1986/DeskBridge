@@ -24,6 +24,18 @@ public sealed class InputReceiver(
     private IReadOnlyList<DisplayRect>? _peers; // the coordinator's displays here (null: older coordinator, by side)
     private int _x, _y;
 
+    // In a Remote Desktop session the pointer DeskBridge moves is not drawn by the client: draw our own.
+    private PointerOverlay? _overlay;
+
+    private void ShowPointer()
+    {
+        if (_overlay is null && PointerOverlay.Needed)
+            _overlay = new PointerOverlay();
+        _overlay?.MoveTo(_x, _y);
+    }
+
+    private void HidePointer() => _overlay?.Hide();
+
     public async Task HandleAsync(string from, ControlMessage message)
     {
         InputLeaveMessage? leave = null;
@@ -42,6 +54,7 @@ public sealed class InputReceiver(
                         ? EdgeGeometry.ClampToDisplays(_displays, ex, ey)
                         : ClientHandover.Enter(_displays, enter.Side, enter.Fraction);
                     InputInjector.MoveTo(_x, _y);
+                    ShowPointer();
                     break;
 
                 case InputEventsMessage events when _from == from:
@@ -62,16 +75,19 @@ public sealed class InputReceiver(
                             leave = _peers is null ? new InputLeaveMessage(move.Fraction) : new InputLeaveMessage(move.Fraction, move.X, move.Y);
                             _injector.ReleaseAll();
                             _from = null;
+                            HidePointer();
                             break;
                         }
                         (_x, _y) = (move.X, move.Y);
                         InputInjector.MoveTo(_x, _y);
+                        ShowPointer();
                     }
                     break;
 
                 case InputReleaseMessage when _from == from:
                     _injector.ReleaseAll();
                     _from = null;
+                    HidePointer();
                     break;
 
                 default:
