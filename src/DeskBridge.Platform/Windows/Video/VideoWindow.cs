@@ -329,8 +329,11 @@ public sealed class VideoWindow : IDisposable
     }
 
     /// <summary>
-    /// Draws a decoded picture (slice <paramref name="slice"/> of an NV12 texture), fitted to the window, with the
-    /// other machine's pointer over it when <paramref name="pointer"/> is visible.
+    /// Takes a decoded picture (slice <paramref name="slice"/> of an NV12 texture), fitted to the window, to be shown
+    /// with the other machine's pointer over it when <paramref name="pointer"/> is visible. Only converts it: showing
+    /// it waits for the screen, and is done on the window's presenting thread, so the decoder never waits there
+    /// (decoding and showing on one thread took most of a frame time while the picture moved, and a hiccup made the
+    /// frames pile up and come too late).
     /// </summary>
     public void Present(ID3D11Texture2D texture, uint slice, int width, int height, (int X, int Y, bool Visible) pointer = default)
     {
@@ -338,38 +341,29 @@ public sealed class VideoWindow : IDisposable
         {
             if (_swapChain is null)
                 return;
-            if (_resized)
-            {
-                _resized = false;
-                GetClientRect(_hwnd, out var r);
-                int w = Math.Max(r.Right - r.Left, 1), h = Math.Max(r.Bottom - r.Top, 1);
-                if (w != _width || h != _height)
-                {
-                    (_width, _height) = (w, h);
-                    _converter?.Dispose();
-                    _converter = null;
-                    _frameView?.Dispose();
-                    _frameView = null;
-                    _backBuffer?.Dispose();
-                    _backBuffer = null;
-                    _picture?.Dispose();
-                    _picture = null;
-                    _swapChain.ResizeBuffers(2, (uint)w, (uint)h, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
-                }
-            }
-            if (_converter is null || _converter.InputWidth != width || _converter.InputHeight != height)
+            if (_converter is null || _converter.InputWidth != width || _converter.InputHeight != height || _converterSize != (_width, _height))
             {
                 _converter?.Dispose();
                 _converter = new VideoConverter(_video, width, height, _width, _height);
+                _converterSize = (_width, _height);
             }
-            _picture ??= _video.CreateTexture(_width, _height, Format.B8G8R8A8_UNorm, BindFlags.RenderTarget);
+            if (_picture is null || _pictureSize != (_width, _height))
+            {
+                _picture?.Dispose();
+                _picture = _video.CreateTexture(_width, _height, Format.B8G8R8A8_UNorm, BindFlags.RenderTarget);
+                _pictureSize = (_width, _height);
+            }
             _converter.Convert(texture, slice, _picture);
             (_pictureWidth, _pictureHeight) = (width, height);
-            Show(pointer);
         }
+        _streamPointer = pointer;
+        _newPicture = true;
+        _repaintWanted.Set();
     }
 
     private int _pictureWidth, _pictureHeight;
+    private (int, int) _pictureSize, _converterSize;
+    private volatile bool _newPicture;
 
     /// <summary>
     /// The other machine reports its pointer somewhere else: drawn again over the last picture (the screen is
@@ -381,6 +375,10 @@ public sealed class VideoWindow : IDisposable
         _repaintWanted.Set();
     }
 
+    /// <summary>
+    /// Shows the newest picture as soon as there is one; the pointer alone (it moved over a still picture) at most
+    /// at the screen's pace. Waiting for the screen happens here, never on the decoder's thread.
+    /// </summary>
     private void PointerLoop()
     {
         Priority.MultimediaThread();
@@ -388,39 +386,71 @@ public sealed class VideoWindow : IDisposable
         while (!_closing)
         {
             _repaintWanted.WaitOne();
-            // Not right after a picture: the next one (if the screen is moving) draws the pointer anyway.
-            while (!_closing)
+            // The pointer alone: not right after a picture (the next one, if the screen is moving, draws it anyway).
+            while (!_closing && !_newPicture)
             {
                 double since = Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastShown)).TotalMilliseconds;
                 if (since >= PointerGapMs)
                     break;
                 delay.Wait(PointerGapMs - since);
             }
-            if (!_closing)
-                Repaint(_streamPointer);
+            if (_closing)
+                break;
+            if (!_newPicture)
+                Interlocked.Increment(ref _repaints);
+            _newPicture = false;
+            bool ready;
+            lock (_drawLock)
+                ready = Compose(_streamPointer);
+            if (!ready)
+                continue;
+            try
+            {
+                // Without waiting for the vertical blank: waiting there made the window fall behind a stream that
+                // runs a hair faster than the monitor. With the flip model a newer picture simply replaces one still
+                // waiting for the next refresh (no tearing). With a frame latency of 1 this can still wait while the
+                // previous picture is queued: here, not on the decoder.
+                _swapChain?.Present(0, PresentFlags.None);
+            }
+            catch (SharpGen.Runtime.SharpGenException)
+            {
+                // the window is closing, or the GPU was reset: the next picture tries again
+            }
         }
     }
 
-    /// <summary>Draws the last picture again with the pointer somewhere else (it moved over a still screen).</summary>
     private int _repaints;
 
     /// <summary>Times the pointer was drawn again on its own since the last call (for logs).</summary>
     public int TakeRepaints() => Interlocked.Exchange(ref _repaints, 0);
 
-    private void Repaint((int X, int Y, bool Visible) pointer)
+    /// <summary>
+    /// Draws the last picture, the pointer and the border into the back buffer (under the draw lock); false when
+    /// there is nothing to draw yet.
+    /// </summary>
+    private bool Compose((int X, int Y, bool Visible) pointer)
     {
-        Interlocked.Increment(ref _repaints);
-        lock (_drawLock)
+        if (_swapChain is null)
+            return false;
+        if (_resized)
         {
-            if (_swapChain is not null && _picture is not null && _converter is not null && !_resized)
-                Show(pointer);
+            _resized = false;
+            GetClientRect(_hwnd, out var r);
+            int rw = Math.Max(r.Right - r.Left, 1), rh = Math.Max(r.Bottom - r.Top, 1);
+            if (rw != _width || rh != _height)
+            {
+                (_width, _height) = (rw, rh);
+                _frameView?.Dispose();
+                _frameView = null;
+                _backBuffer?.Dispose();
+                _backBuffer = null;
+                _swapChain.ResizeBuffers(2, (uint)rw, (uint)rh, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
+                return false; // the picture is converted again at the new size with the next frame
+            }
         }
-    }
-
-    private void Show((int X, int Y, bool Visible) pointer)
-    {
+        if (_picture is null || _converter is null || _pictureSize != (_width, _height))
+            return false;
         int width = _pictureWidth, height = _pictureHeight;
-        _streamPointer = pointer;
         Interlocked.Exchange(ref _lastShown, Stopwatch.GetTimestamp());
         if (_local is { Gone: true } gone)
         {
@@ -444,8 +474,8 @@ public sealed class VideoWindow : IDisposable
                 pointer = (local.X - _hotX, local.Y - _hotY, pointer.Visible);
             }
         }
-        _backBuffer ??= _swapChain!.GetBuffer<ID3D11Texture2D>(0);
-        _video.Context.CopyResource(_backBuffer, _picture!);
+        _backBuffer ??= _swapChain.GetBuffer<ID3D11Texture2D>(0);
+        _video.Context.CopyResource(_backBuffer, _picture);
         if (_pendingPointerImage is { } image)
         {
             _pendingPointerImage = null;
@@ -453,13 +483,10 @@ public sealed class VideoWindow : IDisposable
             _pointer.SetImage(image);
         }
         if (pointer.Visible)
-            _pointer?.Draw(_backBuffer, _width, _height, _converter!.DestRect, width, height, pointer.X, pointer.Y);
+            _pointer?.Draw(_backBuffer, _width, _height, _converter.DestRect, width, height, pointer.X, pointer.Y);
         if (Frame is { } frame)
             DrawFrame(frame);
-        // Without waiting for the vertical blank: waiting there made the window fall behind a stream that
-        // runs a hair faster than the monitor, and the delay grew for as long as it was open. With the flip
-        // model a newer picture simply replaces one still waiting for the next refresh (no tearing).
-        _swapChain!.Present(0, PresentFlags.None);
+        return true;
     }
 
     /// <summary>The border: four thin rectangles filled on the GPU (ClearView), next to nothing per frame.</summary>
