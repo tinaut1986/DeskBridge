@@ -459,6 +459,21 @@ public sealed partial class Updater
             for (int attempt = 0; attempt < 10 && !TryDelete(exe + ".old"); attempt++)
                 Thread.Sleep(300);
         }
+
+        // Left over by updates installed from the coordinator: files moved aside, and versioned copies of before.
+        if (Environment.ProcessPath is { } current && Path.GetDirectoryName(current) is { } folder
+            && Path.GetFileName(current).Equals("DeskBridge.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                foreach (var stale in Directory.EnumerateFiles(folder, "DeskBridge.exe.*.old")
+                             .Concat(Directory.EnumerateFiles(folder, "DeskBridge-*.exe")))
+                    TryDelete(stale);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
     }
 
     private static bool TryDelete(string path)

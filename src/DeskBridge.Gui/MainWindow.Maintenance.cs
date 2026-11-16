@@ -96,8 +96,18 @@ public partial class MainWindow
                         File.Delete(update.Path);
                         return new ErrorMessage(L.T("The new version arrived damaged; nothing was changed."));
                     }
-                    var exe = Path.Combine(UpdatesFolder, $"DeskBridge-{update.Version}.exe");
-                    File.Move(update.Path, exe, overwrite: true);
+                    // Always the same file: Windows remembers the firewall permission (and the like) per path, so a
+                    // new name for every version asked again each time. A running file can be renamed, not
+                    // overwritten: it moves aside to .old (deleted by the next start) and the new one takes its place.
+                    var exe = Path.Combine(UpdatesFolder, "DeskBridge.exe");
+                    var old = exe + ".old";
+                    if (File.Exists(old))
+                        TryDelete(old);
+                    if (File.Exists(exe))
+                        File.Move(exe, File.Exists(old) ? exe + $".{Guid.NewGuid():N}.old" : old);
+                    File.Move(update.Path, exe);
+                    foreach (var stale in Directory.EnumerateFiles(UpdatesFolder, "DeskBridge-*.exe"))
+                        TryDelete(stale); // the versioned files of earlier updates (one of them may still be running)
                     AddLog($"[update] installing DeskBridge {update.Version} ({exe}) and restarting");
                     // Answer first, then hand over: the new process waits for this one to exit (it holds the port).
                     _ = Task.Run(async () =>
@@ -175,6 +185,19 @@ public partial class MainWindow
                 Microsoft.Win32.SessionSwitchReason.ConsoleDisconnect => "[session] left this PC's own screen (console)",
                 var other => $"[session] {other}",
             });
+    }
+
+    private static bool TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private List<string> _vm_LogSnapshot() => Dispatcher.Invoke(() => _vm.Log.ToList());
