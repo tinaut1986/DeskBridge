@@ -114,7 +114,7 @@ public sealed class VideoReceiver : IAsyncDisposable
                         // A still screen sends no frames: the pointer is drawn again over the last picture, unless a
                         // frame is already on its way (it draws it anyway).
                         if (_channel.Pending <= PointerPacketBytes)
-                            window?.Repaint(pointer);
+                            window?.RequestRepaint(pointer);
                         break;
 
                     case VideoPacket.PointerShape:
@@ -122,7 +122,7 @@ public sealed class VideoReceiver : IAsyncDisposable
                         {
                             window?.SetPointerImage(image);
                             if (_channel.Pending <= PointerPacketBytes)
-                                window?.Repaint(pointer);
+                                window?.RequestRepaint(pointer);
                         }
                         break;
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using DeskBridge.Core.Video;
@@ -68,10 +69,19 @@ public sealed class VideoWindow : IDisposable
     private const int GoneMs = 500;
 
     private volatile LocalPosition? _local;
-    private int _repaintPosted;
+    private readonly AutoResetEvent _repaintWanted = new(false);
+    private Thread? _pointerThread;
+    private volatile bool _closing;
+    private long _lastShown; // Stopwatch timestamp of the last picture on screen
+
+    /// <summary>
+    /// The pointer alone is drawn again at most this often, and not while pictures keep coming (they draw it): a
+    /// mouse reports up to 1000 moves a second, and drawing each one held the window so long that the video
+    /// itself fell behind (dragging a window went in jumps).
+    /// </summary>
+    private const double PointerGapMs = 16;
     private (int X, int Y, bool Visible) _streamPointer;
     private int _hotX, _hotY;
-    private const uint WmRepaint = WmUser + 1;
 
     /// <summary>The mouse rests this long before the real position (from the stream) is trusted again.</summary>
     private const int RestMs = 300;
@@ -103,8 +113,7 @@ public sealed class VideoWindow : IDisposable
             else
                 continue;
             window._local = next;
-            if (Interlocked.Exchange(ref window._repaintPosted, 1) == 0)
-                PostMessageW(window._hwnd, WmRepaint, 0, 0);
+            window._repaintWanted.Set();
         }
     }
 
@@ -204,6 +213,8 @@ public sealed class VideoWindow : IDisposable
         _ready.Wait();
         if (_hwnd == 0)
             throw new InvalidOperationException("Could not create the video window.");
+        _pointerThread = new Thread(PointerLoop) { IsBackground = true, Name = "Video pointer" };
+        _pointerThread.Start();
     }
 
     private void Run()
@@ -292,10 +303,6 @@ public sealed class VideoWindow : IDisposable
             case WmSize:
                 _resized = true;
                 break;
-            case WmRepaint:
-                Volatile.Write(ref _repaintPosted, 0);
-                Repaint(_streamPointer);
-                return 0;
             case WmSetCursor when _monitor is not null:
                 SetCursor(0); // the remote pointer is drawn in the picture
                 return 1;
@@ -364,8 +371,38 @@ public sealed class VideoWindow : IDisposable
 
     private int _pictureWidth, _pictureHeight;
 
+    /// <summary>
+    /// The other machine reports its pointer somewhere else: drawn again over the last picture (the screen is
+    /// still, or a new picture would have drawn it), soon and at most at the screen's pace.
+    /// </summary>
+    public void RequestRepaint((int X, int Y, bool Visible) pointer)
+    {
+        _streamPointer = pointer;
+        _repaintWanted.Set();
+    }
+
+    private void PointerLoop()
+    {
+        Priority.MultimediaThread();
+        using var delay = new PreciseDelay();
+        while (!_closing)
+        {
+            _repaintWanted.WaitOne();
+            // Not right after a picture: the next one (if the screen is moving) draws the pointer anyway.
+            while (!_closing)
+            {
+                double since = Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastShown)).TotalMilliseconds;
+                if (since >= PointerGapMs)
+                    break;
+                delay.Wait(PointerGapMs - since);
+            }
+            if (!_closing)
+                Repaint(_streamPointer);
+        }
+    }
+
     /// <summary>Draws the last picture again with the pointer somewhere else (it moved over a still screen).</summary>
-    public void Repaint((int X, int Y, bool Visible) pointer)
+    private void Repaint((int X, int Y, bool Visible) pointer)
     {
         lock (_drawLock)
         {
@@ -378,6 +415,7 @@ public sealed class VideoWindow : IDisposable
     {
         int width = _pictureWidth, height = _pictureHeight;
         _streamPointer = pointer;
+        Interlocked.Exchange(ref _lastShown, Stopwatch.GetTimestamp());
         if (_local is { Gone: true } gone)
         {
             if (Environment.TickCount64 - gone.Tick < GoneMs)
@@ -445,6 +483,9 @@ public sealed class VideoWindow : IDisposable
         if (_hwnd != 0)
             PostMessageW(_hwnd, WmClose, 0, 0);
         _thread.Join(2000);
+        _closing = true;
+        _repaintWanted.Set();
+        _pointerThread?.Join(1000);
         lock (_drawLock)
         {
             _converter?.Dispose();
@@ -455,6 +496,7 @@ public sealed class VideoWindow : IDisposable
             _swapChain = null;
         }
         _ready.Dispose();
+        _repaintWanted.Dispose();
     }
 
     // Win32.
