@@ -102,6 +102,11 @@ public sealed class SecureLink : IDisposable
         }
     }
 
+    /// <summary>Asks the helper to send the display at (x, y) (see <see cref="SecureVideoRelay"/>).</summary>
+    public bool StartVideo(int x, int y, int fps, int mbps) => Send($"video {x} {y} {fps} {mbps}");
+
+    public bool StopVideo() => Send("video-stop");
+
     /// <summary>Puts the cursor at (x, y) on the secure desktop.</summary>
     public bool MoveTo(int x, int y) => Send($"move {x} {y}");
 

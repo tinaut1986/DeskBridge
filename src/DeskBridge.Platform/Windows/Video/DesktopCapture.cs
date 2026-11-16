@@ -92,8 +92,15 @@ public sealed unsafe class DesktopCapture : IDisposable
         return capture;
     }
 
+    /// <summary>
+    /// Called on the capturing thread before each (re)start of the duplication: the secure desktop's helper moves
+    /// the thread onto the desktop with the input there.
+    /// </summary>
+    public Action? BeforeDuplicate { get; set; }
+
     private void Duplicate()
     {
+        BeforeDuplicate?.Invoke();
         _duplication?.Dispose();
         _duplication = null;
         _duplication = _output.DuplicateOutput(_video.Device);

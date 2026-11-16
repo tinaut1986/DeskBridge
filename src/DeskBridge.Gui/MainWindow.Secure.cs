@@ -38,8 +38,36 @@ public partial class MainWindow
         _secureLink.DesktopChanged += desktop =>
         {
             AddLog($"[secure] input desktop: {desktop}");
-            Dispatcher.BeginInvoke(UpdateSecureUi);
+            Dispatcher.BeginInvoke(() =>
+            {
+                UpdateSecureUi();
+                UpdateSecureVideo();
+            });
         };
+    }
+
+    private readonly Dictionary<Platform.Windows.Video.VideoSender, SecureVideoRelay> _secureRelays = [];
+
+    /// <summary>
+    /// While the secure desktop has the input, every display this PC sends comes from the service's helper (see
+    /// <see cref="SecureVideoRelay"/>); DeskBridge's own capture takes over again afterwards.
+    /// </summary>
+    private void UpdateSecureVideo()
+    {
+        bool secure = _secureLink is { OnSecureDesktop: true };
+        var live = _videoSenders.Values.ToHashSet();
+        foreach (var (sender, relay) in _secureRelays.ToArray())
+        {
+            if (!secure || !live.Contains(sender))
+            {
+                _secureRelays.Remove(sender);
+                _ = relay.DisposeAsync().AsTask();
+            }
+        }
+        if (secure && _secureLink is { } link)
+            foreach (var sender in live)
+                if (!_secureRelays.ContainsKey(sender))
+                    _secureRelays[sender] = new SecureVideoRelay(link, sender, AddLog);
     }
 
     private void UpdateSecureUi()

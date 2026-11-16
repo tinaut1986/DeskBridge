@@ -5,6 +5,8 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
 using DeskBridge.Core.Control;
+using DeskBridge.Core.Video;
+using DeskBridge.Platform.Windows.Video;
 using DeskBridge.Gui.Updates;
 using DeskBridge.Platform.Windows.Input;
 using DeskBridge.Platform.Windows.Secure;
@@ -20,13 +22,79 @@ namespace DeskBridge.Gui.Secure;
 /// administrator rights cannot use it to click "Yes" on an administrator prompt.
 /// </para>
 /// Protocol: one line per message. Helper to DeskBridge: <c>hello &lt;version&gt;</c>, <c>desktop &lt;name&gt;</c>.
-/// DeskBridge to helper: <c>move &lt;x&gt; &lt;y&gt;</c>, <c>event &lt;InputEvent as JSON&gt;</c>, <c>release</c>.
+/// DeskBridge to helper: <c>move &lt;x&gt; &lt;y&gt;</c>, <c>event &lt;InputEvent as JSON&gt;</c>, <c>release</c>,
+/// <c>video &lt;x&gt; &lt;y&gt; &lt;fps&gt; &lt;Mbps&gt;</c> (capture that display and send it through the second pipe,
+/// <see cref="VideoPipeName"/>, as <see cref="StreamVideoLink"/> packets), <c>video-stop</c>.
 /// </summary>
 public static class SecureHelper
 {
     public const int ProtocolVersion = 1;
 
     public static string PipeName(uint session) => $"DeskBridge.Secure.{session}";
+
+    public static string VideoPipeName(uint session) => $"DeskBridge.Secure.{session}.video";
+
+    private static readonly object VideoGate = new();
+    private static VideoSender? _video;
+    private static NamedPipeServerStream? _videoPipe;
+
+    /// <summary>
+    /// Captures the display at (x, y) of whichever desktop has the input (this process may open the secure one) and
+    /// sends it to DeskBridge through the video pipe, for the coordinator.
+    /// </summary>
+    private static void StartVideo(uint session, int x, int y, int fps, int mbps)
+    {
+        StopVideo();
+        var pipe = CreatePipe(VideoPipeName(session));
+        lock (VideoGate)
+            _videoPipe = pipe;
+        new Thread(() =>
+        {
+            try
+            {
+                var wait = pipe.WaitForConnectionAsync();
+                if (!wait.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    Log("video: DeskBridge did not connect");
+                    pipe.Dispose();
+                    return;
+                }
+                var sender = new VideoSender(new StreamVideoLink(pipe), x, y, fps, mbps, Log, followInputDesktop: true);
+                lock (VideoGate)
+                {
+                    if (_videoPipe != pipe)
+                    {
+                        _ = sender.DisposeAsync().AsTask(); // stopped meanwhile
+                        return;
+                    }
+                    _video = sender;
+                }
+                Log($"video: sending the display at ({x}, {y}) of the desktop with the input");
+            }
+            catch (Exception ex) when (ex is IOException or AggregateException or ObjectDisposedException or InvalidOperationException)
+            {
+                Log($"video: {ex.Message}");
+            }
+        }) { IsBackground = true, Name = "Secure video start" }.Start();
+    }
+
+    private static void StopVideo()
+    {
+        VideoSender? sender;
+        NamedPipeServerStream? pipe;
+        lock (VideoGate)
+        {
+            (sender, pipe) = (_video, _videoPipe);
+            (_video, _videoPipe) = (null, null);
+        }
+        if (sender is not null)
+        {
+            sender.DisposeAsync().AsTask().Wait(3000);
+            Log("video: stopped");
+        }
+        else
+            pipe?.Dispose();
+    }
 
     private static void Log(string line) => FileLog.Write("[helper] " + line);
 
@@ -45,7 +113,7 @@ public static class SecureHelper
                 using var pipe = CreatePipe(session);
                 pipe.WaitForConnection();
                 Log("DeskBridge connected");
-                Serve(pipe, input);
+                Serve(pipe, input, session);
                 Log("DeskBridge disconnected");
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -56,7 +124,9 @@ public static class SecureHelper
         }
     }
 
-    private static NamedPipeServerStream CreatePipe(uint session)
+    private static NamedPipeServerStream CreatePipe(uint session) => CreatePipe(PipeName(session));
+
+    private static NamedPipeServerStream CreatePipe(string name)
     {
         var security = new PipeSecurity();
         security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
@@ -64,11 +134,11 @@ public static class SecureHelper
         security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
         // Asynchronous (overlapped): on a synchronous handle Windows runs one operation at a time, so a write (the
         // desktop changing) waited forever behind the read waiting for DeskBridge.
-        return NamedPipeServerStreamAcl.Create(PipeName(session), PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+        return NamedPipeServerStreamAcl.Create(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous, 0, 0, security);
     }
 
-    private static void Serve(NamedPipeServerStream pipe, BlockingCollection<string> input)
+    private static void Serve(NamedPipeServerStream pipe, BlockingCollection<string> input, uint session)
     {
         using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
         using var reader = new StreamReader(pipe, leaveOpen: true);
@@ -116,12 +186,25 @@ public static class SecureHelper
         try
         {
             while (reader.ReadLine() is { } line)
-                input.Add(line);
+            {
+                if (line.StartsWith("video ", StringComparison.Ordinal))
+                {
+                    var v = line.Split(' ');
+                    if (v.Length == 5 && int.TryParse(v[1], out int x) && int.TryParse(v[2], out int y)
+                        && int.TryParse(v[3], out int fps) && int.TryParse(v[4], out int mbps))
+                        StartVideo(session, x, y, fps, mbps);
+                }
+                else if (line == "video-stop")
+                    StopVideo();
+                else
+                    input.Add(line);
+            }
         }
         finally
         {
             stop.Cancel();
             input.Add("release");
+            StopVideo();
         }
     }
 

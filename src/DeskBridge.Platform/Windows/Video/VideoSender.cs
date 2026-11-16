@@ -29,7 +29,31 @@ public sealed class VideoSender : IAsyncDisposable
     /// <summary>A still screen still sends one frame this often.</summary>
     private static readonly TimeSpan IdleFrameEvery = TimeSpan.FromSeconds(1);
 
-    private readonly VideoChannel _channel;
+    private readonly IVideoLink _channel;
+    private readonly bool _followInputDesktop;
+    private volatile bool _suspended, _resumed;
+
+    /// <summary>Where the packets go (the network channel, or the pipe to a relay).</summary>
+    public IVideoLink Link => _channel;
+
+    public int Fps => _fps;
+
+    public int BitrateMbps => _bitrateMbps;
+
+    /// <summary>
+    /// Sends nothing while set: the secure desktop's helper sends this display's picture meanwhile, through a relay
+    /// on the same link. When cleared, the format goes again and a key frame follows (the receiver starts over).
+    /// </summary>
+    public bool Suspended
+    {
+        get => _suspended;
+        set
+        {
+            if (_suspended && !value)
+                _resumed = true;
+            _suspended = value;
+        }
+    }
     private readonly Action<string> _log;
     private readonly CancellationTokenSource _stop = new();
     private readonly BlockingCollection<EncodedFrame> _queue = new(boundedCapacity: 64);
@@ -68,9 +92,13 @@ public sealed class VideoSender : IAsyncDisposable
     public Task Completion { get; }
 
     /// <param name="monitorX">Desktop position of the monitor to send (its top-left corner).</param>
-    public VideoSender(VideoChannel channel, int monitorX, int monitorY, int fps, int bitrateMbps, Action<string> log)
+    /// <param name="followInputDesktop">
+    /// Capture whichever desktop has the input (the secure desktop's helper, running as SYSTEM, which may open it).
+    /// </param>
+    public VideoSender(IVideoLink channel, int monitorX, int monitorY, int fps, int bitrateMbps, Action<string> log, bool followInputDesktop = false)
     {
         _channel = channel;
+        _followInputDesktop = followInputDesktop;
         _monitorX = monitorX;
         _monitorY = monitorY;
         _fps = fps;
@@ -149,7 +177,12 @@ public sealed class VideoSender : IAsyncDisposable
                 ?? throw new InvalidOperationException($"No monitor at ({_monitorX}, {_monitorY}).");
             found.Output.Dispose();
             using var captureDevice = VideoDevice.Create(again.Adapter);
+            // The thread moves to the desktop with the input first (it captures only the desktop it is on).
+            if (_followInputDesktop)
+                DeskBridge.Platform.Windows.Secure.InputDesktop.Follow();
             using var capture = DesktopCapture.Open(captureDevice, again.Output);
+            if (_followInputDesktop)
+                capture.BeforeDuplicate = () => DeskBridge.Platform.Windows.Secure.InputDesktop.Follow();
             var (shared, sharedLock) = capture.OpenFrame(video);
             using var sharedFrame = shared;
             using var sharedFrameLock = sharedLock;
@@ -210,6 +243,20 @@ public sealed class VideoSender : IAsyncDisposable
                 {
                     lastChange = clock.Elapsed;
                     fresh = true;
+                }
+                if (_suspended)
+                {
+                    _stop.Token.WaitHandle.WaitOne(50);
+                    continue;
+                }
+                if (_resumed)
+                {
+                    // Back from the helper's stream: the receiver starts over with this one.
+                    _resumed = false;
+                    _channel.SendAsync(VideoPacket.Format, JsonSerializer.SerializeToUtf8Bytes(format), default, _stop.Token).GetAwaiter().GetResult();
+                    _keyFrameWanted = true;
+                    pointerVersion = -1;
+                    pointer = default;
                 }
                 if (capture.Changed)
                 {
@@ -308,7 +355,8 @@ public sealed class VideoSender : IAsyncDisposable
         try
         {
             foreach (var frame in _queue.GetConsumingEnumerable(_stop.Token))
-                await _channel.SendAsync(VideoPacket.Frame, VideoChannel.FrameHeader(frame.Time, frame.KeyFrame), frame.Data, _stop.Token);
+                if (!_suspended) // frames queued before the helper took over are not sent after its own
+                    await _channel.SendAsync(VideoPacket.Frame, VideoChannel.FrameHeader(frame.Time, frame.KeyFrame), frame.Data, _stop.Token);
         }
         catch (OperationCanceledException)
         {
