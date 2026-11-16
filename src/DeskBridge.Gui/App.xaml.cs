@@ -56,6 +56,16 @@ public partial class App : Application
                 Shutdown();
                 return;
             }
+            // "Run as administrator" is on but this copy was opened by hand (the Start menu) or restarted by an update
+            // without those rights: the task opens it again as administrator. Not for other copies started minimized
+            // (the task's own start at sign-in), so a task that cannot elevate never loops.
+            if (!Elevation.IsElevated && (!options.Minimized || e.Args.Contains("--after-update"))
+                && Elevation.TaskExists() && Elevation.HandOverToTask())
+            {
+                _instance.Dispose();
+                Shutdown();
+                return;
+            }
         }
 
         var settings = UserSettings.Load(options.SettingsPath);

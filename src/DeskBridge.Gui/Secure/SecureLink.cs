@@ -41,7 +41,7 @@ public sealed class SecureLink : IDisposable
         {
             try
             {
-                using var pipe = new NamedPipeClientStream(".", SecureHelper.PipeName(session), PipeDirection.InOut);
+                using var pipe = new NamedPipeClientStream(".", SecureHelper.PipeName(session), PipeDirection.InOut, PipeOptions.Asynchronous);
                 pipe.Connect(2000);
                 using var reader = new StreamReader(pipe);
                 var writer = new StreamWriter(pipe) { AutoFlush = true };
@@ -65,7 +65,7 @@ public sealed class SecureLink : IDisposable
                     }
                 }
             }
-            catch (Exception ex) when (ex is IOException or TimeoutException or UnauthorizedAccessException)
+            catch (Exception ex)
             {
                 if (!warned)
                 {

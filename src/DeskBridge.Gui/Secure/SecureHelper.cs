@@ -62,8 +62,10 @@ public static class SecureHelper
         security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
         // Administrators only as an elevated token has them: a normal (filtered) token holds the group as deny-only.
         security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
+        // Asynchronous (overlapped): on a synchronous handle Windows runs one operation at a time, so a write (the
+        // desktop changing) waited forever behind the read waiting for DeskBridge.
         return NamedPipeServerStreamAcl.Create(PipeName(session), PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
-            PipeOptions.None, 0, 0, security);
+            PipeOptions.Asynchronous, 0, 0, security);
     }
 
     private static void Serve(NamedPipeServerStream pipe, BlockingCollection<string> input)
@@ -77,6 +79,7 @@ public static class SecureHelper
                 writer.WriteLine(line);
         }
         Send($"hello {ProtocolVersion} {AppInfo.Version}");
+        Log("hello sent");
 
         // The desktop with the input, now and whenever it changes.
         using var stop = new CancellationTokenSource();
@@ -85,6 +88,8 @@ public static class SecureHelper
             string? last = null;
             while (!stop.IsCancellationRequested)
             {
+                try
+                {
                 string name = InputDesktop.Name() ?? "?";
                 if (name != last)
                 {
@@ -98,6 +103,11 @@ public static class SecureHelper
                         return;
                     }
                     Log($"input desktop: {name}");
+                }
+                }
+                catch (Exception ex) when (ex is not IOException)
+                {
+                    Log($"desktop watch: {ex.Message}");
                 }
                 stop.Token.WaitHandle.WaitOne(150);
             }
