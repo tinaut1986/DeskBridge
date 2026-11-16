@@ -97,7 +97,8 @@ public partial class MainWindow
         catch (Exception ex) when (ex is ControlException or FormatException or System.Runtime.InteropServices.COMException)
         {
             AddLog($"[audio] could not send this PC's sound: {ex.Message}");
-            _audioRetryAfter = DateTime.UtcNow.AddSeconds(30);
+            _audioRetryAfter = DateTime.UtcNow.AddSeconds(10);
+            _ = Task.Delay(TimeSpan.FromSeconds(10.5)).ContinueWith(_ => Dispatcher.InvokeAsync(UpdateAudio), TaskScheduler.Default);
         }
         finally
         {

@@ -103,17 +103,11 @@ public sealed class AudioPlayer : IAsyncDisposable
         _deviceId = device.ID;
         var mix = device.AudioClient.MixFormat;
 
-        // To the output's own rate and channels (float), which shared mode always accepts.
+        // Float at the output's own rate. The channels stay as sent (stereo): Windows puts them on the front
+        // speakers of a 5.1/7.1 output, while a plain float format with more than 2 channels is refused.
         ISampleProvider samples = buffer.ToSampleProvider();
         if (samples.WaveFormat.SampleRate != mix.SampleRate)
             samples = new WdlResamplingSampleProvider(samples, mix.SampleRate);
-        if (samples.WaveFormat.Channels != mix.Channels)
-        {
-            var multiplexer = new MultiplexingSampleProvider([samples], mix.Channels);
-            for (int c = 0; c < mix.Channels; c++)
-                multiplexer.ConnectInputToOutput(c % samples.WaveFormat.Channels, c);
-            samples = multiplexer;
-        }
 
         var output = new WasapiOut(device, AudioClientShareMode.Shared, useEventSync: true, latency: 40);
         output.Init(new SampleToWaveProvider(samples));
