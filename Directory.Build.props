@@ -4,5 +4,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The release workflow overrides it with the tag (-p:Version=X.Y.Z). -->
+    <Version>0.4.24</Version>
+    <Product>DeskBridge</Product>
   </PropertyGroup>
+
+  <!-- -p:DeskBridgeChannel=release|beta marks a published build: only those update themselves. -->
+  <ItemGroup Condition="'$(DeskBridgeChannel)' != ''">
+    <AssemblyMetadata Include="DeskBridgeChannel" Value="$(DeskBridgeChannel)" />
+  </ItemGroup>
 </Project>

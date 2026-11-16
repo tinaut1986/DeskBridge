@@ -1,0 +1,195 @@
+using System.Text.Json.Serialization;
+using DeskBridge.Core.Model;
+using DeskBridge.Core.Planning;
+
+namespace DeskBridge.Core.Control;
+
+/// <summary>
+/// Messages of the control channel: newline-delimited JSON over TCP.
+/// Handshake (plain text): server sends <see cref="ChallengeMessage"/>, client answers <see cref="AuthMessage"/>,
+/// server replies <see cref="WelcomeMessage"/> (with its own proof) or <see cref="ErrorMessage"/>.
+/// Then encrypted <see cref="SessionFrame"/>s: either side can send requests on the same connection
+/// (so a machine that cannot accept connections can still be reached over the one it opened).
+/// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(SessionFrame), "frame")]
+[JsonDerivedType(typeof(PingMessage), "ping")]
+[JsonDerivedType(typeof(ChallengeMessage), "challenge")]
+[JsonDerivedType(typeof(AuthMessage), "auth")]
+[JsonDerivedType(typeof(WelcomeMessage), "welcome")]
+[JsonDerivedType(typeof(OkMessage), "ok")]
+[JsonDerivedType(typeof(ErrorMessage), "error")]
+[JsonDerivedType(typeof(InputEnterMessage), "inputEnter")]
+[JsonDerivedType(typeof(InputEventsMessage), "inputEvents")]
+[JsonDerivedType(typeof(InputLeaveMessage), "inputLeave")]
+[JsonDerivedType(typeof(InputReleaseMessage), "inputRelease")]
+[JsonDerivedType(typeof(RelayMessage), "relay")]
+[JsonDerivedType(typeof(UpdateStartMessage), "updateStart")]
+[JsonDerivedType(typeof(UpdateChunkMessage), "updateChunk")]
+[JsonDerivedType(typeof(UpdateEndMessage), "updateEnd")]
+[JsonDerivedType(typeof(VideoProbeMessage), "videoProbe")]
+[JsonDerivedType(typeof(ReportMessage), "report")]
+[JsonDerivedType(typeof(ProbeMessage), "probe")]
+[JsonDerivedType(typeof(StartVideoMessage), "startVideo")]
+[JsonDerivedType(typeof(VideoStartedMessage), "videoStarted")]
+[JsonDerivedType(typeof(StopVideoMessage), "stopVideo")]
+[JsonDerivedType(typeof(ConfigSyncMessage), "configSync")]
+[JsonDerivedType(typeof(GetDiagnosticsMessage), "getDiagnostics")]
+[JsonDerivedType(typeof(DiagnosticsMessage), "diagnostics")]
+[JsonDerivedType(typeof(ApplyProfileMessage), "applyProfile")]
+[JsonDerivedType(typeof(AppliedMessage), "applied")]
+[JsonDerivedType(typeof(GetDisplaysMessage), "getDisplays")]
+[JsonDerivedType(typeof(DisplaysMessage), "displays")]
+[JsonDerivedType(typeof(ClipboardMessage), "clipboard")]
+[JsonDerivedType(typeof(FileStartMessage), "fileStart")]
+[JsonDerivedType(typeof(FileChunkMessage), "fileChunk")]
+[JsonDerivedType(typeof(FileEndMessage), "fileEnd")]
+[JsonDerivedType(typeof(FileSavedMessage), "fileSaved")]
+public abstract record ControlMessage;
+
+/// <summary>A request (or the reply to request <paramref name="Id"/>) inside an authenticated session.</summary>
+public sealed record SessionFrame(long Id, bool IsReply, ControlMessage Body) : ControlMessage;
+
+/// <summary>Keeps a long-lived connection known to be alive; answered with <see cref="OkMessage"/>.</summary>
+public sealed record PingMessage() : ControlMessage;
+
+/// <param name="Machine">Id of the agent the client has reached.</param>
+public sealed record ChallengeMessage(int Version, string Machine, string Nonce) : ControlMessage;
+
+/// <param name="Link">The client keeps this session open as its link to a coordinator (it is that coordinator's client).</param>
+/// <param name="Video">Not a control session but a video connection for this stream (binary packets after the welcome).</param>
+public sealed record AuthMessage(string Machine, string Nonce, string Proof, bool Link = false, string? Video = null) : ControlMessage;
+
+public sealed record WelcomeMessage(string Proof) : ControlMessage;
+
+public sealed record OkMessage() : ControlMessage;
+
+public sealed record ErrorMessage(string Message) : ControlMessage;
+
+public enum InputKind { MouseMove, MouseButton, Wheel, Key }
+
+/// <summary>
+/// One keyboard or mouse event forwarded from the coordinator. MouseMove: X/Y are a relative move in
+/// pixels. MouseButton: Code 0 left, 1 right, 2 middle, 3 X1, 4 X2. Wheel: X is the delta (120 per
+/// notch), Extended = horizontal. Key: Code is the scan code, Extended the E0 prefix.
+/// </summary>
+public sealed record InputEvent(InputKind Kind, int X = 0, int Y = 0, int Code = 0, bool Down = false, bool Extended = false);
+
+/// <summary>The coordinator hands the cursor over.</summary>
+/// <param name="Side">Where this machine is relative to the coordinator (versions before 0.2.1 enter through the opposite edge).</param>
+/// <param name="Fraction">Position along that edge, 0 to 1 (top to bottom, or left to right).</param>
+/// <param name="X">Where the cursor enters, in this machine's desktop coordinates (0.2.1 and later).</param>
+/// <param name="Peers">The coordinator's displays in this machine's coordinates: the cursor goes back when pushed into them.</param>
+/// <param name="Area">Where the cursor may go on this machine (the display shown on the coordinator); null: all its displays.</param>
+/// <param name="SpeedX">Pixels to move here per pixel moved on the coordinator (displays of different scales).</param>
+/// <param name="AreaDesk">Where each display of <paramref name="Area"/> is on the coordinator's desk (same order).</param>
+/// <param name="Holes">
+/// Parts of this machine's displays covered, on the coordinator, by its own windows on top of the video (one left
+/// there): the cursor goes back to the coordinator when it enters them, so they can be used.
+/// </param>
+public sealed record InputEnterMessage(PlacementSide Side, double Fraction, int? X = null, int? Y = null,
+    IReadOnlyList<DisplayRect>? Peers = null, IReadOnlyList<DisplayRect>? Area = null,
+    double? SpeedX = null, double? SpeedY = null, IReadOnlyList<DisplayRect>? Holes = null,
+    IReadOnlyList<DisplayRect>? AreaDesk = null) : ControlMessage;
+
+/// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
+public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events) : ControlMessage;
+
+/// <summary>The cursor went back to the coordinator, at this position along the edge facing it.</summary>
+/// <param name="X">Where it crossed, in this machine's coordinates (when the coordinator sent its displays).</param>
+public sealed record InputLeaveMessage(double Fraction, int? X = null, int? Y = null) : ControlMessage;
+
+/// <summary>The coordinator took the cursor back: release every key and button still held here.</summary>
+public sealed record InputReleaseMessage() : ControlMessage;
+
+/// <summary>
+/// The coordinator asks a machine (that connects to it) to open a video connection for a stream: it captures
+/// and sends <paramref name="Display"/> ("" = its main display) when <paramref name="Send"/>, otherwise it
+/// receives and shows the stream there. Answered once the connection is open.
+/// </summary>
+public sealed record StartVideoMessage(string Key, bool Send, string Display, int Fps, int BitrateMbps) : ControlMessage;
+
+/// <summary>Reply to <see cref="StartVideoMessage"/>: the stream started, sending this display (sender's desktop coordinates).</summary>
+/// <param name="Mirror">
+/// A copy of an existing display (its main one) instead of the virtual display the profile asked for (no
+/// Virtual Display Driver working there): the same screen shows on both, not a second one.
+/// </param>
+public sealed record VideoStartedMessage(int X, int Y, int Width, int Height, bool Mirror = false) : ControlMessage;
+
+/// <summary>Stops a stream started with <see cref="StartVideoMessage"/> (or every stream when Key is null).</summary>
+public sealed record StopVideoMessage(string? Key) : ControlMessage;
+
+/// <summary>
+/// From this PC only (the command line talking to its own agent): pass <paramref name="Inner"/> to
+/// <paramref name="Target"/> over the session it has with it, and return the reply. This is how another
+/// machine is troubleshot from here even when it accepts no incoming connections.
+/// </summary>
+public sealed record RelayMessage(string Target, ControlMessage Inner) : ControlMessage;
+
+/// <summary>
+/// A new DeskBridge build for this machine (only with "allow updates from the coordinator" on): sent in
+/// chunks, checked against <paramref name="Sha256"/>, then installed and started in place of this one.
+/// </summary>
+public sealed record UpdateStartMessage(string Version, long Size, string Sha256) : ControlMessage;
+
+public sealed record UpdateChunkMessage(long Offset, string DataBase64) : ControlMessage;
+
+public sealed record UpdateEndMessage() : ControlMessage;
+
+/// <summary>From this PC only: receive a stream from <paramref name="Machine"/> without showing it, and report how it went.</summary>
+public sealed record VideoProbeMessage(string Machine, double Seconds) : ControlMessage;
+
+/// <summary>Asks a machine to look into something and report it as text (troubleshooting), e.g. "vdd".</summary>
+public sealed record ProbeMessage(string What) : ControlMessage;
+
+/// <summary>A text answer (a probe's report).</summary>
+public sealed record ReportMessage(string Text) : ControlMessage;
+
+/// <summary>Asks a machine for its state, to troubleshoot it from another one.</summary>
+public sealed record GetDiagnosticsMessage() : ControlMessage;
+
+/// <summary>A machine's state for troubleshooting: version, settings (never the shared key), configuration, recent log.</summary>
+public sealed record DiagnosticsMessage(
+    string Machine,
+    string Version,
+    string? ConnectTo,
+    int ControlPort,
+    bool IsCoordinator,
+    DeskBridgeConfig? Config,
+    IReadOnlyList<string> Log,
+    string? AppPath = null,
+    bool AcceptsUpdates = false) : ControlMessage;
+
+/// <summary>The coordinator's current configuration, sent when a machine connects and whenever it is saved.</summary>
+public sealed record ConfigSyncMessage(DeskBridgeConfig Config) : ControlMessage;
+
+/// <summary>The coordinator sends the whole config, so it only has to be edited on one machine.</summary>
+public sealed record ApplyProfileMessage(DeskBridgeConfig Config, string Profile) : ControlMessage;
+
+public sealed record AppliedMessage(string Machine, string Profile, IReadOnlyList<string> Warnings) : ControlMessage;
+
+/// <summary>Asks an agent for the physical monitors of its machine, so the coordinator can fill the config.</summary>
+public sealed record GetDisplaysMessage() : ControlMessage;
+
+public sealed record DisplaysMessage(string Machine, IReadOnlyList<DisplayConfig> Displays) : ControlMessage;
+
+/// <summary>Something copied on another machine: text, or an image as PNG (base64).</summary>
+public sealed record ClipboardMessage(string? Text, string? PngBase64) : ControlMessage;
+
+/// <summary>Starts sending one file; the agent answers ok (accepted) or error (refused).</summary>
+public sealed record FileStartMessage(Guid Transfer, string Name, long Size) : ControlMessage;
+
+public sealed record FileChunkMessage(Guid Transfer, long Offset, string DataBase64) : ControlMessage;
+
+/// <summary>The whole file has been sent; the agent checks the hash and keeps it.</summary>
+public sealed record FileEndMessage(Guid Transfer, string Sha256) : ControlMessage;
+
+public sealed record FileSavedMessage(string Path) : ControlMessage;
+
+public static class ControlProtocol
+{
+    /// <summary>2: mutual authentication and encrypted messages. 3: two-way sessions (requests from either side).</summary>
+    public const int Version = 3;
+}
+
+public sealed class ControlException(string message) : Exception(message);

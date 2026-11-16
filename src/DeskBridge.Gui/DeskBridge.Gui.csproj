@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Only for the notification area icon (NotifyIcon); WPF has none. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>DeskBridge</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WinForms' advice for WinForms apps; this is a WPF app (WinForms only for the tray icon), where the manifest is the place. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <RootNamespace>DeskBridge.Gui</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep WPF's Application, MessageBox, Clipboard... unambiguous. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeskBridge.Core\DeskBridge.Core.csproj" />
+    <ProjectReference Include="..\DeskBridge.Platform\DeskBridge.Platform.csproj" />
+  </ItemGroup>
+
+</Project>

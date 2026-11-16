@@ -1,4 +1,5 @@
 using DeskBridge.Core.Abstractions;
+using DeskBridge.Core.Localization;
 using DeskBridge.Core.Model;
 
 namespace DeskBridge.Core.Agent;
@@ -17,7 +18,7 @@ public sealed class PlanApplier(
     {
         var addresses = config.Machines.ToDictionary(m => m.Id, m => m.Address);
         if (!addresses.ContainsKey(localMachine))
-            throw new ArgumentException($"El equipo '{localMachine}' no está en la configuración.", nameof(localMachine));
+            throw new ArgumentException(L.T("Machine '{machine}' is not in the configuration.", ("machine", localMachine)), nameof(localMachine));
 
         // Tear down first so a monitor never shows two things at once while switching.
         await receiver.StopAllAsync(ct);

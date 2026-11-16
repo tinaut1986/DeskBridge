@@ -483,3 +483,4 @@ $RECYCLE.BIN/
 
 # Configuración local con IPs reales
 deskbridge.json
+deskbridge.local.json
