@@ -104,7 +104,11 @@ public sealed record InputReleaseMessage() : ControlMessage;
 public sealed record StartVideoMessage(string Key, bool Send, string Display, int Fps, int BitrateMbps) : ControlMessage;
 
 /// <summary>Reply to <see cref="StartVideoMessage"/>: the stream started, sending this display (sender's desktop coordinates).</summary>
-public sealed record VideoStartedMessage(int X, int Y, int Width, int Height) : ControlMessage;
+/// <param name="Mirror">
+/// A copy of an existing display (its main one) instead of the virtual display the profile asked for (no
+/// Virtual Display Driver working there): the same screen shows on both, not a second one.
+/// </param>
+public sealed record VideoStartedMessage(int X, int Y, int Width, int Height, bool Mirror = false) : ControlMessage;
 
 /// <summary>Stops a stream started with <see cref="StartVideoMessage"/> (or every stream when Key is null).</summary>
 public sealed record StopVideoMessage(string? Key) : ControlMessage;

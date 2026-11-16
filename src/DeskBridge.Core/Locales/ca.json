@@ -254,6 +254,7 @@
   "connected: {machines}": "connectats: {machines}",
   "connecting to {address}…": "connectant a {address}…",
   "controlled from {machine}": "controlat des de {machine}",
+  "copy of its main display: no virtual display driver there": "còpia de la seva pantalla principal: allà no hi ha driver de pantalles virtuals",
   "image": "imatge",
   "keyboard and mouse on {machine} (Ctrl+Alt+Home to come back)": "teclat i ratolí a {machine} (Ctrl+Alt+Inici per tornar)",
   "new profile": "perfil nou",

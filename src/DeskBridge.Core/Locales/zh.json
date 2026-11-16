@@ -254,6 +254,7 @@
   "connected: {machines}": "已连接：{machines}",
   "connecting to {address}…": "正在连接 {address}…",
   "controlled from {machine}": "由 {machine} 控制",
+  "copy of its main display: no virtual display driver there": "其主显示器的副本：那边没有虚拟显示器驱动",
   "image": "图像",
   "keyboard and mouse on {machine} (Ctrl+Alt+Home to come back)": "键盘和鼠标在 {machine} 上（Ctrl+Alt+Home 返回）",
   "new profile": "新方案",

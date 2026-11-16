@@ -254,6 +254,7 @@
   "connected: {machines}": "接続中: {machines}",
   "connecting to {address}…": "{address} に接続中…",
   "controlled from {machine}": "{machine} から操作中",
+  "copy of its main display: no virtual display driver there": "メインディスプレイのコピー: 仮想ディスプレイのドライバーがありません",
   "image": "画像",
   "keyboard and mouse on {machine} (Ctrl+Alt+Home to come back)": "キーボードとマウスは {machine} (Ctrl+Alt+Home で戻る)",
   "new profile": "新しいプロファイル",

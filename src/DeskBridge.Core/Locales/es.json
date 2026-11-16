@@ -254,6 +254,7 @@
   "connected: {machines}": "conectados: {machines}",
   "connecting to {address}…": "conectando a {address}…",
   "controlled from {machine}": "controlado desde {machine}",
+  "copy of its main display: no virtual display driver there": "copia de su pantalla principal: allí no hay driver de pantallas virtuales",
   "image": "imagen",
   "keyboard and mouse on {machine} (Ctrl+Alt+Home to come back)": "teclado y ratón en {machine} (Ctrl+Alt+Inicio para volver)",
   "new profile": "perfil nuevo",

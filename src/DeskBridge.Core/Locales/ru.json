@@ -254,6 +254,7 @@
   "connected: {machines}": "подключены: {machines}",
   "connecting to {address}…": "подключение к {address}…",
   "controlled from {machine}": "управляется с {machine}",
+  "copy of its main display: no virtual display driver there": "копия основного дисплея: там нет драйвера виртуальных дисплеев",
   "image": "изображение",
   "keyboard and mouse on {machine} (Ctrl+Alt+Home to come back)": "клавиатура и мышь на {machine} (Ctrl+Alt+Home — вернуть)",
   "new profile": "новый профиль",

@@ -53,8 +53,9 @@ public partial class MainWindow
                 // A planned virtual display (where it ended up), a physical display by id, or the main display.
                 var displays = PlatformServices.DisplayDetector().DetectDisplays();
                 // (A virtual display that has gone away, e.g. the driver stopped: the main display instead.)
-                (int X, int Y)? position = Platform.Windows.VirtualDisplays.MttVirtualDisplays.Placed.TryGetValue(start.Display, out var placed)
-                                           && displays.Any(d => d.X == placed.X && d.Y == placed.Y)
+                bool isVirtual = Platform.Windows.VirtualDisplays.MttVirtualDisplays.Placed.TryGetValue(start.Display, out var placed)
+                                 && displays.Any(d => d.X == placed.X && d.Y == placed.Y);
+                (int X, int Y)? position = isVirtual
                     ? placed
                     : (displays.FirstOrDefault(d => d.Id == start.Display)
                        ?? displays.FirstOrDefault(d => d.X == 0 && d.Y == 0)
@@ -83,7 +84,11 @@ public partial class MainWindow
                         AddLog(sender.Failure is { } failure ? $"[video] stream to {from} stopped: {failure}" : $"[video] stream to {from} stopped");
                     _ = sender.DisposeAsync().AsTask();
                 }, TaskScheduler.Default);
-                return sent is null ? new OkMessage() : new VideoStartedMessage(sent.X, sent.Y, sent.Width, sent.Height);
+                // A planned virtual display that is not there (driver missing or stopped) was replaced by a copy.
+                bool mirror = start.Display.Contains('/') && !(isVirtual && Platform.Windows.VirtualDisplays.MttVirtualDisplays.IsInstalled());
+                if (mirror)
+                    AddLog($"[video] {start.Key}: no virtual display here (Virtual Display Driver missing or stopped): sending a copy of the main display");
+                return sent is null ? new OkMessage() : new VideoStartedMessage(sent.X, sent.Y, sent.Width, sent.Height, mirror);
             }
 
             case StopVideoMessage stop:
@@ -139,6 +144,8 @@ public partial class MainWindow
             bool current = _videoReceivers.TryRemove(new KeyValuePair<string, VideoReceiver>(channel.StreamKey, receiver));
             if (current && _lentDisplays.TryRemove(channel.StreamKey, out var _))
                 await Dispatcher.InvokeAsync(RefreshInputTargets);
+            if (current && _mirroredDisplays.TryRemove(channel.StreamKey, out var _))
+                await Dispatcher.InvokeAsync(ScheduleRedraw);
             await receiver.DisposeAsync();
             if (!current)
                 return; // replaced by a newer receiver for the same stream: nothing else to do
@@ -246,6 +253,9 @@ public partial class MainWindow
 
     private readonly ConcurrentDictionary<string, byte> _videoStarting = new();
 
+    /// <summary>Coordinator: displays here (by stream key) showing a copy of another machine's main display.</summary>
+    private readonly ConcurrentDictionary<string, string> _mirroredDisplays = new();
+
     private async Task StartProfileStreamCoreAsync(Core.Model.StreamSpec stream)
     {
         var monitor = PlatformServices.DisplayDetector().DetectDisplays().FirstOrDefault(d => d.Id == stream.SinkDisplay);
@@ -269,6 +279,17 @@ public partial class MainWindow
                 throw new ControlException(error.Message);
             if (reply is VideoStartedMessage started)
             {
+                if (started.Mirror)
+                {
+                    _mirroredDisplays[stream.Key] = stream.SinkDisplay;
+                    AddLog($"[video] display {stream.SinkDisplay} shows a copy of {MachineName(stream.SourceMachine)}'s main display, not a second one: "
+                           + "it has no working Virtual Display Driver");
+                }
+                else
+                {
+                    _mirroredDisplays.TryRemove(stream.Key, out _);
+                }
+                ScheduleRedraw();
                 _lentDisplays[stream.Key] = (stream.SourceMachine,
                     new Core.Planning.DisplayRect(monitor.X, monitor.Y, monitor.Width, monitor.Height),
                     new Core.Planning.DisplayRect(started.X, started.Y, started.Width, started.Height));

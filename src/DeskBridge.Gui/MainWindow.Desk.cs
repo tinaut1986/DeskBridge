@@ -183,6 +183,18 @@ public partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
+        if (!foreign && shows != machine && _mirroredDisplays.Values.Contains(display.Id.Trim()))
+        {
+            // Not the second display the profile asks for: a copy of the other machine's main one.
+            text.Children.Add(new TextBlock
+            {
+                Text = L.T("copy of its main display: no virtual display driver there"),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = ThemeManager.Resource("WarningText"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+        }
         text.Children.Add(new TextBlock
         {
             Text = shows != machine && assignment is not null ? StreamLabel(assignment)
