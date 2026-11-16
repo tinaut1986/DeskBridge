@@ -136,6 +136,18 @@ public partial class MainWindow
             await receiver.DisposeAsync();
             if (SessionOf(target.Machine) is { } diagnosed)
                 await SaveDiagnosticsAsync(diagnosed); // the sender's side of the story, for troubleshooting
+
+            // A stream of the applied profile that ended by itself (the sender gave up, the connection broke):
+            // ask for it again; it stays off only when the profile changes or the tray stops it.
+            if (_streamPlan?.Streams.FirstOrDefault(s => s.Key == channel.StreamKey) is { } stream)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3));
+                if (_streamPlan?.Streams.Contains(stream) == true)
+                {
+                    AddLog($"[video] {stream.Key} stopped by itself: starting it again");
+                    await Dispatcher.InvokeAsync(() => StartProfileStreamAsync(stream)).Task.Unwrap();
+                }
+            }
             // The window was closed here: the other machine stops sending.
             if (SessionOf(target.Machine) is { } session)
             {

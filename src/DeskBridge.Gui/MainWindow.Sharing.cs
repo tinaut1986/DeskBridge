@@ -41,6 +41,8 @@ public partial class MainWindow
         FilesFolderBox.Text = _settings.EffectiveFilesFolder;
 
         if (_options.SnapshotDir is null)
+            WatchSession();
+        if (_options.SnapshotDir is null)
             SourceInitialized += (_, _) => _clipboard = new ClipboardSync(this, SendClipboardAsync, AddLog) { SendEnabled = _settings.ClipboardSend };
     }
 

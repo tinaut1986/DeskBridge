@@ -71,6 +71,53 @@ public sealed class VideoSender : IAsyncDisposable
 
     private void CaptureLoop()
     {
+        // The pipeline is built again when the monitor changes size or the GPU is reset; a stream only ends when
+        // that keeps failing.
+        var failures = new Queue<DateTime>();
+        try
+        {
+            Loop();
+        }
+        finally
+        {
+            _queue.CompleteAdding();
+        }
+
+        void Loop()
+        {
+            while (!_stop.IsCancellationRequested)
+            {
+                try
+                {
+                    RunPipeline();
+                    return; // stopped
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex) when (!_stop.IsCancellationRequested)
+                {
+                    failures.Enqueue(DateTime.UtcNow);
+                    while (failures.Count > 0 && DateTime.UtcNow - failures.Peek() > TimeSpan.FromMinutes(1))
+                        failures.Dequeue();
+                    if (ex is not CaptureChangedException)
+                        _log($"[video] capture/encode failed, starting again: {ex.Message}" + (_encoder is { } e ? $" ({e.Stats})" : ""));
+                    if (failures.Count >= 5)
+                    {
+                        Fail(ex.Message);
+                        break;
+                    }
+                    _stop.Token.WaitHandle.WaitOne(1000);
+                }
+        }
+        }
+    }
+
+    private sealed class CaptureChangedException(string message) : Exception(message);
+
+    private void RunPipeline()
+    {
         try
         {
             var found = DesktopCapture.FindOutput(_monitorX, _monitorY)
@@ -91,6 +138,7 @@ public sealed class VideoSender : IAsyncDisposable
             _clock = clock;
             (int, int, bool) pointer = default;
             int pointerVersion = 0;
+            string? paused = null;
             var nextReport = TimeSpan.FromSeconds(3);
             while (!_stop.IsCancellationRequested)
             {
@@ -103,6 +151,16 @@ public sealed class VideoSender : IAsyncDisposable
                     nextReport = clock.Elapsed + TimeSpan.FromSeconds(10);
                 }
                 capture.TryAcquire(0); // never wait inside it: it holds the device lock
+                if (capture.Changed)
+                {
+                    _log("[video] the display changed size: starting the stream again");
+                    throw new CaptureChangedException("display changed");
+                }
+                if (capture.Paused != paused)
+                {
+                    paused = capture.Paused;
+                    _log(paused is null ? "[video] capture resumed" : $"[video] capture paused ({paused}): the last picture is sent meanwhile");
+                }
                 if (capture.PointerVersion != pointerVersion && capture.PointerImage is { } image)
                 {
                     pointerVersion = capture.PointerVersion;
@@ -123,18 +181,9 @@ public sealed class VideoSender : IAsyncDisposable
                 encoder.Encode(clock.Elapsed.Ticks, TimeSpan.FromMilliseconds(200));
             }
         }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            _log($"[video] capture/encode failed: {ex.Message}" + (_encoder is { } e ? $" ({e.Stats})" : ""));
-            Fail(ex.Message);
-        }
         finally
         {
             _encoder = null;
-            _queue.CompleteAdding();
         }
     }
 

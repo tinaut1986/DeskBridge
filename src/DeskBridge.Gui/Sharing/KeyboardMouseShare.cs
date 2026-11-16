@@ -81,6 +81,8 @@ public sealed class KeyboardMouseShare : IDisposable
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
                         _target = enter.Machine;
                         Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area)));
+                        var how = enter.Area is null ? "past the edge" : "through the display showing it";
+                        Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
                         _remoteChanged(enter.Machine);
                         return true;
                     case MouseDecision.Forward forward:
@@ -167,6 +169,7 @@ public sealed class KeyboardMouseShare : IDisposable
             if (_logic.Remote != from)
                 return;
             var (x, y) = _logic.Return(leave.Fraction, leave.X, leave.Y);
+            Task.Run(() => _log($"[input] keyboard and mouse back from {from}, at ({x}, {y})"));
             InputInjector.SetCursor(x, y);
         }
         _remoteChanged(null);

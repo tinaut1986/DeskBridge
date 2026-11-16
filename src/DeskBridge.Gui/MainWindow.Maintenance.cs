@@ -154,5 +154,25 @@ public partial class MainWindow
         return new ReportMessage(string.Join("\n", lines));
     }
 
+    /// <summary>
+    /// Logs what happens to the Windows session (locked, unlocked, remote desktop connected or gone): a locked
+    /// session cannot be captured or controlled, which explains streams that pause and input that does nothing.
+    /// </summary>
+    private void WatchSession()
+    {
+        AddLog(Platform.Windows.Input.PointerOverlay.Needed ? "[session] this is a Remote Desktop session" : "[session] console session");
+        Microsoft.Win32.SystemEvents.SessionSwitch += (_, e) =>
+            AddLog(e.Reason switch
+            {
+                Microsoft.Win32.SessionSwitchReason.SessionLock => "[session] locked: video and input pause until it is unlocked",
+                Microsoft.Win32.SessionSwitchReason.SessionUnlock => "[session] unlocked",
+                Microsoft.Win32.SessionSwitchReason.RemoteConnect => "[session] Remote Desktop connected",
+                Microsoft.Win32.SessionSwitchReason.RemoteDisconnect => "[session] Remote Desktop disconnected",
+                Microsoft.Win32.SessionSwitchReason.ConsoleConnect => "[session] back on this PC's own screen (console)",
+                Microsoft.Win32.SessionSwitchReason.ConsoleDisconnect => "[session] left this PC's own screen (console)",
+                var other => $"[session] {other}",
+            });
+    }
+
     private List<string> _vm_LogSnapshot() => Dispatcher.Invoke(() => _vm.Log.ToList());
 }

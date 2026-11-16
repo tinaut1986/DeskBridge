@@ -76,7 +76,35 @@ public sealed unsafe class DesktopCapture : IDisposable
     private void Duplicate()
     {
         _duplication?.Dispose();
+        _duplication = null;
         _duplication = _output.DuplicateOutput(_video.Device);
+    }
+
+    private long _retryAt;
+
+    /// <summary>
+    /// The monitor changed size (or went away) since the capture started: the whole pipeline has to be built
+    /// again for the new picture.
+    /// </summary>
+    public bool Changed { get; private set; }
+
+    /// <summary>Why the capture is paused (null while it works), for logs.</summary>
+    public string? Paused { get; private set; }
+
+    /// <summary>Drops the duplication after an error; it is created again shortly (a lock screen, a mode change...).</summary>
+    private void Lose(string why)
+    {
+        _holding = false;
+        try
+        {
+            _duplication?.Dispose();
+        }
+        catch (SharpGen.Runtime.SharpGenException)
+        {
+        }
+        _duplication = null;
+        Paused = why;
+        _retryAt = Environment.TickCount64 + 250;
     }
 
     /// <summary>
@@ -85,29 +113,49 @@ public sealed unsafe class DesktopCapture : IDisposable
     /// </summary>
     public bool TryAcquire(int timeoutMs)
     {
+        if (_duplication is null)
+        {
+            // Lost (mode change, full-screen app, desktop switch such as UAC or the lock screen): try again now and then.
+            if (Environment.TickCount64 < _retryAt)
+                return false;
+            try
+            {
+                var r = _output.Description.DesktopCoordinates;
+                if (r.Right - r.Left != Width || r.Bottom - r.Top != Height)
+                {
+                    Changed = true;
+                    return false;
+                }
+                Duplicate();
+                Paused = null;
+            }
+            catch (SharpGen.Runtime.SharpGenException ex)
+            {
+                Lose(ex.ResultCode.ApiCode ?? ex.Message);
+                _retryAt = Environment.TickCount64 + 1000;
+                return false;
+            }
+        }
+
         if (_holding)
         {
-            _duplication!.ReleaseFrame();
             _holding = false;
+            if (_duplication!.ReleaseFrame().Failure)
+            {
+                Lose("release failed");
+                return false;
+            }
         }
 
         var result = _duplication!.AcquireNextFrame((uint)timeoutMs, out var info, out var resource);
         if (result == Vortice.DXGI.ResultCode.WaitTimeout)
             return false;
-        if (result == Vortice.DXGI.ResultCode.AccessLost)
+        if (result.Failure)
         {
-            // Mode change, full-screen app, desktop switch (UAC, lock screen): start again.
-            Thread.Sleep(50);
-            try
-            {
-                Duplicate();
-            }
-            catch (SharpGen.Runtime.SharpGenException)
-            {
-            }
+            resource?.Dispose();
+            Lose(result.ApiCode ?? result.ToString());
             return false;
         }
-        result.CheckError();
         _holding = true;
 
         if (info.LastMouseUpdateTime != 0)
