@@ -24,6 +24,24 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
     public static ConcurrentDictionary<string, (int X, int Y)> Placed { get; } = new();
 
     /// <summary>
+    /// Where the planned virtual display <paramref name="key"/> ("machine/vN") is: as placed when the profile was
+    /// applied, or else the N-th of the driver's monitors on the desktop (after a restart of the app, for example).
+    /// </summary>
+    public static (int X, int Y)? Find(string key)
+    {
+        if (Placed.TryGetValue(key, out var placed))
+            return placed;
+        int slash = key.LastIndexOf("/v", StringComparison.Ordinal);
+        if (slash < 0 || !int.TryParse(key[(slash + 2)..], out int n) || n < 1)
+            return null;
+        var attached = VirtualMonitors().Where(IsAttached).ToList();
+        if (attached.Count < n)
+            return null;
+        var mode = new DevMode { Size = (ushort)Marshal.SizeOf<DevMode>() };
+        return EnumDisplaySettingsW(attached[n - 1], EnumCurrentSettings, ref mode) ? (mode.PositionX, mode.PositionY) : null;
+    }
+
+    /// <summary>
     /// True when the driver's pipe takes a connection (some versions do not answer PING, so the connection itself
     /// is the sign that the driver is installed and running).
     /// </summary>

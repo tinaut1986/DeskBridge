@@ -38,6 +38,7 @@ public partial class MainWindow
         Dispatcher.BeginInvoke(() =>
         {
             DriverBanner.Visibility = Visibility.Visible;
+            WatchForDriver(); // installed, enabled again or restarted by hand: noticed within seconds
             if (!_driverNoticeShown)
             {
                 _driverNoticeShown = true;
@@ -120,7 +121,7 @@ public partial class MainWindow
     private void WatchForDriver()
     {
         _driverWatch?.Stop();
-        var until = DateTime.UtcNow.AddMinutes(15);
+        var until = DateTime.UtcNow.AddHours(12);
         _driverWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _driverWatch.Tick += async (_, _) =>
         {
