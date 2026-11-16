@@ -72,7 +72,9 @@ reparte sola), `deskbridge.local.json` (id del equipo y clave) y `settings.json`
 Funciona a diario entre un sobremesa (NVIDIA) y un portátil (Intel Arc): pantallas virtuales, vídeo propio de
 baja latencia, teclado y ratón, sonido, micrófono, portapapeles, archivos, actualizaciones remotas.
 
-Pendiente, por orden: enviar vídeo solo cuando la pantalla cambia; servicio de Windows para los avisos de UAC y
+El vídeo solo se envía cuando la pantalla cambia: una pantalla quieta apenas gasta red ni GPU.
+
+Pendiente, por orden: servicio de Windows para los avisos de UAC y
 la pantalla de bloqueo; mostrar el sobremesa en el portátil (fase 4); color a resolución completa (4:4:4);
 cámara. Ver la [hoja de ruta](docs/arquitectura.md#hoja-de-ruta).
 

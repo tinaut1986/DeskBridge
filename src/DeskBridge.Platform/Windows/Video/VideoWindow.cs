@@ -37,6 +37,12 @@ public sealed class VideoWindow : IDisposable
     private ID3D11RenderTargetView? _frameView;
 
     /// <summary>
+    /// The last picture, fitted to the window: the sender sends nothing while its screen is still, so the pointer
+    /// is drawn again over this when only it moves.
+    /// </summary>
+    private ID3D11Texture2D? _picture;
+
+    /// <summary>
     /// A thin border around the picture in this colour (red, green, blue; 0-1), so it is clear which machine
     /// this display shows; null for none.
     /// </summary>
@@ -275,6 +281,8 @@ public sealed class VideoWindow : IDisposable
                     _frameView = null;
                     _backBuffer?.Dispose();
                     _backBuffer = null;
+                    _picture?.Dispose();
+                    _picture = null;
                     _swapChain.ResizeBuffers(2, (uint)w, (uint)h, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
                 }
             }
@@ -283,23 +291,44 @@ public sealed class VideoWindow : IDisposable
                 _converter?.Dispose();
                 _converter = new VideoConverter(_video, width, height, _width, _height);
             }
-            _backBuffer ??= _swapChain.GetBuffer<ID3D11Texture2D>(0);
-            _converter.Convert(texture, slice, _backBuffer);
-            if (_pendingPointerImage is { } image)
-            {
-                _pendingPointerImage = null;
-                _pointer ??= new PointerRenderer(_video);
-                _pointer.SetImage(image);
-            }
-            if (pointer.Visible)
-                _pointer?.Draw(_backBuffer, _width, _height, _converter.DestRect, width, height, pointer.X, pointer.Y);
-            if (Frame is { } frame)
-                DrawFrame(frame);
-            // Without waiting for the vertical blank: waiting there made the window fall behind a stream that
-            // runs a hair faster than the monitor, and the delay grew for as long as it was open. With the flip
-            // model a newer picture simply replaces one still waiting for the next refresh (no tearing).
-            _swapChain.Present(0, PresentFlags.None);
+            _picture ??= _video.CreateTexture(_width, _height, Format.B8G8R8A8_UNorm, BindFlags.RenderTarget);
+            _converter.Convert(texture, slice, _picture);
+            (_pictureWidth, _pictureHeight) = (width, height);
+            Show(pointer);
         }
+    }
+
+    private int _pictureWidth, _pictureHeight;
+
+    /// <summary>Draws the last picture again with the pointer somewhere else (it moved over a still screen).</summary>
+    public void Repaint((int X, int Y, bool Visible) pointer)
+    {
+        lock (_drawLock)
+        {
+            if (_swapChain is not null && _picture is not null && _converter is not null && !_resized)
+                Show(pointer);
+        }
+    }
+
+    private void Show((int X, int Y, bool Visible) pointer)
+    {
+        int width = _pictureWidth, height = _pictureHeight;
+        _backBuffer ??= _swapChain!.GetBuffer<ID3D11Texture2D>(0);
+        _video.Context.CopyResource(_backBuffer, _picture!);
+        if (_pendingPointerImage is { } image)
+        {
+            _pendingPointerImage = null;
+            _pointer ??= new PointerRenderer(_video);
+            _pointer.SetImage(image);
+        }
+        if (pointer.Visible)
+            _pointer?.Draw(_backBuffer, _width, _height, _converter!.DestRect, width, height, pointer.X, pointer.Y);
+        if (Frame is { } frame)
+            DrawFrame(frame);
+        // Without waiting for the vertical blank: waiting there made the window fall behind a stream that
+        // runs a hair faster than the monitor, and the delay grew for as long as it was open. With the flip
+        // model a newer picture simply replaces one still waiting for the next refresh (no tearing).
+        _swapChain!.Present(0, PresentFlags.None);
     }
 
     /// <summary>The border: four thin rectangles filled on the GPU (ClearView), next to nothing per frame.</summary>
@@ -333,6 +362,7 @@ public sealed class VideoWindow : IDisposable
         {
             _converter?.Dispose();
             _pointer?.Dispose();
+            _picture?.Dispose();
             _backBuffer?.Dispose();
             _swapChain?.Dispose();
             _swapChain = null;
