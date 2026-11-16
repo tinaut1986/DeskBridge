@@ -738,6 +738,15 @@
                             </CheckBox>
                         </Border>
                         <Border Style="{StaticResource Row}">
+                            <CheckBox x:Name="RunAsAdminBox" Style="{StaticResource Switch}" Click="RunAsAdmin_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Run as administrator'}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{l:T 'On a machine controlled from the coordinator: needed for the keyboard and mouse to work in apps opened as administrator. DeskBridge starts as administrator when you sign in (a scheduled task); Windows asks for permission once, on this PC. Files cannot be dropped on its window meanwhile.'}" />
+                                    <TextBlock x:Name="AdminStatusText" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Row}">
                             <CheckBox x:Name="CloseToTrayMenu" Style="{StaticResource Switch}" Click="CloseToTray_Click">
                                 <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Keep running in the notification area when closed'}" />
                             </CheckBox>

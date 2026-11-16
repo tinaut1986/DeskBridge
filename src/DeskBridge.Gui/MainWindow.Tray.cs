@@ -33,9 +33,69 @@ public partial class MainWindow
         };
         _tray.DoubleClick += (_, _) => ShowFromTray();
         _tray.ContextMenuStrip.Opening += (_, _) => BuildTrayMenu();
+        _adminTask = Elevation.TaskExists();
         FollowAutostart();
-        StartWithWindowsMenu.IsChecked = StartsWithWindows();
+        UpdateAdminUi();
         CloseToTrayMenu.IsChecked = _settings.CloseToTray;
+    }
+
+    /// <summary>The sign-in task that starts DeskBridge as administrator exists (it replaces "Start with Windows").</summary>
+    private bool _adminTask;
+
+    private void UpdateAdminUi()
+    {
+        RunAsAdminBox.IsChecked = _adminTask;
+        AdminStatusText.Text = Elevation.IsElevated
+            ? L.T("DeskBridge is running as administrator now.")
+            : L.T("DeskBridge is running without administrator rights now.");
+        // The task starts it at sign-in already: no second start from the Run key.
+        StartWithWindowsMenu.IsChecked = _adminTask || StartsWithWindows();
+        StartWithWindowsMenu.IsEnabled = !_adminTask;
+    }
+
+    private void RunAsAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        bool wanted = RunAsAdminBox.IsChecked == true;
+        if (Environment.ProcessPath is not { } exe)
+            return;
+        AddLog(wanted ? "[admin] creating the sign-in task (Windows asks for permission on this PC)"
+                      : "[admin] deleting the sign-in task (Windows asks for permission on this PC)");
+        bool started = wanted ? Elevation.Enable(exe, AddLog) : Elevation.Disable(exe, AddLog);
+        if (!started)
+        {
+            RunAsAdminBox.IsChecked = _adminTask;
+            return;
+        }
+        if (wanted)
+            RemoveRunKey();
+        else
+            SetRunKey(exe);
+        // The task (or Explorer) starts the new copy in a few seconds, once this one has closed.
+        Quit();
+    }
+
+    private static void RemoveRunKey()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            key?.DeleteValue(RunValue, throwOnMissingValue: false);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or System.IO.IOException)
+        {
+        }
+    }
+
+    private static void SetRunKey(string exe)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+            key.SetValue(RunValue, $"\"{exe}\" --minimized");
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or System.IO.IOException)
+        {
+        }
     }
 
     /// <summary>
@@ -43,10 +103,15 @@ public partial class MainWindow
     /// coordinator (a new file under %LOCALAPPDATA%\DeskBridge\bin), or when the registered file is gone.
     /// A copy started by hand from elsewhere does not take it over.
     /// </summary>
-    private static void FollowAutostart()
+    private void FollowAutostart()
     {
         if (Environment.ProcessPath is not { } exe)
             return;
+        if (_adminTask)
+        {
+            RemoveRunKey(); // started by the sign-in task instead
+            return;
+        }
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
