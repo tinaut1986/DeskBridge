@@ -105,9 +105,22 @@ public static class InputLayout
         new(machine, [display], position.X - (int)Math.Round(display.X * scale), position.Y - (int)Math.Round(display.Y * scale),
             Confine: true, ScaleX: scale, ScaleY: scale);
 
-    /// <summary>How big a display of another machine is on the coordinator's desk: its size as Windows scales it.</summary>
-    public static (int Width, int Height) DeskSize(int width, int height, int scalePercent) =>
-        scalePercent is > 0 and not 100 ? ((int)Math.Round(width * 100.0 / scalePercent), (int)Math.Round(height * 100.0 / scalePercent)) : (width, height);
+    /// <summary>
+    /// How big a display of another machine is on the coordinator's desk: the width chosen for it (the height in
+    /// proportion), or else its size as Windows scales it.
+    /// </summary>
+    public static (int Width, int Height) DeskSize(int width, int height, int scalePercent, int? deskWidth = null)
+    {
+        if (deskWidth is > 0 and var w && width > 0)
+            return (w, (int)Math.Round((double)height * w / width));
+        return scalePercent is > 0 and not 100
+            ? ((int)Math.Round(width * 100.0 / scalePercent), (int)Math.Round(height * 100.0 / scalePercent))
+            : (width, height);
+    }
+
+    /// <summary>Desk units per pixel of that display (the scale of its input target).</summary>
+    public static double DeskScale(int width, int height, int scalePercent, int? deskWidth = null) =>
+        width > 0 ? (double)DeskSize(width, height, scalePercent, deskWidth).Width / width : 1;
 
     /// <summary>
     /// A display of the coordinator (<paramref name="lent"/>) showing <paramref name="shown"/>, a display of

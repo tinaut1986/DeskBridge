@@ -54,14 +54,21 @@ public static class Arrangement
         }
     }
 
-    /// <summary>Position along another display's edge: kept touching it, snapped to its ends when close.</summary>
+    /// <summary>
+    /// Position along another display's edge: kept touching it, snapped to its ends or to its centre (both
+    /// centres in line) when close.
+    /// </summary>
     private static int AlongEdge(int position, int size, int start, int end, int threshold)
     {
         int v = Math.Clamp(position, start - size + 1, end - 1);
-        if (Math.Abs(v - start) <= threshold)
-            return start;
-        if (Math.Abs(v + size - end) <= threshold)
-            return end - size;
-        return v;
+        int centred = (start + end) / 2 - size / 2;
+        int best = v, bestDistance = threshold + 1;
+        foreach (var candidate in new[] { start, end - size, centred })
+        {
+            int distance = Math.Abs(v - candidate);
+            if (distance < bestDistance)
+                (best, bestDistance) = (candidate, distance);
+        }
+        return best;
     }
 }

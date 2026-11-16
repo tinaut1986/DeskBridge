@@ -101,6 +101,21 @@ public sealed class MachineVm : ObservableObject
     /// <summary>Its displays placed on the coordinator's desk (Layout tab), by display id; the others stay apart.</summary>
     public IReadOnlyDictionary<string, VirtualPosition> DeskPositions { get => _deskPositions; set => Set(ref _deskPositions, value); }
 
+    private IReadOnlyDictionary<string, int> _deskWidths = new Dictionary<string, int>();
+
+    /// <summary>Width chosen for a display on the desk (to line its edges up with a neighbour); none: its visual size.</summary>
+    public IReadOnlyDictionary<string, int> DeskWidths { get => _deskWidths; set => Set(ref _deskWidths, value); }
+
+    public void SetDeskWidth(string display, int? width)
+    {
+        var copy = new Dictionary<string, int>(DeskWidths);
+        if (width is { } w)
+            copy[display] = w;
+        else
+            copy.Remove(display);
+        DeskWidths = copy;
+    }
+
     /// <summary>Places one display on the desk (or takes it off with null).</summary>
     public void PlaceOnDesk(string display, VirtualPosition? position)
     {
@@ -362,7 +377,10 @@ public sealed class EditorModel
         foreach (var (m, vm) in config.Machines.Zip(model.Machines))
         {
             if (!m.HasInput)
+            {
                 vm.DeskPositions = Core.Input.InputLayout.DeskPositions(m, coordinator);
+                vm.DeskWidths = m.DeskWidths is { } widths ? new Dictionary<string, int>(widths) : new Dictionary<string, int>();
+            }
         }
 
         foreach (var p in config.Profiles)
@@ -397,7 +415,10 @@ public sealed class EditorModel
             m.HasInput, m.ControlPort,
             DeskPositions: m.HasInput || m.DeskPositions.Count == 0
                 ? null
-                : m.DeskPositions.Where(p => m.Displays.Any(d => d.Id.Trim() == p.Key)).ToDictionary())).ToList();
+                : m.DeskPositions.Where(p => m.Displays.Any(d => d.Id.Trim() == p.Key)).ToDictionary(),
+            DeskWidths: m.HasInput || !m.DeskWidths.Any(w => m.DeskPositions.ContainsKey(w.Key))
+                ? null
+                : m.DeskWidths.Where(w => m.DeskPositions.ContainsKey(w.Key)).ToDictionary())).ToList();
 
         var profiles = Profiles.Select(p => new ProfileConfig(
             p.Name.Trim(),

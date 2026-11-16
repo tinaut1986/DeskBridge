@@ -81,7 +81,7 @@ public sealed class KeyboardMouseShare : IDisposable
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
                         _target = enter.Machine;
                         Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY)));
-                        var how = enter.Area is null ? "past the edge" : "through the display showing it";
+                        var how = enter.Area is null ? "past the edge" : "onto its display (on the desk, or shown here)";
                         Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
                         _remoteChanged(enter.Machine);
                         return true;

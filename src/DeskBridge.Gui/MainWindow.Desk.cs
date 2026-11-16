@@ -38,10 +38,11 @@ public partial class MainWindow
     /// Another machine's display as it sits on the desk: its visual size (a 2880-pixel panel at 200% takes 1440),
     /// its own arrangement scaled the same way.
     /// </summary>
-    private static DisplayRect DeskRectOf(DisplayVm d)
+    private static DisplayRect DeskRectOf(MachineVm m, DisplayVm d)
     {
-        var (w, h) = InputLayout.DeskSize(d.Width, d.Height, d.Scale);
-        double s = d.Scale is > 0 ? 100.0 / d.Scale : 1;
+        int? chosen = m.DeskWidths.TryGetValue(d.Id.Trim(), out var width) ? width : null;
+        var (w, h) = InputLayout.DeskSize(d.Width, d.Height, d.Scale, chosen);
+        double s = InputLayout.DeskScale(d.Width, d.Height, d.Scale, chosen);
         return new DisplayRect((int)Math.Round(d.X * s), (int)Math.Round(d.Y * s), w, h);
     }
 
@@ -75,7 +76,7 @@ public partial class MainWindow
         foreach (var m in others)
             foreach (var d in m.Displays)
                 if (m.DeskPositions.TryGetValue(d.Id.Trim(), out var p))
-                    desk.Add((m, d, DeskRectOf(d) with { X = p.X, Y = p.Y }));
+                    desk.Add((m, d, DeskRectOf(m, d) with { X = p.X, Y = p.Y }));
         var deskBounds = InputLayout.Bounds(desk.Select(x => x.Rect).ToList());
 
         // Beside it, each machine with the displays left apart (in their own arrangement), one under another.
@@ -88,12 +89,12 @@ public partial class MainWindow
             var left = m.Displays.Where(d => !m.DeskPositions.ContainsKey(d.Id.Trim())).ToList();
             if (left.Count == 0)
                 continue;
-            var own = InputLayout.Bounds(left.Select(DeskRectOf).ToList());
+            var own = InputLayout.Bounds(left.Select(d => DeskRectOf(m, d)).ToList());
             int labelSpace = gap;
             apartLabels.Add((m, apartX, apartY));
             foreach (var d in left)
             {
-                var r = DeskRectOf(d);
+                var r = DeskRectOf(m, d);
                 apart.Add((m, d, r with { X = apartX + r.X - own.X, Y = apartY + labelSpace + r.Y - own.Y }));
             }
             apartY += labelSpace + own.Height + gap;
@@ -286,10 +287,59 @@ public partial class MainWindow
         };
 
         if (onDesk)
+            tile.ContextMenu = DeskTileMenu(machine, display, start, desk);
+    }
+
+    /// <summary>
+    /// Right-click on a display on the desk: line its edges up with a neighbour it touches (same width as the one
+    /// above or below, same height as the one beside it), back to its visual size, or off the desk.
+    /// </summary>
+    private ContextMenu DeskTileMenu(MachineVm machine, DisplayVm display, DisplayRect rect,
+        IReadOnlyList<(MachineVm Machine, DisplayVm Display, DisplayRect Rect)> desk)
+    {
+        var menu = new ContextMenu();
+        string id = display.Id.Trim();
+        foreach (var (otherMachine, other, o) in desk.Where(x => !(x.Machine == machine && x.Display == display)))
         {
-            var remove = new MenuItem { Header = L.T("Take off the desk") };
-            remove.Click += (_, _) => machine.PlaceOnDesk(display.Id.Trim(), null);
-            tile.ContextMenu = new ContextMenu { Items = { remove } };
+            string name = otherMachine.HasInput ? other.Id : $"{otherMachine} · {other.Id}";
+            bool aboveOrBelow = (rect.Y == o.Bottom || rect.Bottom == o.Y) && rect.X < o.Right && o.X < rect.Right;
+            bool beside = (rect.X == o.Right || rect.Right == o.X) && rect.Y < o.Bottom && o.Y < rect.Bottom;
+            if (aboveOrBelow)
+            {
+                var item = new MenuItem { Header = L.T("Same width as display {display}", ("display", name)) };
+                item.Click += (_, _) =>
+                {
+                    int h = (int)Math.Round((double)display.Height * o.Width / display.Width);
+                    int y = rect.Y >= o.Bottom ? o.Bottom : o.Y - h;
+                    machine.SetDeskWidth(id, o.Width);
+                    machine.PlaceOnDesk(id, new VirtualPosition(o.X, y)); // edges in line with it
+                };
+                menu.Items.Add(item);
+            }
+            if (beside)
+            {
+                var item = new MenuItem { Header = L.T("Same height as display {display}", ("display", name)) };
+                item.Click += (_, _) =>
+                {
+                    int w = (int)Math.Round((double)display.Width * o.Height / display.Height);
+                    int x = rect.X >= o.Right ? o.Right : o.X - w;
+                    machine.SetDeskWidth(id, w);
+                    machine.PlaceOnDesk(id, new VirtualPosition(x, o.Y));
+                };
+                menu.Items.Add(item);
+            }
         }
+        var visual = new MenuItem
+        {
+            Header = L.T("Visual size ({scale}%)", ("scale", display.Scale)),
+            IsEnabled = machine.DeskWidths.ContainsKey(id),
+        };
+        visual.Click += (_, _) => machine.SetDeskWidth(id, null);
+        menu.Items.Add(visual);
+        menu.Items.Add(new Separator());
+        var remove = new MenuItem { Header = L.T("Take off the desk") };
+        remove.Click += (_, _) => machine.PlaceOnDesk(id, null);
+        menu.Items.Add(remove);
+        return menu;
     }
 }

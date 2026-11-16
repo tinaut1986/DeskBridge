@@ -25,6 +25,10 @@ public sealed record DisplayConfig(string Id, int Width, int Height, int Refresh
 /// of each in the coordinator's desktop coordinates. A display on the desk is used from the coordinator like one
 /// more of its monitors (the cursor moves onto it past the edge where they touch); one that is not stays apart.
 /// </param>
+/// <param name="DeskWidths">
+/// Width chosen for a display on the desk (by display id), e.g. the same as the monitor it sits under so the
+/// edges line up; without one it takes its visual size (its width at Windows' scale). The height follows.
+/// </param>
 public sealed record MachineConfig(
     string Id,
     string Name,
@@ -34,7 +38,8 @@ public sealed record MachineConfig(
     int? ControlPort = null,
     PlacementSide? InputSide = null,
     VirtualPosition? InputPosition = null,
-    IReadOnlyDictionary<string, VirtualPosition>? DeskPositions = null);
+    IReadOnlyDictionary<string, VirtualPosition>? DeskPositions = null,
+    IReadOnlyDictionary<string, int>? DeskWidths = null);
 
 /// <summary>
 /// How a lent display is streamed. Every value is optional: by default the virtual display

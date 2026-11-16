@@ -22,6 +22,23 @@ public class ArrangementTests
     }
 
     [Fact]
+    public void Dropped_near_the_middle_lines_up_both_centres()
+    {
+        // A 1646-wide laptop panel under a 1920 monitor: centred is x = 137.
+        var snapped = Arrangement.Snap(new DisplayRect(120, 1120, 1646, 1029), [Screen], threshold: 40);
+        Assert.Equal(new DisplayRect(137, 1080, 1646, 1029), snapped);
+    }
+
+    [Fact]
+    public void A_chosen_width_sets_the_size_on_the_desk_and_the_scale()
+    {
+        // Visual size at 175%, or matched to the 1920 monitor above it.
+        Assert.Equal((1646, 1029), Core.Input.InputLayout.DeskSize(2880, 1800, 175));
+        Assert.Equal((1920, 1200), Core.Input.InputLayout.DeskSize(2880, 1800, 175, deskWidth: 1920));
+        Assert.Equal(1920.0 / 2880, Core.Input.InputLayout.DeskScale(2880, 1800, 175, 1920), 6);
+    }
+
+    [Fact]
     public void Far_from_the_ends_it_keeps_its_offset_along_the_edge()
     {
         var snapped = Arrangement.Snap(new DisplayRect(1900, 500, 1280, 720), [Screen], threshold: 50);
