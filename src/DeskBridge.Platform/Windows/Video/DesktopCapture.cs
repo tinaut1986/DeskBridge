@@ -9,6 +9,10 @@ namespace DeskBridge.Platform.Windows.Video;
 /// Captures one monitor with DXGI desktop duplication: each new frame is copied into a texture of our own
 /// (BGRA, on the GPU), with no copy to the CPU. Works for physical and virtual (IddCx) displays alike.
 /// The mouse pointer is not part of the image (it is sent separately).
+/// It runs on a device of its own: waiting for the next frame inside AcquireNextFrame holds its device, so the
+/// encoder works on another one and reads the frame through a shared texture (<see cref="OpenFrame"/>), guarded by
+/// a keyed mutex. That way the capture wakes up the moment Windows has a new picture, instead of looking for one
+/// at fixed times out of step with it.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class DesktopCapture : IDisposable
@@ -43,7 +47,22 @@ public sealed unsafe class DesktopCapture : IDisposable
         _output = output;
         Width = width;
         Height = height;
-        Frame = video.CreateTexture(width, height, Format.B8G8R8A8_UNorm, BindFlags.RenderTarget | BindFlags.ShaderResource);
+        Frame = video.CreateTexture(width, height, Format.B8G8R8A8_UNorm, BindFlags.RenderTarget | BindFlags.ShaderResource,
+            options: ResourceOptionFlags.SharedKeyedMutex);
+        _frameLock = Frame.QueryInterface<IDXGIKeyedMutex>();
+    }
+
+    private readonly IDXGIKeyedMutex _frameLock;
+
+    /// <summary>
+    /// <see cref="Frame"/> opened on another device (the encoder's), with the lock to hold while reading it there:
+    /// <c>AcquireSync(0, ...)</c> before, <c>ReleaseSync(0)</c> after.
+    /// </summary>
+    public (ID3D11Texture2D Texture, IDXGIKeyedMutex Lock) OpenFrame(VideoDevice other)
+    {
+        using var resource = Frame.QueryInterface<IDXGIResource>();
+        var texture = other.Device.OpenSharedResource<ID3D11Texture2D>(resource.SharedHandle);
+        return (texture, texture.QueryInterface<IDXGIKeyedMutex>());
     }
 
     /// <summary>The GPU and output of the monitor whose desktop rectangle starts at (x, y).</summary>
@@ -168,7 +187,16 @@ public sealed unsafe class DesktopCapture : IDisposable
             if (image)
             {
                 using var texture = resource!.QueryInterface<ID3D11Texture2D>();
-                _video.Context.CopyResource(Frame, texture);
+                try
+                {
+                    _frameLock.AcquireSync(0, 500);
+                    _video.Context.CopyResource(Frame, texture);
+                    _frameLock.ReleaseSync(0);
+                }
+                catch (SharpGen.Runtime.SharpGenException)
+                {
+                    // the encoder kept the frame too long: this picture is skipped, the next one goes
+                }
             }
         }
         return image;
@@ -196,6 +224,7 @@ public sealed unsafe class DesktopCapture : IDisposable
         if (_holding)
             _duplication?.ReleaseFrame();
         _duplication?.Dispose();
+        _frameLock.Dispose();
         Frame.Dispose();
         _output.Dispose();
     }
