@@ -169,6 +169,26 @@ public sealed class KeyboardMouseShare : IDisposable
         }
     }
 
+    /// <summary>
+    /// The scan code sent for a key. The two Shift keys are never extended (some keyboards report Right Shift
+    /// as extended, and E0 36 is ignored by the other PC); a key with no scan code gets the one its virtual key
+    /// maps to.
+    /// </summary>
+    private static (int Scan, bool Extended) KeyCode(HookedKey k)
+    {
+        if (k.VirtualKey == 0xA1) // VK_RSHIFT
+            return (0x36, false);
+        if (k.VirtualKey is 0xA0 or 0x10) // VK_LSHIFT, VK_SHIFT
+            return (k.ScanCode == 0x36 ? 0x36 : 0x2A, false);
+        if (k.ScanCode != 0)
+            return (k.ScanCode, k.Extended);
+        uint mapped = MapVirtualKeyW((uint)k.VirtualKey, 4 /* MAPVK_VK_TO_VSC_EX */);
+        return ((int)(mapped & 0xFF), (mapped & 0xFF00) == 0xE000 || k.Extended);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint MapVirtualKeyW(uint code, uint mapType);
+
     private bool OnKey(HookedKey k)
     {
         if (k.Injected)
@@ -212,7 +232,8 @@ public sealed class KeyboardMouseShare : IDisposable
             }
             else
             {
-                Enqueue(new EventItem(new InputEvent(InputKind.Key, Code: k.ScanCode, Down: k.Down, Extended: k.Extended)));
+                var (scan, extended) = KeyCode(k);
+                Enqueue(new EventItem(new InputEvent(InputKind.Key, Code: scan, Down: k.Down, Extended: extended)));
                 return true;
             }
         }

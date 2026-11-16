@@ -68,6 +68,11 @@ public sealed class InputInjector
 
     private void Key(int scan, bool extended, bool down)
     {
+        // Right Shift (0x36) and Left Shift (0x2A) are never extended keys: E0 36 / E0 2A are the "fake shifts"
+        // keyboards send around some keys, and Windows ignores them. Some keyboards report Right Shift as
+        // extended to the hook, so it is corrected here.
+        if (scan is 0x36 or 0x2A)
+            extended = false;
         uint flags = KEYEVENTF_SCANCODE | (extended ? KEYEVENTF_EXTENDEDKEY : 0) | (down ? 0 : KEYEVENTF_KEYUP);
         Send(new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wScan = (ushort)scan, dwFlags = flags } } });
         if (down)
