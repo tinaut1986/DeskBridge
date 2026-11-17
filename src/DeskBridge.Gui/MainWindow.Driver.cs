@@ -25,9 +25,9 @@ public partial class MainWindow
     private void CheckVirtualDisplayDriver(LayoutPlan plan)
     {
         var here = _agent?.Machine;
-        // Only virtual displays that are really shown elsewhere (sending from the coordinator is not available yet).
-        bool needed = here is not null && here != plan.Coordinator
-                      && plan.Streams.Any(s => s.SourceMachine == here && s.SinkMachine == plan.Coordinator);
+        // Virtual displays of this PC that another machine shows: a client's on the coordinator, or the
+        // coordinator's on another machine (e.g. a laptop used as one more monitor of the desktop).
+        bool needed = here is not null && plan.Streams.Any(s => s.SourceMachine == here && s.SinkMachine != here);
         if (!needed)
         {
             Dispatcher.BeginInvoke(() => DriverBanner.Visibility = Visibility.Collapsed);
@@ -42,7 +42,9 @@ public partial class MainWindow
             if (!_driverNoticeShown)
             {
                 _driverNoticeShown = true;
-                Notify(L.T("This PC needs the Virtual Display Driver to create the displays the coordinator shows. Open DeskBridge to install it."));
+                Notify(here == plan.Coordinator
+                    ? L.T("This PC needs the Virtual Display Driver to create the displays the other machines show. Open DeskBridge to install it.")
+                    : L.T("This PC needs the Virtual Display Driver to create the displays the coordinator shows. Open DeskBridge to install it."));
             }
         });
     }
@@ -148,6 +150,14 @@ public partial class MainWindow
     {
         if (_agent is not { } agent || !await agent.ReapplyAsync())
             return;
+        if (IsCoordinatorHere())
+        {
+            // Its own streams to the other machines: each one stopped is started again by itself a moment later
+            // (see TryStartOutgoing), now of the virtual display.
+            foreach (var sender in _videoSenders.Values.ToArray())
+                await sender.DisposeAsync();
+            return;
+        }
         foreach (var (key, sender) in _videoSenders.ToArray())
         {
             _videoSenders.TryRemove(key, out _);

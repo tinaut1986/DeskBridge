@@ -63,6 +63,13 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
     {
         Placed.Clear();
         bool installed = await Task.Run(IsInstalled, ct);
+        if (!installed && displays.Count > 0 && await Task.Run(RestartStoppedDriver, ct))
+        {
+            for (int i = 0; i < 20 && !(installed = await Task.Run(IsInstalled, ct)); i++)
+                await Task.Delay(500, ct);
+            log(installed ? "[virtual displays] the Virtual Display Driver is running again"
+                          : "[virtual displays] the Virtual Display Driver did not come back after restarting it");
+        }
         if (!installed)
         {
             if (displays.Count > 0)
@@ -86,16 +93,23 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             return;
         }
 
-        // Every SETDISPLAYCOUNT reloads the driver (and a few reloads in a row can leave it stopped with a problem):
-        // only when the number of its monitors really changes.
-        if (VirtualMonitors().Count != displays.Count
-            && Send($"SETDISPLAYCOUNT {displays.Count}", wantReply: false) is null)
+        // Every SETDISPLAYCOUNT reloads the driver, and a few reloads in a row can leave it stopped with a problem
+        // (code 43, seen going from one monitor to none and back): only when it needs more monitors than it has.
+        // Fewer are taken off the desktop instead (they stay with the driver, ready for the next profile).
+        // A size the driver does not list cannot be given to its monitors (e.g. a laptop's 2880x1800): added to its
+        // settings once, then the driver is reloaded to read them.
+        bool reload = await Task.Run(() => AddMissingResolutions(displays), ct);
+        if ((reload || VirtualMonitors().Count < displays.Count)
+            && Send($"SETDISPLAYCOUNT {Math.Max(displays.Count, VirtualMonitors().Count)}", wantReply: false) is null)
         {
             log("[virtual displays] the Virtual Display Driver did not take the new monitor count");
             return;
         }
+        if (reload)
+            await Task.Delay(2000, ct); // its monitors go away and come back (with new names) as it reloads
         if (displays.Count == 0)
         {
+            await DetachLeftOversAsync(0, ct);
             log("[virtual displays] none");
             return;
         }
@@ -140,10 +154,21 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
                 mode.Fields &= ~DmDisplayFrequency;
                 result = ChangeDisplaySettingsExW(devices[i], ref mode, 0, CdsUpdateRegistry | CdsNoReset, 0);
             }
+            if (result != 0 && ClosestMode(devices[i], spec.Width, spec.Height) is { } closest)
+            {
+                // Still not a size it has: the nearest one it has, so it is a display of its own (extended), not
+                // a copy of the main one.
+                mode.PelsWidth = closest.Width;
+                mode.PelsHeight = closest.Height;
+                result = ChangeDisplaySettingsExW(devices[i], ref mode, 0, CdsUpdateRegistry | CdsNoReset, 0);
+                if (result == 0)
+                    log($"[virtual displays] {devices[i]}: {spec.Width}x{spec.Height} is not one of its sizes; {closest.Width}x{closest.Height} instead");
+            }
             if (result != 0)
                 log($"[virtual displays] {devices[i]}: mode {spec.Width}x{spec.Height}@{spec.RefreshHz} refused ({result})");
         }
         ChangeDisplaySettingsExW(null, 0, 0, 0, 0); // apply everything at once
+        await DetachLeftOversAsync(displays.Count, ct);
 
         for (int i = 0; i < displays.Count; i++)
         {
@@ -251,6 +276,160 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
         }
         return found;
+    }
+
+    private static DateTime _lastRestart;
+
+    /// <summary>Where the driver reads its settings (the monitor count and the sizes its monitors offer).</summary>
+    private static string SettingsPath
+    {
+        get
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\MikeTheTech\VirtualDisplayDriver");
+            var folder = key?.GetValue("VDDPATH") as string;
+            return Path.Combine(string.IsNullOrWhiteSpace(folder) ? @"C:\VirtualDisplayDriver" : folder, "vdd_settings.xml");
+        }
+    }
+
+    /// <summary>
+    /// Adds to the driver's settings every planned size it does not list yet (at 60 Hz; its global refresh rates
+    /// apply too). True when the file changed, so the driver has to be reloaded. Needs administrator rights.
+    /// </summary>
+    private bool AddMissingResolutions(IReadOnlyList<VirtualDisplaySpec> displays)
+    {
+        try
+        {
+            var path = SettingsPath;
+            if (!File.Exists(path) || displays.Count == 0)
+                return false;
+            var doc = System.Xml.Linq.XDocument.Load(path, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+            if (doc.Descendants("resolutions").FirstOrDefault() is not { } list)
+                return false;
+            static int Value(System.Xml.Linq.XElement e, string name) =>
+                int.TryParse((string?)e.Element(name), out var v) ? v : 0;
+            var have = list.Elements("resolution").Select(r => (Value(r, "width"), Value(r, "height"))).ToHashSet();
+            var missing = displays.Select(d => (d.Width, d.Height)).Where(size => !have.Contains(size)).Distinct().ToList();
+            if (missing.Count == 0)
+                return false;
+            foreach (var (width, height) in missing)
+            {
+                list.Add(new System.Xml.Linq.XElement("resolution",
+                    new System.Xml.Linq.XElement("width", width),
+                    new System.Xml.Linq.XElement("height", height),
+                    new System.Xml.Linq.XElement("refresh_rate", 60)));
+            }
+            doc.Save(path);
+            log($"[virtual displays] added to the driver's sizes: {string.Join(", ", missing.Select(m => $"{m.Width}x{m.Height}"))}; reloading it");
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            log($"[virtual displays] the driver's sizes could not be updated: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>The size the monitor offers that is closest to the wanted one (same shape first, not larger).</summary>
+    private static (uint Width, uint Height)? ClosestMode(string device, int width, int height)
+    {
+        var sizes = new HashSet<(uint Width, uint Height)>();
+        var mode = new DevMode { Size = (ushort)Marshal.SizeOf<DevMode>() };
+        for (int i = 0; EnumDisplaySettingsW(device, i, ref mode); i++)
+        {
+            sizes.Add((mode.PelsWidth, mode.PelsHeight));
+            mode = new DevMode { Size = (ushort)Marshal.SizeOf<DevMode>() };
+        }
+        if (sizes.Count == 0)
+            return null;
+        double shape = (double)width / height;
+        return sizes
+            .OrderBy(s => s.Width > width || s.Height > height ? 1 : 0)                 // not larger than wanted
+            .ThenBy(s => Math.Abs((double)s.Width / s.Height - shape) < 0.02 ? 0 : 1)  // same shape
+            .ThenByDescending(s => (long)s.Width * s.Height)                            // as large as possible
+            .First();
+    }
+
+    /// <summary>
+    /// The driver's device is there but its pipe does not answer (stopped with a problem, e.g. code 43 after a
+    /// reload): restart the device, as disabling and enabling it in Device Manager does. At most once every few
+    /// minutes, so a driver that keeps failing is not restarted in a loop. Needs administrator rights.
+    /// </summary>
+    private bool RestartStoppedDriver()
+    {
+        if (DateTime.UtcNow - _lastRestart < TimeSpan.FromMinutes(5))
+            return false;
+        try
+        {
+            string? instance = null, candidate = null;
+            foreach (var line in RunPnpUtil("/enum-devices /class Display").Split('\n'))
+            {
+                // Each device starts with its instance id (e.g. ROOT\DISPLAY\0000); the labels are in Windows' language.
+                int colon = line.IndexOf(':');
+                var value = colon < 0 ? "" : line[(colon + 1)..].Trim();
+                if (value.Contains('\\') && !value.Contains(' '))
+                    candidate = value;
+                else if (value.Contains("Virtual Display Driver", StringComparison.OrdinalIgnoreCase) && candidate is not null)
+                {
+                    instance = candidate;
+                    break;
+                }
+            }
+            if (instance is null)
+                return false;
+            _lastRestart = DateTime.UtcNow;
+            log($"[virtual displays] the Virtual Display Driver does not answer: restarting its device ({instance})");
+            RunPnpUtil($"/restart-device \"{instance}\"");
+            return true;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            log($"[virtual displays] restarting the Virtual Display Driver failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static string RunPnpUtil(string arguments)
+    {
+        using var pnp = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("pnputil.exe", arguments)
+        {
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        })!;
+        var output = pnp.StandardOutput.ReadToEnd();
+        pnp.WaitForExit(15000);
+        return output;
+    }
+
+    /// <summary>
+    /// Virtual monitors past the first <paramref name="keep"/> that are still part of the desktop (a profile that
+    /// used more of them before: the driver keeps them, see SetDisplaysAsync) are taken off it, so the cursor and
+    /// windows cannot go onto a display nobody shows.
+    /// </summary>
+    private Task DetachLeftOversAsync(int keep, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var extra = VirtualMonitors().Skip(keep).Where(IsAttached).ToList();
+        if (extra.Count == 0)
+            return Task.CompletedTask;
+        DetachAll(extra);
+        return Task.CompletedTask;
+    }
+
+    private void DetachAll(List<string> extra)
+    {
+        if (extra.Count == 0)
+            return;
+        foreach (var device in extra)
+        {
+            // A position and a size of zero take a display off the desktop.
+            var mode = new DevMode { Size = (ushort)Marshal.SizeOf<DevMode>(), Fields = DmPelsWidth | DmPelsHeight | DmPosition };
+            int result = ChangeDisplaySettingsExW(device, ref mode, 0, CdsUpdateRegistry | CdsNoReset, 0);
+            if (result != 0)
+                log($"[virtual displays] {device}: taking it off the desktop refused ({result})");
+        }
+        ChangeDisplaySettingsExW(null, 0, 0, 0, 0);
+        log($"[virtual displays] taken off the desktop (not in the profile any more): {string.Join(", ", extra)}");
     }
 
     private static bool IsAttached(string deviceName)

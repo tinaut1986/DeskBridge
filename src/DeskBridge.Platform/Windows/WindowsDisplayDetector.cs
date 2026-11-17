@@ -71,6 +71,19 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
         if (target.IsPrimary)
             return true;
         int dx = -target.Config.X, dy = -target.Config.Y;
+
+        // Windows' display configuration (what Settings > Display uses): the primary display is the one at (0,0).
+        // The older per-display API below is refused by some drivers (DISP_CHANGE_FAILED).
+        if (ShiftWithDisplayConfig(target.Config.X, target.Config.Y, dx, dy, log))
+        {
+            bool done = DetectDetailed(includeVirtual: true).Any(d => d.Config.Id == id && d.IsPrimary);
+            if (done)
+            {
+                log($"[displays] display {id} is now the primary display");
+                return true;
+            }
+        }
+
         foreach (var display in displays)
         {
             var mode = new DevMode { dmSize = (ushort)Marshal.SizeOf<DevMode>() };
@@ -92,6 +105,74 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
         bool ok = applied == 0 && DetectDetailed(includeVirtual: true).Any(d => d.Config.Id == id && d.IsPrimary);
         log(ok ? $"[displays] display {id} is now the primary display" : $"[displays] display {id} could not be made the primary display ({applied})");
         return ok;
+    }
+
+    /// <summary>
+    /// Moves every active display by (dx, dy) with QueryDisplayConfig / SetDisplayConfig, so the one whose top-left
+    /// corner is at (x, y) ends up at (0,0). False when it could not be done (the caller tries the older API).
+    /// </summary>
+    private static bool ShiftWithDisplayConfig(int x, int y, int dx, int dy, Action<string> log)
+    {
+        const uint QdcOnlyActivePaths = 0x2;
+        const uint SdcApply = 0x80, SdcUseSuppliedDisplayConfig = 0x20, SdcSaveToDatabase = 0x200, SdcAllowChanges = 0x400;
+        const int PathSize = 72, ModeSize = 64;
+        const uint ModeTypeSource = 1;
+        // DISPLAYCONFIG_MODE_INFO: infoType at 0; for a source mode, position.x at 28 and position.y at 32.
+        const int InfoType = 0, PositionX = 28, PositionY = 32;
+
+        nint paths = 0, modes = 0;
+        try
+        {
+            int result = 0;
+            uint pathCount = 0, modeCount = 0;
+            for (int attempt = 0; attempt < 3; attempt++) // the configuration may change between the two calls
+            {
+                if (NativeMethods.GetDisplayConfigBufferSizes(QdcOnlyActivePaths, out pathCount, out modeCount) != 0)
+                    return false;
+                Marshal.FreeHGlobal(paths);
+                Marshal.FreeHGlobal(modes);
+                paths = Marshal.AllocHGlobal((int)pathCount * PathSize);
+                modes = Marshal.AllocHGlobal((int)modeCount * ModeSize);
+                result = NativeMethods.QueryDisplayConfig(QdcOnlyActivePaths, ref pathCount, paths, ref modeCount, modes, 0);
+                if (result != 122 /* ERROR_INSUFFICIENT_BUFFER */)
+                    break;
+            }
+            if (result != 0)
+                return false;
+
+            bool found = false;
+            for (int i = 0; i < modeCount; i++)
+            {
+                nint mode = modes + i * ModeSize;
+                if ((uint)Marshal.ReadInt32(mode, InfoType) == ModeTypeSource
+                    && Marshal.ReadInt32(mode, PositionX) == x && Marshal.ReadInt32(mode, PositionY) == y)
+                    found = true;
+            }
+            if (!found)
+                return false;
+            for (int i = 0; i < modeCount; i++)
+            {
+                nint mode = modes + i * ModeSize;
+                if ((uint)Marshal.ReadInt32(mode, InfoType) != ModeTypeSource)
+                    continue;
+                Marshal.WriteInt32(mode, PositionX, Marshal.ReadInt32(mode, PositionX) + dx);
+                Marshal.WriteInt32(mode, PositionY, Marshal.ReadInt32(mode, PositionY) + dy);
+            }
+            result = NativeMethods.SetDisplayConfig(pathCount, paths, modeCount, modes,
+                SdcApply | SdcUseSuppliedDisplayConfig | SdcSaveToDatabase | SdcAllowChanges);
+            if (result != 0)
+                log($"[displays] moving the displays refused ({result}); trying the older way");
+            return result == 0;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return false;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(paths);
+            Marshal.FreeHGlobal(modes);
+        }
     }
 
     /// <summary>The id of Windows' primary display.</summary>
@@ -193,6 +274,15 @@ public sealed class WindowsDisplayDetector : IDisplayDetector
 
         [DllImport("user32.dll")]
         public static extern nint MonitorFromPoint(Point point, uint flags);
+
+        [DllImport("user32.dll")]
+        public static extern int GetDisplayConfigBufferSizes(uint flags, out uint pathCount, out uint modeCount);
+
+        [DllImport("user32.dll")]
+        public static extern int QueryDisplayConfig(uint flags, ref uint pathCount, nint paths, ref uint modeCount, nint modes, nint topologyId);
+
+        [DllImport("user32.dll")]
+        public static extern int SetDisplayConfig(uint pathCount, nint paths, uint modeCount, nint modes, uint flags);
 
         [DllImport("shcore.dll")]
         public static extern int GetDpiForMonitor(nint monitor, int type, out uint dpiX, out uint dpiY);

@@ -138,6 +138,16 @@ public static class LayoutPlanner
                 var s = assignment!.Stream ?? StreamSettings.Default;
                 int width = s.Width ?? display.Width;
                 int height = s.Height ?? display.Height;
+                // The coordinator's screen shown on a display that is on its desk (the laptop under the monitors):
+                // the size it has on the desk, so its edges meet the coordinator's displays exactly as the Layout map
+                // shows (Windows joins displays by pixels, whatever their scale). The display scales it to fit.
+                if (s.Width is null && s.Height is null && config.Machines.FirstOrDefault(m => m.Id == user)?.HasInput == true
+                    && machine.DeskPositions?.ContainsKey(display.Id) == true)
+                {
+                    int? chosen = machine.DeskWidths is { } widths && widths.TryGetValue(display.Id, out var w) && w > 0 ? w : null;
+                    (width, height) = Input.InputLayout.DeskSize(display.Width, display.Height, display.Scale, chosen);
+                    (width, height) = (width & ~1, height & ~1); // the video encoder works in whole pairs of pixels
+                }
                 int refresh = s.RefreshHz ?? display.RefreshHz;
                 int bitrate = s.BitrateMbps ?? DefaultBitrateMbps(width, height, refresh);
 
@@ -237,6 +247,17 @@ public static class LayoutPlanner
             // Shown on the coordinator's desk next to this machine's own displays: placed in this machine's desktop
             // the same way round, so Windows moves the cursor (and dragged windows) between them as seen there.
             var fromDesk = DeskPlaced(config, borrower, mine);
+            // The coordinator's own virtual displays shown on a display of another machine that is on its desk (e.g.
+            // the laptop below the monitors, used as one more monitor): exactly where that display is on the desk,
+            // unless the profile places them by hand.
+            if (borrower.HasInput)
+            {
+                fromDesk.AddRange(mine
+                    .Where(v => assignments[(v.ForMachine, v.ForDisplay)].Position is null)
+                    .Select(v => (Spec: v, Lender: config.Machines.FirstOrDefault(m => m.Id == v.ForMachine)))
+                    .Where(x => x.Lender?.DeskPositions?.ContainsKey(x.Spec.ForDisplay) == true)
+                    .Select(x => x.Spec with { X = x.Lender!.DeskPositions![x.Spec.ForDisplay].X, Y = x.Lender.DeskPositions[x.Spec.ForDisplay].Y }));
+            }
             result.AddRange(fromDesk);
             mine = mine.Where(v => fromDesk.All(f => f.Key != v.Key)).ToList();
 

@@ -35,10 +35,16 @@ public partial class MainWindow
         // Desk positions are in the original arrangement's coordinates (see DeskOffset).
         var (ox, oy) = DeskOffset();
         // Displays of other machines placed on this PC's desk (Layout tab): reached past the edge where they touch.
+        // Not one that shows a screen of this PC in the applied profile: that screen is a display of this PC, placed
+        // right there, and the cursor simply moves onto it.
+        var showingThisPc = (_streamPlan?.Streams ?? [])
+            .Where(s => s.SourceMachine == _vm.LocalMachine.Trim())
+            .Select(s => (s.SinkMachine, s.SinkDisplay))
+            .ToHashSet();
         var edges = _vm.Model.Machines
             .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()))
             .SelectMany(m => m.Displays
-                .Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()))
+                .Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()) && !showingThisPc.Contains((m.Id.Trim(), d.Id.Trim())))
                 .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height),
                     new VirtualPosition(m.DeskPositions[d.Id.Trim()].X + ox, m.DeskPositions[d.Id.Trim()].Y + oy),
                     InputLayout.DeskScale(d.Width, d.Height, d.Scale, m.DeskWidths.TryGetValue(d.Id.Trim(), out var w) ? w : null))));

@@ -224,8 +224,13 @@ public sealed class VideoReceiver : IAsyncDisposable
         return found.Adapter;
     }
 
+    private int _disposed;
+
     public async ValueTask DisposeAsync()
     {
+        // Closed from more than one place (a machine that went away, the profile changing): once is enough.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         try
         {
             await _channel.SendAsync(VideoPacket.Stop);

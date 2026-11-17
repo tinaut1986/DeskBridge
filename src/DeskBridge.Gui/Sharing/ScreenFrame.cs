@@ -36,11 +36,13 @@ internal sealed class ScreenFrame : IDisposable
         }
         if (color != _color || _brush == 0)
         {
+            // Each strip paints with its own frame's brush (see Paint): a brush set on the window class would be
+            // shared by every frame, and deleted under the others when one of them goes away (they turned white).
             var old = _brush;
             _brush = CreateSolidBrush((uint)(color.R | color.G << 8 | color.B << 16));
             foreach (var strip in _strips)
             {
-                SetClassLongPtrW(strip, GclpHbrBackground, _brush);
+                StripBrushes[strip] = _brush;
                 InvalidateRect(strip, 0, true);
             }
             if (old != 0)
@@ -58,11 +60,26 @@ internal sealed class ScreenFrame : IDisposable
     private static void Put(nint strip, int x, int y, int w, int h) =>
         SetWindowPos(strip, HwndTopmost, x, y, w, h, SwpNoActivate | SwpShowWindow);
 
-    public void Dispose()
+    /// <summary>
+    /// Back above every other always-on-top window: the taskbar puts itself above the strips when it is used
+    /// (they would stay under it until the next placement).
+    /// </summary>
+    public void Raise()
     {
         foreach (var strip in _strips)
             if (strip != 0)
-                DestroyWindow(strip);
+                SetWindowPos(strip, HwndTopmost, 0, 0, 0, 0, SwpNoActivate | SwpNoMove | SwpNoSize | SwpNoOwnerZOrder);
+    }
+
+    public void Dispose()
+    {
+        foreach (var strip in _strips)
+        {
+            if (strip == 0)
+                continue;
+            DestroyWindow(strip);
+            StripBrushes.Remove(strip);
+        }
         Array.Clear(_strips);
         if (_brush != 0)
             DeleteObject(_brush);
@@ -73,7 +90,21 @@ internal sealed class ScreenFrame : IDisposable
 
     private const string ClassName = "DeskBridgeFrameStrip";
     private static bool _registered;
-    private static readonly WndProc Procedure = DefWindowProcW; // kept alive: Windows calls it for the whole process' life
+    private static readonly WndProc Procedure = Paint; // kept alive: Windows calls it for the whole process' life
+
+    /// <summary>The brush each strip is filled with (all on the UI thread).</summary>
+    private static readonly Dictionary<nint, nint> StripBrushes = new();
+
+    private static nint Paint(nint hwnd, uint message, nint wParam, nint lParam)
+    {
+        if (message == WmEraseBkgnd && StripBrushes.TryGetValue(hwnd, out var brush))
+        {
+            GetClientRect(hwnd, out var rect);
+            FillRect(wParam, ref rect, brush);
+            return 1;
+        }
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
     private static nint Instance => GetModuleHandleW(null);
 
     private static void EnsureClass()
@@ -108,9 +139,21 @@ internal sealed class ScreenFrame : IDisposable
     private const uint WsPopup = 0x80000000;
     private const uint WsExTopmost = 0x8, WsExTransparent = 0x20, WsExToolWindow = 0x80, WsExLayered = 0x80000, WsExNoActivate = 0x08000000;
     private const uint LwaAlpha = 0x2, WdaExcludeFromCapture = 0x11;
-    private const int GclpHbrBackground = -10;
+    private const uint WmEraseBkgnd = 0x14;
     private static readonly nint HwndTopmost = -1;
-    private const uint SwpNoActivate = 0x10, SwpShowWindow = 0x40;
+    private const uint SwpNoSize = 0x1, SwpNoMove = 0x2, SwpNoActivate = 0x10, SwpShowWindow = 0x40, SwpNoOwnerZOrder = 0x200;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetClientRect(nint hwnd, out Rect rect);
+
+    [DllImport("user32.dll")]
+    private static extern int FillRect(nint hdc, ref Rect rect, nint brush);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern ushort RegisterClassExW(ref WndClassEx wc);
@@ -130,9 +173,6 @@ internal sealed class ScreenFrame : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool SetWindowDisplayAffinity(nint hwnd, uint affinity);
-
-    [DllImport("user32.dll")]
-    private static extern nint SetClassLongPtrW(nint hwnd, int index, nint value);
 
     [DllImport("user32.dll")]
     private static extern bool InvalidateRect(nint hwnd, nint rect, bool erase);

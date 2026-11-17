@@ -34,6 +34,8 @@ public partial class MainWindow
         FixCoordinatorIfAClientIsMarkedAsIt();
         UpdateInputSharing();
         UpdateAudio();
+        OnPeersChangedForPresence();
+        UpdateFrames();
         if (_agent is null || !IsCoordinatorHere())
             return;
 
