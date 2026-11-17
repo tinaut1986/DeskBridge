@@ -110,7 +110,10 @@ public partial class MainWindow
                     {
                         _inputRemote = machine;
                         UpdateAgentStatus();
-                    }));
+                    }))
+                {
+                    Emergency = () => Dispatcher.BeginInvoke(Emergency),
+                };
             }
             catch (InvalidOperationException ex)
             {

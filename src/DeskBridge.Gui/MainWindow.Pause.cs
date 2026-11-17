@@ -223,6 +223,48 @@ public partial class MainWindow
         UpdateAppliedIndicator();
     }
 
+    // ------------------------------------------------------------------ emergency keys
+
+    private const int EmergencyHotkeyId = 0xDB01;
+
+    /// <summary>
+    /// Ctrl+Alt+Shift+Home, on any machine: independent machines at once (only that way round: connecting again is
+    /// done from Home or the tray). On the coordinator, while the cursor is on another machine, its keyboard hook
+    /// sees the keys first (KeyboardMouseShare.Emergency); otherwise Windows' hotkey does, even with the window hidden.
+    /// </summary>
+    private void RegisterEmergencyHotkey()
+    {
+        if (_options.SnapshotDir is not null)
+            return;
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+        System.Windows.Interop.HwndSource.FromHwnd(handle)?.AddHook((nint hwnd, int message, nint wParam, nint lParam, ref bool handled) =>
+        {
+            if (message == WmHotkey && wParam == EmergencyHotkeyId)
+            {
+                Emergency();
+                handled = true;
+            }
+            return 0;
+        });
+        if (!RegisterHotKey(handle, EmergencyHotkeyId, ModControl | ModAlt | ModShift | ModNoRepeat, VkHome))
+            AddLog(L.T("Ctrl+Alt+Shift+Home is taken by another program: the emergency keys do not work on this PC."));
+    }
+
+    private void Emergency()
+    {
+        if (_settings.Independent)
+            return;
+        var text = L.T("Emergency keys (Ctrl+Alt+Shift+Home): independent machines. Connect again from Home or the tray.");
+        AddLog(text);
+        _ = SetIndependentAsync(true).ContinueWith(_ => Dispatcher.BeginInvoke(() => Notify(text)), TaskScheduler.Default);
+    }
+
+    private const int WmHotkey = 0x0312, VkHome = 0x24;
+    private const uint ModAlt = 0x1, ModControl = 0x2, ModShift = 0x4, ModNoRepeat = 0x4000;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint key);
+
     // ------------------------------------------------------------------ buttons and menus
 
     private void UpdatePauseUi()
@@ -234,7 +276,7 @@ public partial class MainWindow
         IndependentButton.Content = _settings.Independent ? L.T("Connect with the other machines") : L.T("Independent machines");
         IndependentButton.ToolTip = _settings.Independent
             ? null
-            : L.T("Stops everything with the other machines (screens, keyboard and mouse, clipboard, sound, files) until you connect again. Nothing in the configuration changes.");
+            : L.T("Stops everything with the other machines (screens, keyboard and mouse, clipboard, sound, files) until you connect again. Nothing in the configuration changes. In an emergency, on any machine: Ctrl+Alt+Shift+Home.");
         // (The tray menu is built each time it opens.)
     }
 

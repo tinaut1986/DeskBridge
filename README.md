@@ -50,6 +50,8 @@ A sidebar with these pages:
     and sound keep working. *Resume* brings the profile back.
   - **Independent machines**: this PC stops talking to the others and each one works on its own. *Connect with the
     other machines* undoes it. Neither switch changes the configuration, and both survive a restart.
+    In an emergency, **Ctrl+Alt+Shift+Home** on any computer turns on *Independent machines* at once (on the
+    coordinator, even while the keyboard and mouse are on another computer).
 - **Layout** (on the coordinator): a map with *your desk* (the coordinator's monitors) and the screens of the other
   computers.
   - Drag a screen of another computer onto the desk to use it from there; the mouse crosses where they touch.

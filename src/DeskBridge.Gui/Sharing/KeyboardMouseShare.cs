@@ -18,6 +18,13 @@ public sealed class KeyboardMouseShare : IDisposable
 {
     private const int VkControl = 0x11, VkLControl = 0xA2, VkRControl = 0xA3;
     private const int VkMenu = 0x12, VkLMenu = 0xA4, VkRMenu = 0xA5, VkHome = 0x24;
+    private const int VkShift = 0x10, VkLShift = 0xA0, VkRShift = 0xA1;
+
+    /// <summary>
+    /// Ctrl+Alt+Shift+Home while the cursor is on another machine: back here, and then everything off (independent
+    /// machines). Elsewhere the same keys reach Windows' hotkey (see MainWindow.Emergency).
+    /// </summary>
+    public Action? Emergency { get; set; }
 
     private abstract record Item;
     private sealed record EnterItem(InputEnterMessage Message) : Item;
@@ -302,8 +309,10 @@ public sealed class KeyboardMouseShare : IDisposable
     {
         if (k.Injected)
             return false;
-        bool isModifier = k.VirtualKey is VkControl or VkLControl or VkRControl or VkMenu or VkLMenu or VkRMenu;
+        bool isModifier = k.VirtualKey is VkControl or VkLControl or VkRControl or VkMenu or VkLMenu or VkRMenu
+                          or VkShift or VkLShift or VkRShift;
         string? cameBack = null;
+        bool emergency = false;
         lock (_gate)
         {
             if (isModifier)
@@ -328,6 +337,7 @@ public sealed class KeyboardMouseShare : IDisposable
             bool alt = _modifiersDown.Overlaps([VkMenu, VkLMenu, VkRMenu]);
             if (k.Down && k.VirtualKey == VkHome && ctrl && alt)
             {
+                emergency = _modifiersDown.Overlaps([VkShift, VkLShift, VkRShift]);
                 cameBack = _logic.Remote;
                 var (x, y) = _logic.ReturnHere();
                 Settle(_parkedX, _parkedY);
@@ -351,6 +361,8 @@ public sealed class KeyboardMouseShare : IDisposable
         }
         if (cameBack is not null)
             _remoteChanged(null);
+        if (emergency)
+            Emergency?.Invoke();
         return true;
     }
 
