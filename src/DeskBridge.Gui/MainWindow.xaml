@@ -619,7 +619,8 @@
                                         <TextBlock Text="&#xE7B3;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
                                     </ToggleButton>
                                     <Button Content="{l:T 'Generate'}" Click="GenerateKey_Click" />
-                                    <Button Content="{l:T 'Copy'}" Click="CopyKey_Click" Margin="0" />
+                                    <Button Content="{l:T 'Copy'}" Click="CopyKey_Click" />
+                                    <Button Content="{l:T 'QR for a phone'}" Click="PhoneQr_Click" Margin="0" ToolTip="{l:T 'Connect a phone or tablet'}" />
                                 </StackPanel>
                                 <TextBlock Style="{StaticResource RowTitle}" Text="{l:T 'Shared key'}" Margin="0,0,16,0" />
                             </DockPanel>
