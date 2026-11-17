@@ -185,6 +185,13 @@ public sealed class VideoWindow : IDisposable
         return result;
     }
 
+    /// <summary>Where the video windows are on the screen, with their window handles.</summary>
+    public static List<(nint Hwnd, int X, int Y, int Width, int Height)> Areas() =>
+        Windows.Keys
+            .Select(h => GetWindowRect(h, out var r) ? (h, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top) : (h, 0, 0, 0, 0))
+            .Where(a => a.Item4 > 0 && a.Item5 > 0)
+            .ToList();
+
     /// <summary>Every video window: where it is, its client size and what it draws (troubleshooting).</summary>
     public static string Report() => Windows.Count == 0
         ? "no video window"
