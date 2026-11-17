@@ -1,0 +1,42 @@
+{
+  "protocolVersion": 3,
+  "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "serverNonce": "ERERERERERERERERERERERERERERERERERERERERERE=",
+  "clientNonce": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=",
+  "client": "tablet",
+  "server": "desktop",
+  "clientProof": "SJHTSVwV6VurnR9CYjyL3YbWt9PDwLLXYKW1fVxwgyI=",
+  "serverProof": "sLx/YXT6STw5uC3M7hWQyoBeCiQUaBlCLSqsDAyWQ34=",
+  "clientToServer": "fc21d650364ed59bf9388f03695fa051d8d417de9f0836cd8edae9096d3d3ed4",
+  "serverToClient": "3ed60a677c076cb2fc2dcaee0d3f02d0c0ae5b7ca9354502a5a8ccd17260ca26",
+  "messages": {
+    "challenge": "{\"type\":\"challenge\",\"version\":3,\"machine\":\"desktop\",\"nonce\":\"ERERERERERERERERERERERERERERERERERERERERERE=\"}",
+    "auth": "{\"type\":\"auth\",\"machine\":\"tablet\",\"nonce\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\",\"proof\":\"SJHTSVwV6VurnR9CYjyL3YbWt9PDwLLXYKW1fVxwgyI=\",\"link\":true}",
+    "authVideo": "{\"type\":\"auth\",\"machine\":\"tablet\",\"nonce\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\",\"proof\":\"p\",\"link\":false,\"video\":\"desktop/v1-\\u003Etablet/1\"}",
+    "welcome": "{\"type\":\"welcome\",\"proof\":\"sLx/YXT6STw5uC3M7hWQyoBeCiQUaBlCLSqsDAyWQ34=\"}",
+    "error": "{\"type\":\"error\",\"message\":\"no\"}",
+    "ok": "{\"type\":\"frame\",\"id\":7,\"isReply\":true,\"body\":{\"type\":\"ok\"}}",
+    "applied": "{\"type\":\"applied\",\"machine\":\"tablet\",\"profile\":\"personal\",\"warnings\":[\"w1\"]}",
+    "startVideo": "{\"type\":\"startVideo\",\"key\":\"desktop/v1-\\u003Etablet/1\",\"send\":false,\"display\":\"1\",\"fps\":60,\"bitrateMbps\":20}",
+    "videoStarted": "{\"type\":\"videoStarted\",\"x\":0,\"y\":0,\"width\":2560,\"height\":1600,\"mirror\":false}",
+    "stopVideo": "{\"type\":\"stopVideo\"}",
+    "diagnostics": "{\"type\":\"diagnostics\",\"machine\":\"tablet\",\"version\":\"0.1.0\",\"connectTo\":\"desktop:47900\",\"controlPort\":47900,\"isCoordinator\":false,\"log\":[\"line\"],\"acceptsUpdates\":false}",
+    "inputEvents": "{\"type\":\"inputEvents\",\"events\":[{\"kind\":\"mouseMove\",\"x\":3,\"y\":-2,\"code\":0,\"down\":false,\"extended\":false},{\"kind\":\"key\",\"x\":0,\"y\":0,\"code\":30,\"down\":true,\"extended\":false}],\"seq\":9}",
+    "inputEnter": "{\"type\":\"inputEnter\",\"side\":\"below\",\"fraction\":0.5,\"x\":10,\"y\":0,\"holdsDrag\":false}",
+    "inputLeave": "{\"type\":\"inputLeave\",\"fraction\":0.25,\"x\":640,\"y\":0}",
+    "inputCursor": "{\"type\":\"inputCursor\",\"seq\":9,\"x\":100,\"y\":200}"
+  },
+  "serverLines": [
+    "370IGtuAZy8RduVZBcWJ28jIjBv7FebY7HeYxEh7Dx7V09rkRYLipbS2BOw5DNu2IjOG0yCX3auBj283oTnfjrWA2ort+rD4BNrZotn6T+Lmw2RXpg==",
+    "rJgvMmBcJ+JQJqyVrvGpy9lu1kh7R+uVneMAEgGdEAnSRmNbs6BIy7Oh9PKvMiHtIZuLeq5Ao1EkCbbOW6CPHOqrl6Pqm7rY67NbOkgq"
+  ],
+  "serverLinesJson": [
+    "{\"type\":\"frame\",\"id\":5,\"isReply\":false,\"body\":{\"type\":\"getDisplays\"}}",
+    "{\"type\":\"frame\",\"id\":6,\"isReply\":false,\"body\":{\"type\":\"ping\"}}"
+  ],
+  "clientLine": "z0SC9lfuYtq39zQSj9Ttn0CCzRhV4pc3V3Cpy0AQ4PebAb/Qc4J1ZPhQqsXzlUaOh7e4cIxVPNAj+Y3QME79t0nv+/toHnqFsDm0X41dDlmtNEqhLbKCHSKCwbeneymQ5UAHTVr3XV3tu4+ogLxObJYYEpZud3nI1kZy0c+E051yVvCC4GakFc3DQzn/jORHqcPvkngMKye3UYQJW2nkT7kBh0XjB9PmnuYImobeqfqhS2qvQGGLyDhZ7AMtw8I=",
+  "clientLineJson": "{\"type\":\"frame\",\"id\":5,\"isReply\":true,\"body\":{\"type\":\"displays\",\"machine\":\"tablet\",\"displays\":[{\"id\":\"1\",\"width\":2560,\"height\":1600,\"refreshHz\":120,\"x\":0,\"y\":0,\"scale\":200}]}}",
+  "videoFormatJson": "{\"Width\":2560,\"Height\":1600,\"Fps\":60,\"BitrateMbps\":20,\"Gpu\":\"GPU\",\"Encoder\":\"Encoder\"}",
+  "videoFrame": "00000001658884",
+  "videoServerBytes": "57000000a5e45e34c281317d112aa50d5e9087d5a2c4815ea954e8c0b432fa911435304c9c9781be06cbecc5bfad12f46f53edf62639d48c309dd3eea38b5e7ce86bf4bf99d1d4d5d550f930a0f2fc9310d9884320c3287c89ab1026b0a077a09c11ce9c0935e5eecbd05911000000d53d8d59103905d87241def4c395ee6f7fd081015d4129cf4fdce995431f3e622b0a0000004cab5c675b2b4f7a2e71196a62b06eb850712d2008ae9514f49619000000b04feb0433094c9bd4e7f77de94e25f8a353e2c3ca1bfc0c74527efc5c9133aeedd1130261c9bee4a6"
+}

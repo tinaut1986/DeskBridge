@@ -60,6 +60,24 @@ sobra uno que ya no se usa. Las claves son el texto en inglés; los JSON de `src
 ordenados por orden ordinal. Para escribirlos, mejor un script de Python (`json.dumps(..., ensure_ascii=False)`)
 que PowerShell 5.1, que estropea los caracteres no ASCII.
 
+## App de Android (`android/`)
+
+Proyecto Gradle aparte: se abre `android/` en Android Studio, o desde la línea de comandos (JDK 17+ y el SDK de
+Android en `local.properties`):
+
+```bash
+cd android
+./gradlew :protocol:test :app:assembleDebug
+```
+
+- `protocol`: el protocolo en Kotlin (JVM puro). Sus tests leen `protocol/src/test/resources/protocol-vectors.json`,
+  que escribe el test de C# `ProtocolVectorTests` con la implementación de Windows. Si cambias el protocolo a
+  propósito, regenera el fichero con `DESKBRIDGE_WRITE_VECTORS=1 dotnet test --filter ProtocolVectorTests` y
+  adapta Kotlin hasta que sus tests pasen.
+- `app`: la app (agente en un servicio en primer plano). Diseño y fases en [android.md](android.md).
+- Si Gradle no arranca su daemon con "Unable to establish loopback connection", es el directorio temporal de
+  Java: `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=D:/tmp/jdkuds` (una carpeta que exista) lo arregla.
+
 ## Ficheros de estado en cada equipo (`%LOCALAPPDATA%\DeskBridge\`)
 
 | Fichero | Para qué |
