@@ -30,6 +30,11 @@ public enum ThemeChoice { System, Light, Dark }
 /// <param name="ShowFrames">Each display gets a thin border in the colour of the machine it belongs to.</param>
 /// <param name="VideoAtOnce">On the coordinator: video goes on screen at once, not at the monitor's next refresh (may tear).</param>
 /// <param name="CloseToTray">Closing the window keeps DeskBridge running in the notification area.</param>
+/// <param name="ScreensPaused">
+/// On the coordinator: the applied profile stays chosen but no machine shows another's screen (no virtual
+/// displays, no video); keyboard, mouse, clipboard and sound go on as usual.
+/// </param>
+/// <param name="Independent">This PC does not connect to the other machines at all: each one works on its own.</param>
 public sealed record UserSettings(
     string Language = L.System,
     bool? Betas = null,
@@ -48,7 +53,9 @@ public sealed record UserSettings(
     bool ShareMic = false,
     bool UseRemoteMic = false,
     bool ShowFrames = true,
-    bool VideoAtOnce = false)
+    bool VideoAtOnce = false,
+    bool ScreensPaused = false,
+    bool Independent = false)
 {
     public static string DefaultPath => Path.Combine(AppPaths.Directory, "settings.json");
 

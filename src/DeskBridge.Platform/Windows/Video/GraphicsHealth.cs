@@ -54,6 +54,6 @@ public static class GraphicsHealth
 
     /// <summary>The user's explanation: the driver of <paramref name="gpu"/> (or the one Windows fell back to) stopped working.</summary>
     public static string Message(string? gpu) => gpu is null
-        ? L.T("The graphics driver of this machine stopped working (Windows is using the Microsoft Basic Display Adapter), so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.")
-        : L.T("The graphics driver of this machine ({gpu}) cannot capture or encode video right now, so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.", ("gpu", gpu));
+        ? L.T("The graphics driver of this machine stopped working (Windows is using the Microsoft Basic Display Adapter), so its screen cannot be sent. Shut this machine down completely (hold Shift while choosing Shut down) and turn it on again: a restart is not always enough. If that does not help, reinstall the graphics driver.")
+        : L.T("The graphics driver of this machine ({gpu}) cannot capture or encode video right now, so its screen cannot be sent. Shut this machine down completely (hold Shift while choosing Shut down) and turn it on again: a restart is not always enough. If that does not help, reinstall the graphics driver.", ("gpu", gpu));
 }

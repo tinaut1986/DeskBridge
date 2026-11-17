@@ -55,7 +55,42 @@ public sealed class ControlSession : IAsyncDisposable
     /// <summary>Raised once, when the connection is gone.</summary>
     public event Action<ControlSession>? Closed;
 
-    internal void Start() => _ = Task.Run(ReadLoopAsync);
+    /// <summary>
+    /// A machine that keeps its link to this one pings every <see cref="Agent.ReverseLink.PingEvery"/>: this long
+    /// without a word from it and it is gone (switched off, asleep, off the network), even if the connection was
+    /// never closed, which can take Windows minutes to notice.
+    /// </summary>
+    public static readonly TimeSpan LinkSilenceLimit = Agent.ReverseLink.PingEvery + Agent.ReverseLink.PingTimeout + TimeSpan.FromSeconds(15);
+
+    private long _lastHeard = Environment.TickCount64;
+
+    internal void Start()
+    {
+        _ = Task.Run(ReadLoopAsync);
+        if (PeerIsLink)
+            _ = Task.Run(WatchSilenceAsync);
+    }
+
+    private async Task WatchSilenceAsync()
+    {
+        try
+        {
+            while (IsOpen)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), _closing.Token);
+                var silent = TimeSpan.FromMilliseconds(Environment.TickCount64 - Interlocked.Read(ref _lastHeard));
+                if (silent > LinkSilenceLimit)
+                {
+                    _log(L.T("{remote} has not answered for {seconds} s: it is taken as disconnected.",
+                        ("remote", RemoteMachine), ("seconds", (int)silent.TotalSeconds)));
+                    Close();
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
 
     public async Task<ControlMessage> RequestAsync(ControlMessage request, CancellationToken ct = default)
     {
@@ -122,6 +157,7 @@ public sealed class ControlSession : IAsyncDisposable
         {
             while (await _channel.ReceiveJsonAsync(_closing.Token) is { } json)
             {
+                Interlocked.Exchange(ref _lastHeard, Environment.TickCount64);
                 var frame = ReadFrame(json);
                 if (frame.IsReply)
                 {

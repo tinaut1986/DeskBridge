@@ -455,9 +455,10 @@ public partial class MainWindow : Window
             _agent = null;
         }
         _activeProfile = null;
-        if (local is null)
+        if (local is null || _settings.Independent)
         {
             UpdateAgentStatus();
+            UpdateInputSharing();
             return;
         }
 
@@ -474,7 +475,10 @@ public partial class MainWindow : Window
             _agent = agent;
             agent.Directory.Changed += () => Dispatcher.BeginInvoke(OnPeersChanged);
             if (agent.Reverse is { } reverse)
+            {
                 reverse.StateChanged += () => Dispatcher.BeginInvoke(() => UpdateAgentStatus());
+                ReleaseLeftOversIfAlone(agent);
+            }
         }
         catch (SocketException ex)
         {
@@ -487,6 +491,11 @@ public partial class MainWindow : Window
     private void UpdateAgentStatus(int? failedPort = null)
     {
         UpdateRoleUi();
+        if (_agent is null && _settings.Independent)
+        {
+            _vm.AgentStatus = L.T("Independent machines: this PC does not connect to the others");
+            return;
+        }
         if (_agent is null)
         {
             _vm.AgentStatus = failedPort is { } port
@@ -532,6 +541,7 @@ public partial class MainWindow : Window
         VideoTestButton.IsEnabled = !client;
         VideoTestButton.ToolTip = client ? L.T("Only the coordinator can show another machine's screen.") : null;
         ToolTipService.SetShowOnDisabled(VideoTestButton, true);
+        UpdatePauseUi();
     }
 
     protected override void OnClosed(EventArgs e)
@@ -782,6 +792,16 @@ public partial class MainWindow : Window
             return; // the buttons are disabled: profiles are applied from the coordinator
         if (_vm.SelectedProfile is not { } profile || !SaveConfig())
             return;
+        if (_settings.Independent)
+        {
+            _vm.Status = L.T("Independent machines: connect with the other machines first.");
+            return;
+        }
+        if (_settings.ScreensPaused)
+        {
+            SaveUserSettings(_settings with { ScreensPaused = false }); // applying a profile shows its screens again
+            UpdatePauseUi();
+        }
         var config = CurrentConfig(showErrors: false)!;
         var local = CurrentLocalSettings(showErrors: true);
         if (local is null)

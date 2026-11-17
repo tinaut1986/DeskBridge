@@ -96,6 +96,7 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
         }
         if (displays.Count == 0)
         {
+            await DetachLeftOversAsync(0, ct);
             log("[virtual displays] none");
             return;
         }
@@ -144,6 +145,7 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
                 log($"[virtual displays] {devices[i]}: mode {spec.Width}x{spec.Height}@{spec.RefreshHz} refused ({result})");
         }
         ChangeDisplaySettingsExW(null, 0, 0, 0, 0); // apply everything at once
+        await DetachLeftOversAsync(displays.Count, ct);
 
         for (int i = 0; i < displays.Count; i++)
         {
@@ -251,6 +253,31 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
         }
         return found;
+    }
+
+    /// <summary>
+    /// Virtual monitors past the first <paramref name="keep"/> that are still part of the desktop (a profile that
+    /// used more of them before; Windows may keep one on after the driver is given a smaller count) are taken off
+    /// it, so the cursor and windows cannot go onto a display nobody shows.
+    /// </summary>
+    private async Task DetachLeftOversAsync(int keep, CancellationToken ct)
+    {
+        List<string> extra = [];
+        // The driver drops the monitors it no longer has a moment after the new count.
+        for (int i = 0; i < 12 && (extra = VirtualMonitors().Skip(keep).Where(IsAttached).ToList()).Count > 0; i++)
+            await Task.Delay(250, ct);
+        if (extra.Count == 0)
+            return;
+        foreach (var device in extra)
+        {
+            // A position and a size of zero take a display off the desktop.
+            var mode = new DevMode { Size = (ushort)Marshal.SizeOf<DevMode>(), Fields = DmPelsWidth | DmPelsHeight | DmPosition };
+            int result = ChangeDisplaySettingsExW(device, ref mode, 0, CdsUpdateRegistry | CdsNoReset, 0);
+            if (result != 0)
+                log($"[virtual displays] {device}: taking it off the desktop refused ({result})");
+        }
+        ChangeDisplaySettingsExW(null, 0, 0, 0, 0);
+        log($"[virtual displays] taken off the desktop (not in the profile any more): {string.Join(", ", extra)}");
     }
 
     private static bool IsAttached(string deviceName)

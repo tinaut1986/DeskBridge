@@ -355,6 +355,12 @@ public partial class MainWindow
     private async Task StopAllVideoAsync()
     {
         await StopAllAudioAsync();
+        await StopVideoStreamsAsync();
+    }
+
+    /// <summary>Every video stream to or from this PC stops (sound goes on).</summary>
+    private async Task StopVideoStreamsAsync()
+    {
         foreach (var (key, sender) in _videoSenders.ToArray())
         {
             _videoSenders.TryRemove(key, out _);
