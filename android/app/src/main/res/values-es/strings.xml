@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="intro">Este dispositivo se une a tus equipos de DeskBridge. En el coordinador, añádelo en Equipos con el mismo id y pulsa Detectar.</string>
+    <string name="machine">Id de este dispositivo</string>
+    <string name="connect_to">Dirección del coordinador</string>
+    <string name="connect_to_hint">192.168.1.10 o sobremesa:47900</string>
+    <string name="shared_key">Clave compartida</string>
+    <string name="start">Conectar</string>
+    <string name="stop">Desconectar</string>
+    <string name="status_stopped">Sin conectar.</string>
+    <string name="status_connecting">Conectando…</string>
+    <string name="status_connected">Conectado a %1$s.</string>
+    <string name="error_key">La clave compartida no es válida: cópiala de Conexión y seguridad en el coordinador.</string>
+    <string name="error_missing">Rellena el id de este dispositivo y la dirección del coordinador.</string>
+    <string name="notification_channel">Conexión</string>
+    <string name="log_connected">Conectado a %1$s en %2$s.</string>
+    <string name="log_lost">Se perdió la conexión con %1$s; reconectando.</string>
+    <string name="log_profile">Recibido el perfil \'%1$s\'.</string>
+    <string name="warning_profiles_pending">Android todavía no muestra ni presta pantallas: esta versión solo se une a los equipos.</string>
+</resources>

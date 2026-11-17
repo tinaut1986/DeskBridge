@@ -35,4 +35,15 @@ public sealed class PlanApplier(
         if (localMachine == plan.Coordinator)
             await inputRouter.ApplyRoutesAsync(plan.InputRoutes, addresses, ct);
     }
+
+    /// <summary>
+    /// Undoes this machine's share of any plan: no streams and no virtual displays, the machine on its own
+    /// (the coordinator went away, or sharing was turned off).
+    /// </summary>
+    public async Task ReleaseAsync(CancellationToken ct = default)
+    {
+        await receiver.StopAllAsync(ct);
+        await sender.StopAllAsync(ct);
+        await virtualDisplays.SetDisplaysAsync([], ct);
+    }
 }

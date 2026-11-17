@@ -270,6 +270,36 @@ public class LayoutPlannerTests
     }
 
     [Fact]
+    public void The_coordinators_virtual_display_shown_on_the_laptop_goes_where_the_laptop_is_on_the_desk()
+    {
+        // The laptop panel sits on the desk under displays 2 and 3; the "four screens" profile has it show a screen
+        // of the coordinator: that screen goes right there, not to the right of everything.
+        var config = new DeskBridgeConfig(
+            [
+                new MachineConfig("skynet", "SKYNET", "192.168.1.52",
+                    [new DisplayConfig("2", 1920, 1080, X: -1920), new DisplayConfig("3", 1920, 1080), new DisplayConfig("1", 1920, 1080, X: 1920)],
+                    HasInput: true),
+                new MachineConfig("laptop-oscar", "LAPTOP", "192.168.1.140", [new DisplayConfig("1", 2880, 1800, Scale: 175)],
+                    DeskPositions: new Dictionary<string, VirtualPosition> { ["1"] = new(-1154, 1080) },
+                    DeskWidths: new Dictionary<string, int> { ["1"] = 1920 }),
+            ],
+            [
+                new ProfileConfig("four", [new DisplayAssignment("laptop-oscar", "1", "skynet")]),
+                new ProfileConfig("by-hand", [new DisplayAssignment("laptop-oscar", "1", "skynet", Position: new VirtualPosition(1920, 1080))]),
+            ]);
+
+        var plan = LayoutPlanner.Plan(config, "four");
+        var v = Assert.Single(plan.VirtualDisplays);
+        // The size it has on the desk (1920 wide, same shape), so its edges meet displays 2 and 3 as the map shows.
+        Assert.Equal(("skynet", 1920, 1200, -1154, 1080), (v.Machine, v.Width, v.Height, v.X, v.Y));
+        var stream = Assert.Single(plan.Streams);
+        Assert.Equal((1920, 1200), (stream.Width, stream.Height));
+        // Placed by hand in the profile: that wins.
+        var manual = Assert.Single(LayoutPlanner.Plan(config, "by-hand").VirtualDisplays);
+        Assert.Equal((1920, 1080), (manual.X, manual.Y));
+    }
+
+    [Fact]
     public void A_primary_display_shown_on_the_coordinator_is_that_machines_virtual_display()
     {
         // a (the coordinator) shows b's virtual display on its display 3; b's primary is that one, a's is its 2.

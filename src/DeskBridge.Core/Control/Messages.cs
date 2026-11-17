@@ -88,10 +88,15 @@ public sealed record InputEvent(InputKind Kind, int X = 0, int Y = 0, int Code =
 /// Parts of this machine's displays covered, on the coordinator, by its own windows on top of the video (one left
 /// there): the cursor goes back to the coordinator when it enters them, so they can be used.
 /// </param>
+/// <param name="HoldsDrag">
+/// The coordinator keeps a drag going (0.9.28 and later): when the cursor goes back with a mouse button held
+/// here, this machine keeps it held (the window stays picked up) until the cursor comes back here, or until the
+/// coordinator sends <see cref="InputReleaseMessage"/> (the button was let go over there).
+/// </param>
 public sealed record InputEnterMessage(PlacementSide Side, double Fraction, int? X = null, int? Y = null,
     IReadOnlyList<DisplayRect>? Peers = null, IReadOnlyList<DisplayRect>? Area = null,
     double? SpeedX = null, double? SpeedY = null, IReadOnlyList<DisplayRect>? Holes = null,
-    IReadOnlyList<DisplayRect>? AreaDesk = null) : ControlMessage;
+    IReadOnlyList<DisplayRect>? AreaDesk = null, bool HoldsDrag = false) : ControlMessage;
 
 /// <summary>Keyboard and mouse events while this machine has the cursor (sent as notifications, in order).</summary>
 /// <param name="Seq">Numbers the batches (when the coordinator draws the pointer itself), for <see cref="InputCursorMessage"/>.</param>
@@ -108,7 +113,10 @@ public sealed record InputCursorMessage(long Seq, int X, int Y) : ControlMessage
 /// <param name="X">Where it crossed, in this machine's coordinates (when the coordinator sent its displays).</param>
 public sealed record InputLeaveMessage(double Fraction, int? X = null, int? Y = null) : ControlMessage;
 
-/// <summary>The coordinator took the cursor back: release every key and button still held here.</summary>
+/// <summary>
+/// The coordinator took the cursor back, or let go over there of a button held here (see
+/// <see cref="InputEnterMessage.HoldsDrag"/>): release every key and button still held here.
+/// </summary>
 public sealed record InputReleaseMessage() : ControlMessage;
 
 /// <summary>

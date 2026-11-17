@@ -59,7 +59,11 @@
   pantalla de otro equipo vista desde el coordinador (en el escritorio, con escala por DPI, o prestada en un
   monitor). El cursor se mueve de verdad en el otro equipo (para que se arrastren ventanas) dentro de su "área";
   entre sus pantallas sigue la geometría del escritorio del coordinador (`AreaDesk`). Las ventanas del
-  coordinador encima del vídeo son "agujeros" por los que vuelve. El puntero que no se usa se oculta. Si
+  coordinador encima del vídeo son "agujeros" por los que vuelve. Arrastrando (botón pulsado allí), el cursor
+  salta los huecos vacíos del escritorio hasta la pantalla más cercana de ese equipo, y si vuelve al
+  coordinador el otro equipo mantiene el botón pulsado (`HoldsDrag`): el arrastre sigue al volver a entrar, y si
+  se suelta en el coordinador, este le manda soltarlo (un poco dentro del borde, para que Windows no maximice
+  la ventana). Si se pierde la conexión, el otro equipo lo suelta solo. El puntero que no se usa se oculta. Si
   Windows descarta el movimiento simulado (una app de administrador en primer plano), el cursor se coloca con
   `SetCursorPos`.
 - **Sonido** (Platform/Windows/Audio, NAudio + Concentus): captura WASAPI *loopback* de la salida
@@ -123,4 +127,5 @@ Pendiente:
 1. **Fase 4**: una pantalla del sobremesa mostrada en el portátil (el sentido contrario).
 2. **Color 4:4:4** para el texto de colores (HEVC/H.264 4:4:4 donde la GPU lo permita).
 3. **Cámara**: ver [microfono-camara.md](microfono-camara.md).
-4. Linux / Avalonia: en pausa.
+4. **Android**: tablet o móvil como pantalla extra o como equipo controlado; ver [android.md](android.md).
+5. Linux / Avalonia: en pausa.

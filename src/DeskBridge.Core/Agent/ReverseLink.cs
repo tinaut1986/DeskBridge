@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.NetworkInformation;
 using DeskBridge.Core.Configuration;
 using DeskBridge.Core.Control;
 using DeskBridge.Core.Localization;
@@ -54,7 +55,25 @@ public sealed class ReverseLink : IAsyncDisposable
         return (a, defaultPort);
     }
 
-    public void Start() => _loop = Task.Run(() => RunAsync(_stop.Token));
+    public void Start()
+    {
+        // Back on a network (or on another one): try at once instead of waiting out the pause between attempts.
+        NetworkChange.NetworkAddressChanged += OnNetworkChanged;
+        _loop = Task.Run(() => RunAsync(_stop.Token));
+    }
+
+    private CancellationTokenSource? _wake;
+
+    private void OnNetworkChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            Volatile.Read(ref _wake)?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
 
     private async Task RunAsync(CancellationToken ct)
     {
@@ -94,15 +113,26 @@ public sealed class ReverseLink : IAsyncDisposable
                 ConnectedTo = null;
                 StateChanged?.Invoke();
             }
+            using var wake = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            Volatile.Write(ref _wake, wake);
             try
             {
-                await Task.Delay(backoff, ct);
+                await Task.Delay(backoff, wake.Token);
+                backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, MaxBackoff.Ticks));
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                backoff = TimeSpan.FromSeconds(2); // the network changed: start over
+                await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None); // (it settles: an address comes a moment later)
             }
             catch (OperationCanceledException)
             {
                 break;
             }
-            backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, MaxBackoff.Ticks));
+            finally
+            {
+                Interlocked.CompareExchange(ref _wake, null, wake);
+            }
         }
     }
 
@@ -129,6 +159,7 @@ public sealed class ReverseLink : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
         await _stop.CancelAsync();
         if (_loop is not null)
         {

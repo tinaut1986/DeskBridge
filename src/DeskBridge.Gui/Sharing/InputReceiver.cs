@@ -47,6 +47,49 @@ public sealed class InputReceiver(
         secure?.Invoke()?.ReleaseAll();
     }
 
+    /// <summary>
+    /// The button held for a drag was let go on the coordinator (or the coordinator is gone): let go of it here,
+    /// a little inside the edge where the cursor left, so Windows does not snap or maximize the window there.
+    /// </summary>
+    private void DropAway()
+    {
+        _heldFor = null;
+        _buttons = 0;
+        if (_displays.Count > 0)
+        {
+            var d = _displays.FirstOrDefault(r => _x >= r.X && _x < r.Right && _y >= r.Y && _y < r.Bottom);
+            if (d.Width > 2 * EdgeInset && d.Height > 2 * EdgeInset)
+                MoveCursor(Math.Clamp(_x, d.X + EdgeInset, d.Right - 1 - EdgeInset), Math.Clamp(_y, d.Y + EdgeInset, d.Bottom - 1 - EdgeInset));
+        }
+        ReleaseEverything();
+    }
+
+    /// <summary>How far from the edge a drag is dropped when its button is let go on the coordinator.</summary>
+    private const int EdgeInset = 24;
+
+    /// <summary>
+    /// The coordinator is no longer connected: let go of everything it held here (it cannot send the release).
+    /// </summary>
+    public void ReleaseIfGone(Func<string, bool> connected)
+    {
+        bool changed = false;
+        lock (_gate)
+        {
+            if (_heldFor is { } held && !connected(held))
+                DropAway();
+            if (_from is { } from && !connected(from))
+            {
+                ReleaseEverything();
+                _from = null;
+                _buttons = 0;
+                HidePointer();
+                changed = true;
+            }
+        }
+        if (changed)
+            activeChanged(null);
+    }
+
     private (int X, int Y) _offset;
 
     private IReadOnlyList<DisplayRect>? Shift(IReadOnlyList<DisplayRect>? rects) =>
@@ -61,6 +104,9 @@ public sealed class InputReceiver(
     private int _x, _y;
     private double _speedX = 1, _speedY = 1, _restX, _restY;
     private IReadOnlyList<DisplayRect>? _holes; // parts the coordinator keeps (its windows over the video)
+    private int _buttons; // mouse buttons the coordinator holds here (bit per button): a drag jumps gaps
+    private bool _holdsDrag; // the coordinator keeps a drag going when the cursor goes back mid-drag
+    private string? _heldFor; // the cursor went back mid-drag: buttons kept held for that coordinator
 
     // In a Remote Desktop session the pointer DeskBridge moves is not drawn by the client: draw our own.
     private PointerOverlay? _overlay;
@@ -123,6 +169,11 @@ public sealed class InputReceiver(
                     _holes = Shift(enter.Holes);
                     _areaDesk = enter.Area is { Count: > 0 } && enter.AreaDesk?.Count == enter.Area.Count ? enter.AreaDesk : null;
                     (_restX, _restY) = (0, 0);
+                    _holdsDrag = enter.HoldsDrag;
+                    // Back mid-drag: the buttons are still held, the window still follows the cursor.
+                    if (_heldFor != from)
+                        _buttons = 0;
+                    _heldFor = null;
                     (_x, _y) = enter is { X: { } ex, Y: { } ey, Peers: not null }
                         ? EdgeGeometry.ClampToDisplays(_displays, ex + _offset.X, ey + _offset.Y)
                         : ClientHandover.Enter(_displays, enter.Side, enter.Fraction);
@@ -147,6 +198,8 @@ public sealed class InputReceiver(
                     {
                         if (e.Kind != InputKind.MouseMove)
                         {
+                            if (e.Kind == InputKind.MouseButton)
+                                _buttons = e.Down ? _buttons | (1 << e.Code) : _buttons & ~(1 << e.Code);
                             Play(e);
                             continue;
                         }
@@ -156,14 +209,17 @@ public sealed class InputReceiver(
                         _restX -= mx;
                         _restY -= my;
                         var move = _peers is { } peers
-                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes, _areaDesk)
+                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes, _areaDesk, dragging: _buttons != 0)
                             : ClientHandover.Move(_displays, _side, _x, _y, mx, my);
                         if (move.Left)
                         {
                             leave = _peers is null
                                 ? new InputLeaveMessage(move.Fraction)
                                 : new InputLeaveMessage(move.Fraction, move.X - _offset.X, move.Y - _offset.Y);
-                            ReleaseEverything();
+                            if (_buttons != 0 && _holdsDrag)
+                                _heldFor = from; // the coordinator lets go of it later, or brings the cursor back
+                            else
+                                ReleaseEverything();
                             _from = null;
                             HidePointer();
                             break;
@@ -178,6 +234,10 @@ public sealed class InputReceiver(
                     ReleaseEverything();
                     _from = null;
                     HidePointer();
+                    break;
+
+                case InputReleaseMessage when _heldFor == from:
+                    DropAway();
                     break;
 
                 default:

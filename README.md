@@ -1,90 +1,132 @@
 # DeskBridge
 
-Usa varios equipos con un solo teclado y ratón, y **reparte las pantallas físicas entre ellos**: un monitor
-del sobremesa puede mostrar una pantalla del portátil, y el ratón pasa de uno a otro como si fueran un solo
-escritorio.
+Use several computers with one keyboard and mouse, and **share the physical monitors between them**: a monitor of
+the desktop PC can show a screen of the laptop, the laptop's panel can become one more monitor of the desktop, and
+the mouse moves from one to the other as if they were a single desk.
 
-Ejemplo real: un sobremesa con 3 monitores y un portátil de empresa.
+A real setup: a desktop PC with 3 monitors and a work laptop.
 
-| Perfil | Qué pasa |
+| Profile | What happens |
 |---|---|
-| `personal` | El monitor 3 del sobremesa muestra una pantalla virtual del portátil; el ratón y el teclado del sobremesa manejan los dos equipos, el sonido del portátil sale por los cascos del sobremesa. |
-| `four-screens` | La pantalla del propio portátil queda colocada debajo de los monitores del sobremesa, como una pantalla más. |
+| `work` | Monitor 3 of the desktop shows a virtual screen of the laptop. The desktop's keyboard and mouse drive both computers, and the laptop's sound comes out of the desktop's headphones. |
+| `four-screens` | The laptop's own panel shows a virtual screen of the desktop, placed under the desktop's monitors as a fourth one. |
+| `personal` | Each computer keeps its own screens; the laptop sits on the desktop's desk, and the mouse crosses over to it at the edge. |
 
-## Cómo funciona (resumen)
+## How it works (in short)
 
-1. El equipo que **presta** su imagen crea una **pantalla virtual** (Virtual Display Driver) colocada donde dice el perfil.
-2. Esa pantalla se captura, se codifica en H.264 con la GPU y se envía cifrada por la red.
-3. El monitor del otro equipo muestra el vídeo a pantalla completa, con un retraso de unos 20-30 ms ida y vuelta.
-4. El teclado y el ratón del **coordinador** (el equipo con teclado y ratón) pasan al otro equipo al entrar en su pantalla.
-5. Opcionalmente, el sonido de un equipo se oye en el coordinador y el micrófono del coordinador se usa en el otro.
+1. The computer that **lends** a screen creates a **virtual display** (Virtual Display Driver), placed where the profile says.
+2. That display is captured, encoded to H.264 on the GPU and sent encrypted over the network.
+3. The monitor of the other computer shows the video full screen, about 20–30 ms round trip.
+4. The **coordinator** (the computer with the keyboard and mouse) hands them over to another computer when the cursor enters one of its screens.
+5. Optionally, a computer's sound plays on the coordinator, and the coordinator's microphone is used on the other one.
 
-Más detalle en [docs/arquitectura.md](docs/arquitectura.md); para trabajar en el código, [docs/desarrollo.md](docs/desarrollo.md).
+It works both ways: the desktop can show the laptop, and the laptop can show the desktop. The computer that is
+not the coordinator always opens the connections, so it can sit behind a firewall that blocks incoming ones.
 
-## Instalación
+More detail in [docs/arquitectura.md](docs/arquitectura.md); to work on the code, [docs/desarrollo.md](docs/desarrollo.md)
+(both in Spanish).
 
-`DeskBridge.exe` es la misma aplicación en todos los equipos; no necesita .NET instalado.
-- Al abrirla por primera vez se copia a `%LOCALAPPDATA%\DeskBridge\bin\`, crea su acceso directo en el menú
-  Inicio y su entrada en **Configuración → Aplicaciones** (desde donde se desinstala). No pide permisos de administrador.
-- Se actualiza sola desde las [releases de GitHub](https://github.com/tinaut1986/DeskBridge/releases) (canal estable o beta).
-- Todos los equipos necesitan la **misma clave compartida** (página *Conexión y seguridad*). Un equipo que no
-  acepta conexiones entrantes (cortafuegos de empresa) pone además la dirección del coordinador en *Conectar a*:
-  él abre todas las conexiones.
+## Installation
 
-## La aplicación
+`DeskBridge.exe` is the same app on every computer; it does not need .NET installed.
 
-Barra lateral con estas páginas:
+- The first time it runs, it copies itself to `%LOCALAPPDATA%\DeskBridge\bin\`, adds a Start menu shortcut and an
+  entry in **Settings → Apps** (where it is uninstalled). It does not ask for administrator rights.
+- It updates itself from the [GitHub releases](https://github.com/tinaut1986/DeskBridge/releases) (stable or beta
+  channel). The coordinator can also install a new build on the other computers, if they allow it.
+- Every computer needs the **same shared key** (*Connection and security* page). A computer that does not accept
+  incoming connections (a company firewall) also sets the coordinator's address in *Connect to*.
+- A computer whose screens are shown elsewhere needs the free **[Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver)**
+  (MIT, signed). When a profile needs it and it is missing, DeskBridge shows a banner with an **Install** button
+  (it fetches *VDD Control* with winget; press *Install Driver* there). Until then, the main display is mirrored
+  instead.
 
-- **Inicio**: este PC, estado del agente, perfil aplicado y equipos.
-- **Disposición** (en el coordinador): mapa con *tu escritorio* (los monitores del coordinador) y las pantallas de
-  los demás equipos.
-  - Arrastra una pantalla de otro equipo al escritorio para usarla desde allí; el ratón pasa por donde se tocan.
-  - Selecciona una pantalla (en el mapa o en la lista) para elegir qué muestra, la resolución, los Hz y el bitrate.
-  - **Clic derecho** en una pantalla: hacerla la **pantalla principal** de su equipo (menú Inicio, barra de
-    tareas, ventanas nuevas), o hacer principal del otro equipo lo que muestra. Las principales llevan "★".
-    Si el coordinador presta su pantalla principal, por defecto pasa a ser principal la más cercana.
-  - Menú "⋯" del perfil: nuevo, duplicar, cambiar nombre, eliminar. **Aplicar perfil** lo pone en marcha en todos los equipos.
-- **Equipos**: equipos, direcciones y monitores (*Detectar* los lee de Windows, también de otro equipo por la red).
-- **Compartir**, cada opción por equipo y casi todas desactivadas por defecto (uno de los equipos puede ser del trabajo):
-  - teclado y ratón (en el coordinador: llevarlos a otros equipos; en el otro: dejarse controlar). **Ctrl+Alt+Inicio** en el coordinador los recupera siempre;
-  - **sonido**: un equipo envía todo lo que reproduce al coordinador (y silencia sus altavoces); el coordinador lo
-    reproduce, con un volumen por equipo;
-  - **micrófono**: el coordinador presta su micrófono; el otro equipo lo recibe por **VB-CABLE** (hay que
-    instalarlo), y mientras se usa "CABLE Output" es su micrófono predeterminado;
-  - portapapeles (texto e imágenes) y archivos (se sueltan en la ventana o *Enviar archivos a*).
-- **Conexión y seguridad**: nombre del equipo, clave compartida (oculta), puerto, *Conectar a*, y permitir que el
-  coordinador instale versiones nuevas en este equipo (mantenimiento a distancia).
-- **Actualizaciones**: versión instalada, canal y buscar ahora.
-- **Registro**: el log, diagnósticos de todos los equipos y prueba de vídeo.
-- **General**: idioma (11), tema, iniciar con Windows, seguir en el área de notificación al cerrar,
-  **marcar cada pantalla con el color de su equipo** (un borde fino), **mostrar las pantallas de otros equipos
-  sin esperar al refresco** (menos retraso, a veces una línea de corte), **ejecutar como administrador** y
-  **permitir que el coordinador use la pantalla de bloqueo y los avisos de administrador** (instala un servicio).
+## The app
 
-**Ejecutar como administrador** (en el equipo controlado): Windows no deja que un programa normal envíe teclas o
-clics a una aplicación abierta como administrador. Con esta opción DeskBridge arranca elevado al iniciar sesión
-(una tarea programada; Windows pide permiso una vez). Si se abre a mano sin permisos, le pasa el relevo a la tarea.
+A sidebar with these pages:
 
-**Pantalla de bloqueo y avisos de UAC**: ningún programa normal puede verlos ni escribir en ellos. La opción
-instala el servicio "DeskBridge Helper" (como AnyDesk): con él se ven en el monitor prestado y se manejan desde el
-coordinador. Necesita "Ejecutar como administrador": el servicio solo atiende a DeskBridge con esos permisos.
+- **Home**: this PC, the agent's state, the applied profile and the computers. Two switches, also in the tray menu:
+  - **Pause screen sharing** (coordinator): every computer shows its own screens again; keyboard, mouse, clipboard
+    and sound keep working. *Resume* brings the profile back.
+  - **Independent machines**: this PC stops talking to the others and each one works on its own. *Connect with the
+    other machines* undoes it. Neither switch changes the configuration, and both survive a restart.
+    In an emergency, **Ctrl+Alt+Shift+Home** on any computer turns on *Independent machines* at once (on the
+    coordinator, even while the keyboard and mouse are on another computer).
+- **Layout** (on the coordinator): a map with *your desk* (the coordinator's monitors) and the screens of the other
+  computers.
+  - Drag a screen of another computer onto the desk to use it from there; the mouse crosses where they touch.
+  - Select a screen (on the map or in the list) to choose what it shows, the resolution, Hz and bitrate.
+  - **Right-click** a screen to make it the **primary display** of its computer (Start menu, taskbar, new
+    windows), or to make what it shows the other computer's primary. Primary displays carry a "★". When the
+    coordinator lends its primary display, the nearest one becomes primary by default.
+  - A screen of the coordinator shown on a display that sits on the desk (the laptop under the monitors) is created
+    at that spot and at the size it has on the map, so the edges the mouse crosses are the ones you see.
+  - Each computer has a colour (right-click → *Colour of…*), used on the map and for the screen borders.
+  - The profile's "⋯" menu: new, duplicate, rename, delete. **Apply profile** puts it in place on every computer.
+- **Machines**: computers, addresses and monitors (*Detect* reads them from Windows, also from another computer
+  over the network).
+- **Sharing**, each option per computer and most of them off by default (one of the computers may be a work one):
+  - keyboard and mouse (on the coordinator: take them to other computers; on the other one: let them in).
+    **Ctrl+Alt+Home** on the coordinator always brings them back;
+  - **sound**: a computer sends everything it plays to the coordinator (and mutes its own speakers); the
+    coordinator plays it, with a volume per computer;
+  - **microphone**: the coordinator lends its microphone; the other computer gets it through **VB-CABLE** (to be
+    installed), and "CABLE Output" is its default microphone while it is in use;
+  - clipboard (text and images) and files (drop them on the window, or *Send files to*).
+- **Connection and security**: the computer's name, the shared key (hidden), port, *Connect to*, and whether the
+  coordinator may install new builds here (remote maintenance).
+- **Updates**: installed version, channel, and check now.
+- **Log**: the log, diagnostics of every computer, and a video test.
+- **General**: language (11), theme, start with Windows, keep running in the notification area when closed,
+  **mark each screen with its computer's colour** (a thin border, only while another computer is connected),
+  **show other computers' screens without waiting for the refresh** (less delay, sometimes a tear line),
+  **run as administrator**, and **let the coordinator use the lock screen and administrator prompts** (installs a
+  service).
 
-La configuración vive en `%APPDATA%\DeskBridge\`: `deskbridge.json` (común, se edita en el coordinador y se
-reparte sola), `deskbridge.local.json` (id del equipo y clave) y `settings.json` (preferencias de este usuario).
+**Run as administrator** (on the controlled computer): Windows does not let a normal program send keys or clicks
+to an app running as administrator. With this option DeskBridge starts elevated when you sign in (a scheduled
+task; Windows asks once). Opened by hand without rights, it hands over to the task.
 
-## Estado
+**Lock screen and UAC prompts**: no normal program can see or type into them. The option installs the
+"DeskBridge Helper" service (like AnyDesk does): with it they show on the lent monitor and are used from the
+coordinator. It needs "Run as administrator": the service only serves DeskBridge with those rights.
 
-Funciona a diario entre un sobremesa (NVIDIA) y un portátil (Intel Arc): pantallas virtuales, vídeo propio de
-baja latencia, teclado y ratón, sonido, micrófono, portapapeles, archivos, actualizaciones remotas.
+### When something goes away
 
-El vídeo solo se envía cuando la pantalla cambia: una pantalla quieta apenas gasta red ni GPU.
+- A computer that is switched off, restarts or leaves the network is noticed within about 40 s, even if the
+  connection was never closed. The coordinator stops showing it at once, and asks for its screens again when it is
+  back.
+- A computer that loses its coordinator waits 10 s, then removes its virtual displays and works on its own, so the
+  cursor and windows cannot end up on a screen nobody shows. If it starts without finding the coordinator, it does
+  the same after 20 s. It keeps trying to connect in the background (at once when the network changes), without
+  blocking anything.
+- If the **Virtual Display Driver** stops (it can, after several reloads in a row), DeskBridge restarts it. A
+  resolution the driver does not have yet is added to its settings, and the closest one is used if Windows still
+  refuses it.
+- If the **graphics driver** stops working (after a crash, Windows falls back to the *Microsoft Basic Display
+  Adapter*), DeskBridge says so plainly instead of retrying: shut the computer down completely (hold Shift while
+  choosing *Shut down*), as a restart is not always enough.
 
-Pendiente, por orden: mostrar el sobremesa en el portátil (fase 4); color a resolución completa (4:4:4);
-cámara. Ver la [hoja de ruta](docs/arquitectura.md#hoja-de-ruta).
+The configuration lives in `%APPDATA%\DeskBridge\`: `deskbridge.json` (shared, edited on the coordinator and sent
+to the others by itself), `deskbridge.local.json` (this computer's id and key) and `settings.json` (this user's
+preferences).
 
-## Compilar y probar
+## Status
 
-Requiere el SDK de .NET 10 y Windows.
+Used daily between a desktop (NVIDIA) and a laptop (Intel Arc), both ways: virtual displays, low-latency video,
+keyboard and mouse, sound, microphone, clipboard, files, remote updates, lock screen and UAC prompts.
+
+Video is only sent when the screen changes: a still screen costs almost no network or GPU.
+
+**Android** (tablet or phone as one more computer): phase 1 is done, the protocol in Kotlin and an app that joins
+the computers; showing screens comes next. See [docs/android.md](docs/android.md).
+
+Next, in order: full-resolution colour (4:4:4) for coloured text; camera; the Android modes. See the
+[roadmap](docs/arquitectura.md#hoja-de-ruta).
+
+## Build and test
+
+Requires the .NET 10 SDK and Windows.
 
 ```bash
 dotnet test
@@ -94,25 +136,27 @@ dotnet test
 dotnet run --project src/DeskBridge.Gui
 ```
 
-La línea de comandos (`src/DeskBridge.App`, `deskbridge.exe`) sirve para pruebas y para depurar otros equipos a
-distancia; ver [docs/desarrollo.md](docs/desarrollo.md).
+The command line (`src/DeskBridge.App`, `deskbridge.exe`) is for tests and for troubleshooting other computers
+remotely (their log, displays, the virtual display driver, installing a build); see [docs/desarrollo.md](docs/desarrollo.md).
+The Android app builds with Gradle from `android/`; see the same document.
 
-## Publicar
+## Releases
 
-Un tag `vX.Y.Z` compila `DeskBridge-X.Y.Z-win-x64.exe` (autocontenido, un solo archivo) y publica la release con
-su `SHA256SUMS.txt` (`.github/workflows/build-release.yml`). Si el commit está en `main` es estable; en una rama
-`release/*` sin fusionar, beta. Las notas, en los 11 idiomas, van antes en `docs/release-notes/`.
+A `vX.Y.Z` tag builds `DeskBridge-X.Y.Z-win-x64.exe` (self-contained, a single file) and publishes the release
+with its `SHA256SUMS.txt` (`.github/workflows/build-release.yml`). On a commit in `main` it is stable; on an
+unmerged `release/*` branch, beta. The notes, in the 11 languages, go first in `docs/release-notes/`.
 
-## Estructura
+## Layout
 
 ```
-src/DeskBridge.Core        Sin dependencias de Windows: modelo, planificador, canal de control y de vídeo,
-                           agente, entrada (lógica), Opus, traducciones (Locales/), releases
-src/DeskBridge.Platform    Windows: monitores, pantallas virtuales, captura/codificación/vídeo (Direct3D 11,
-                           Media Foundation), entrada (ganchos, SendInput), sonido (WASAPI)
-src/DeskBridge.Gui         Aplicación WPF (DeskBridge.exe) con el agente dentro
-src/DeskBridge.App         CLI (deskbridge.exe)
+src/DeskBridge.Core        No Windows dependencies: model, planner, control and video channels, agent,
+                           input (logic), Opus, translations (Locales/), releases
+src/DeskBridge.Platform    Windows: monitors, virtual displays, capture/encoding/video (Direct3D 11, Media
+                           Foundation), input (hooks, SendInput), sound (WASAPI)
+src/DeskBridge.Gui         The WPF app (DeskBridge.exe), with the agent inside
+src/DeskBridge.App         Command line (deskbridge.exe)
+android/                   Android app (Kotlin): protocol and agent
 tests/DeskBridge.Core.Tests
-scripts/i18n-keys.cs       Lista los textos traducibles (o los que faltan en un idioma)
-docs/                      Arquitectura, desarrollo, micrófono y cámara, notas de versión
+scripts/i18n-keys.cs       Lists the translatable texts (or those missing in a language)
+docs/                      Architecture, development, microphone and camera, Android, release notes (Spanish)
 ```

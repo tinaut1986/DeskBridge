@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DeskBridge.Core.Planning;
@@ -22,12 +23,51 @@ public partial class MainWindow
             return;
         _framesTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => UpdateFrames(), Dispatcher);
         _framesTimer.Start();
+        // Whatever comes to the front (the taskbar when it is clicked puts itself above other always-on-top
+        // windows) leaves the borders under it: back on top at once, and again a moment later, once it has settled.
+        _foregroundProc = OnForegroundChanged; // kept in a field: Windows calls it for as long as the hook lasts
+        _foregroundHook = SetWinEventHook(EventSystemForeground, EventSystemForeground, 0, _foregroundProc, 0, 0, WineventOutOfContext);
         UpdateFrames();
     }
 
+    private nint _foregroundHook;
+    private WinEventProc? _foregroundProc;
+    private DispatcherTimer? _raiseAgain;
+
+    private void RaiseFrames()
+    {
+        foreach (var frame in _frames.Values)
+            frame.Raise();
+    }
+
+    private void OnForegroundChanged(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (_frames.Count == 0)
+            return;
+        RaiseFrames();
+        _raiseAgain ??= new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
+        {
+            _raiseAgain!.Stop();
+            RaiseFrames();
+        }, Dispatcher);
+        _raiseAgain.Stop();
+        _raiseAgain.Start();
+    }
+
+    private delegate void WinEventProc(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time);
+
+    private const uint EventSystemForeground = 0x3, WineventOutOfContext = 0x0;
+
+    [DllImport("user32.dll")]
+    private static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint module, WinEventProc proc, uint process, uint thread, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool UnhookWinEvent(nint hook);
+
     private void UpdateFrames()
     {
-        bool on = _settings.ShowFrames && _options.SnapshotDir is null;
+        // Only while another machine is connected: on its own, this PC has nothing to tell its displays apart from.
+        bool on = _settings.ShowFrames && _options.SnapshotDir is null && OthersConnected();
         var covered = new HashSet<(int X, int Y)>();
 
         // Displays showing another machine: their video windows draw the border.
@@ -73,6 +113,10 @@ public partial class MainWindow
     private void CloseFrames()
     {
         _framesTimer?.Stop();
+        _raiseAgain?.Stop();
+        if (_foregroundHook != 0)
+            UnhookWinEvent(_foregroundHook);
+        _foregroundHook = 0;
         foreach (var frame in _frames.Values)
             frame.Dispose();
         _frames.Clear();

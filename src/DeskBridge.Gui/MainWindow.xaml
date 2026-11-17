@@ -226,12 +226,17 @@
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Hint}" Text="{l:T 'This PC'}" />
                                     <TextBlock Text="{Binding LocalMachine}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource NormalText}" Margin="0,4,0,8" />
-                                    <TextBlock Style="{StaticResource Hint}" Text="{Binding AgentStatus}" />
+                                    <TextBlock Style="{StaticResource Hint}" Text="{Binding AgentStatus}" TextWrapping="Wrap" />
+                                    <Button x:Name="IndependentButton" HorizontalAlignment="Left" Margin="0,12,0,0" Click="Independent_Click"
+                                            ToolTipService.ShowOnDisabled="True" />
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="2" Style="{StaticResource Card}">
                                 <DockPanel>
-                                    <Button DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="0,12,0,0" Content="{l:T 'Layout'}" Click="GoToLayout_Click" />
+                                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+                                        <Button Content="{l:T 'Layout'}" Click="GoToLayout_Click" />
+                                        <Button x:Name="PauseScreensButton" Margin="8,0,0,0" Click="PauseScreens_Click" />
+                                    </StackPanel>
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource Hint}" Text="{l:T 'Profile'}" />
                                         <TextBlock x:Name="HomeAppliedText" FontSize="20" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap" />
@@ -593,7 +598,8 @@
                         <Border Style="{StaticResource Row}">
                             <DockPanel>
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Grid Width="280" Margin="0,0,8,0">
+                                    <!-- At least as wide as the hidden key; shown, as wide as the whole key (it grows to the left). -->
+                                    <Grid MinWidth="280" Margin="0,0,8,0">
                                         <TextBox FontFamily="Consolas" VerticalContentAlignment="Center"
                                                  Visibility="{Binding IsChecked, ElementName=ShowKeyBox, Converter={StaticResource Visible}}"
                                                  Text="{Binding LocalKey, UpdateSourceTrigger=PropertyChanged}" />
