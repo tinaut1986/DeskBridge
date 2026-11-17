@@ -16,5 +16,13 @@
     <string name="log_connected">Conectado a %1$s en %2$s.</string>
     <string name="log_lost">Se perdió la conexión con %1$s; reconectando.</string>
     <string name="log_profile">Recibido el perfil \'%1$s\'.</string>
-    <string name="warning_profiles_pending">Android todavía no muestra ni presta pantallas: esta versión solo se une a los equipos.</string>
+    <string name="warning_profiles_pending">Esta versión de Android solo muestra las pantallas del coordinador: usar su propia pantalla con el teclado y el ratón del coordinador llegará más adelante.</string>
+    <string name="error_cannot_send">Este dispositivo Android todavía no puede enviar su pantalla.</string>
+    <string name="error_overlay">Para mostrar la pantalla del coordinador, permite a DeskBridge mostrarse sobre otras aplicaciones en este dispositivo (abre la app allí).</string>
+    <string name="overlay_needed">Para mostrar las pantallas del coordinador, DeskBridge necesita mostrarse sobre otras aplicaciones.</string>
+    <string name="overlay_allow">Permitir</string>
+    <string name="scan_qr">Escanear QR</string>
+    <string name="qr_loaded">Datos del coordinador cargados del QR: conectando.</string>
+    <string name="qr_invalid">Este QR no es de DeskBridge: en el coordinador, Conexión y seguridad, QR para el móvil.</string>
+    <string name="qr_failed">No se pudo escanear: %1$s</string>
 </resources>

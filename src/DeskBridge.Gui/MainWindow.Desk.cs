@@ -339,7 +339,8 @@ public partial class MainWindow
             Height = tileHeight,
             CornerRadius = new CornerRadius(5),
             Background = new SolidColorBrush(Color.FromArgb(shows == machine ? (byte)0x22 : (byte)0x55, showsColor.R, showsColor.G, showsColor.B)),
-            BorderBrush = isSelected ? new SolidColorBrush(Colors.Black) : onDesk ? new SolidColorBrush(color) : DashedBrush(color),
+            // Selected: the theme's text colour (black was lost on the dark theme, as if the display were off).
+            BorderBrush = isSelected ? ThemeManager.Resource("NormalText") : onDesk ? new SolidColorBrush(color) : DashedBrush(color),
             BorderThickness = new Thickness(thickness),
             Child = content,
             Cursor = foreign ? Cursors.SizeAll : Cursors.Hand,
