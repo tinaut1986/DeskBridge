@@ -122,11 +122,11 @@ public partial class MainWindow
         Canvas.SetLeft(deskOutline, frame.ToCanvasX(deskBounds.X) - 6);
         Canvas.SetTop(deskOutline, frame.ToCanvasY(deskBounds.Y) - 6);
         canvas.Children.Add(deskOutline);
-        AddLabel(canvas, L.T("{machine}: your desk (keyboard and mouse)", ("machine", coordinator)), ColorOf(coordinator),
+        AddLabel(canvas, L.T("{machine}: your desk (keyboard and mouse)", ("machine", coordinator)), coordinator,
             frame.ToCanvasX(deskBounds.X) - 4, 2);
 
         foreach (var (machine, x, y) in apartLabels)
-            AddLabel(canvas, L.T("{machine}: apart", ("machine", machine)), ColorOf(machine),
+            AddLabel(canvas, L.T("{machine}: apart", ("machine", machine)), machine,
                 frame.ToCanvasX(x), frame.ToCanvasY(y));
 
         var selected = AssignmentGrid.SelectedItem as AssignmentVm;
@@ -137,12 +137,129 @@ public partial class MainWindow
             AddDeskTile(canvas, frame, machine, display, rect, onDesk: false, coordinator, deskRects, deskBounds, selected);
     }
 
-    private static void AddLabel(Canvas canvas, string text, Color color, double x, double y)
+    /// <summary>A machine's title on the map, in its colour, with a dot: clicking it chooses that colour.</summary>
+    private void AddLabel(Canvas canvas, string text, MachineVm machine, double x, double y)
     {
-        var label = new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color) };
+        var color = ColorOf(machine);
+        var label = new StackPanel { Orientation = Orientation.Horizontal, Background = Brushes.Transparent, Cursor = Cursors.Hand };
+        label.Children.Add(new Border
+        {
+            Width = 10,
+            Height = 10,
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush(color),
+            Margin = new Thickness(0, 0, 5, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        label.Children.Add(new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color) });
+        var menu = new ContextMenu();
+        menu.Items.Add(ColorMenu(machine));
+        label.ContextMenu = menu;
+        label.ToolTip = L.T("Colour of {machine}", ("machine", machine));
+        label.MouseLeftButtonUp += (_, _) =>
+        {
+            menu.PlacementTarget = label;
+            menu.IsOpen = true;
+        };
         Canvas.SetLeft(label, x);
         Canvas.SetTop(label, y);
         canvas.Children.Add(label);
+    }
+
+    /// <summary>A star on a ribbon across a corner of a display on the map: the primary display of a machine.</summary>
+    private static FrameworkElement PrimaryRibbon(Color color, bool right, double tileSize, string tooltip)
+    {
+        double size = Math.Clamp(tileSize * 0.3, 16, 34);
+        var ribbon = new Grid
+        {
+            Width = size,
+            Height = size,
+            HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            ToolTip = tooltip,
+        };
+        ribbon.Children.Add(new System.Windows.Shapes.Polygon
+        {
+            Points = right
+                ? new PointCollection { new(0, 0), new(size, 0), new(size, size) }
+                : new PointCollection { new(0, 0), new(size, 0), new(0, size) },
+            Fill = new SolidColorBrush(color),
+        });
+        ribbon.Children.Add(new TextBlock
+        {
+            Text = "★",
+            Foreground = Brushes.White,
+            FontSize = size * 0.42,
+            HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = right ? new Thickness(0, size * 0.02, size * 0.08, 0) : new Thickness(size * 0.08, size * 0.02, 0, 0),
+        });
+        return ribbon;
+    }
+
+    /// <summary>"Colour of {machine}": the colours to choose from, and automatic (by its place in the list).</summary>
+    private MenuItem ColorMenu(MachineVm machine)
+    {
+        var root = new MenuItem { Header = L.T("Colour of {machine}", ("machine", machine)), IsEnabled = !IsClientHere() };
+        var current = ColorOf(machine);
+        var swatches = new WrapPanel { MaxWidth = 5 * 30 };
+        foreach (var c in ChoosableColors)
+        {
+            var swatch = new Border
+            {
+                Width = 22,
+                Height = 22,
+                Margin = new Thickness(4),
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(c),
+                BorderBrush = InfoBrush,
+                BorderThickness = new Thickness(c == current ? 2.5 : 0),
+                Cursor = Cursors.Hand,
+            };
+            swatch.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                machine.Color = Hex(c);
+                CloseMenus(root);
+                RefreshColors();
+            };
+            swatches.Children.Add(swatch);
+        }
+        root.Items.Add(new MenuItem { Header = swatches, StaysOpenOnClick = true });
+        var automatic = new MenuItem { Header = L.T("Automatic colour"), IsCheckable = true, IsChecked = machine.Color is null };
+        automatic.Click += (_, _) =>
+        {
+            machine.Color = null;
+            RefreshColors();
+        };
+        root.Items.Add(automatic);
+        return root;
+    }
+
+    /// <summary>Closes the context menu an item is in (a click on a swatch does not close it by itself).</summary>
+    private static void CloseMenus(MenuItem item)
+    {
+        DependencyObject? node = item;
+        while (node is not null)
+        {
+            if (node is ContextMenu menu)
+            {
+                menu.IsOpen = false;
+                return;
+            }
+            node = LogicalTreeHelper.GetParent(node) ?? VisualTreeHelper.GetParent(node);
+        }
+    }
+
+    /// <summary>
+    /// A machine's colour changed: saved at once (it belongs to no profile) and so sent to the other machines,
+    /// whose borders follow like this PC's; the map is redrawn.
+    /// </summary>
+    private void RefreshColors()
+    {
+        SaveConfig();
+        ScheduleRedraw();
+        UpdateFrames();
     }
 
     private void AddDeskTile(Canvas canvas, DeskFrame frame, MachineVm machine, DisplayVm display, DisplayRect rect, bool onDesk,
@@ -157,19 +274,6 @@ public partial class MainWindow
         bool isSelected = assignment is not null && assignment == selected;
 
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        // Primary display marks: of its own machine, and of the machine it shows (its virtual display there).
-        var primaryOf = PrimaryMarks(machine, display, shows, coordinator);
-        foreach (var of in primaryOf)
-        {
-            text.Children.Add(new TextBlock
-            {
-                Text = of == machine ? L.T("★ primary") : L.T("★ primary of {machine}", ("machine", of)),
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(ColorOf(of)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-            });
-        }
         text.Children.Add(new TextBlock
         {
             Text = foreign ? $"{machine} · {display.Id}" : display.Id,
@@ -217,15 +321,27 @@ public partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Center,
         });
 
+        double tileWidth = Math.Max(rect.Width * frame.Scale - 6, 10), tileHeight = Math.Max(rect.Height * frame.Scale - 6, 10);
+        double thickness = isSelected ? 3 : 1.5;
+        var content = new Grid();
+        content.Children.Add(new Viewbox { Child = text, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(4) });
+        // Primary display marks, a star on a corner ribbon: of its own machine (right), and of the machine it
+        // shows (left: its virtual display there).
+        foreach (var of in PrimaryMarks(machine, display, shows, coordinator))
+            content.Children.Add(PrimaryRibbon(ColorOf(of), right: of == machine, Math.Min(tileWidth, tileHeight),
+                L.T("★ primary of {machine}", ("machine", of))));
+        double innerWidth = Math.Max(tileWidth - 2 * thickness, 1), innerHeight = Math.Max(tileHeight - 2 * thickness, 1);
+        content.Clip = new RectangleGeometry(new Rect(0, 0, innerWidth, innerHeight), 4, 4);
+
         var tile = new Border
         {
-            Width = Math.Max(rect.Width * frame.Scale - 6, 10),
-            Height = Math.Max(rect.Height * frame.Scale - 6, 10),
+            Width = tileWidth,
+            Height = tileHeight,
             CornerRadius = new CornerRadius(5),
             Background = new SolidColorBrush(Color.FromArgb(shows == machine ? (byte)0x22 : (byte)0x55, showsColor.R, showsColor.G, showsColor.B)),
             BorderBrush = isSelected ? new SolidColorBrush(Colors.Black) : onDesk ? new SolidColorBrush(color) : DashedBrush(color),
-            BorderThickness = new Thickness(isSelected ? 3 : 1.5),
-            Child = new Viewbox { Child = text, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(4) },
+            BorderThickness = new Thickness(thickness),
+            Child = content,
             Cursor = foreign ? Cursors.SizeAll : Cursors.Hand,
             ToolTip = foreign
                 ? (onDesk
@@ -237,6 +353,13 @@ public partial class MainWindow
         Canvas.SetTop(tile, frame.ToCanvasY(rect.Y) + 3);
         canvas.Children.Add(tile);
         tile.ContextMenu = PrimaryMenu(machine, display, shows, coordinator);
+        if (tile.ContextMenu is { } tileMenu)
+        {
+            tileMenu.Items.Add(new Separator());
+            tileMenu.Items.Add(ColorMenu(machine));
+            if (shows != machine)
+                tileMenu.Items.Add(ColorMenu(shows));
+        }
 
         if (foreign)
             MakeDeskDraggable(tile, machine, display, rect, onDesk, desk, deskBounds, frame, assignment);

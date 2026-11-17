@@ -114,6 +114,32 @@ public sealed class AgentHost : IAsyncDisposable
     }
 
     /// <summary>The configuration the coordinator sent with the last profile (so non-coordinators know the others).</summary>
+    /// <summary>The coordinator whose profile is in place here (null when none is).</summary>
+    public string? AppliedBy => _lastApplied?.Plan.Coordinator;
+
+    /// <summary>
+    /// Leaves the profile in place: this machine's streams stop and its virtual displays go away, as if no profile
+    /// had been applied (the coordinator applies it again when it is back).
+    /// </summary>
+    /// <param name="evenIfNothingApplied">Also when no profile was applied since the agent started (left-overs from before).</param>
+    public async Task ReleaseAsync(string reason, CancellationToken ct = default, bool evenIfNothingApplied = false)
+    {
+        await _applyLock.WaitAsync(ct);
+        try
+        {
+            if (_lastApplied is null && ActiveProfile is null && !evenIfNothingApplied)
+                return;
+            log(reason);
+            await applier.ReleaseAsync(ct);
+            _lastApplied = null;
+            ActiveProfile = null;
+        }
+        finally
+        {
+            _applyLock.Release();
+        }
+    }
+
     public event Action<DeskBridgeConfig>? ConfigReceived;
 
     /// <summary>Takes a clipboard from another machine; false (or unset) refuses it.</summary>

@@ -150,6 +150,13 @@ public sealed class VideoSender : IAsyncDisposable
                     failures.Enqueue(DateTime.UtcNow);
                     while (failures.Count > 0 && DateTime.UtcNow - failures.Peek() > TimeSpan.FromMinutes(1))
                         failures.Dequeue();
+                    if (GraphicsHealth.IsBroken(ex) && GraphicsHealth.Problem(_monitorX, _monitorY) is { } broken)
+                    {
+                        // The driver stopped working (e.g. it crashed): trying again every second only fills the log.
+                        _log($"[video] {broken}");
+                        Fail(broken);
+                        break;
+                    }
                     if (ex is not CaptureChangedException)
                         _log($"[video] capture/encode failed, starting again: {ex.Message}" + (_encoder is { } e ? $" ({e.Stats})" : ""));
                     if (failures.Count >= 5)
@@ -399,8 +406,13 @@ public sealed class VideoSender : IAsyncDisposable
         _stop.Cancel();
     }
 
+    private int _disposed;
+
     public async ValueTask DisposeAsync()
     {
+        // Closed from more than one place (stopped by hand, and by its own end): once is enough.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         _stop.Cancel();
         _captureThread.Join(2000);
         try

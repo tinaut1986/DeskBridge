@@ -27,11 +27,15 @@ public partial class MainWindow
     /// <summary>On the UI thread, whenever a machine connects or disconnects.</summary>
     private void OnPeersChanged()
     {
+        // A coordinator gone mid-drag cannot let go of what it held here.
+        _receiver?.ReleaseIfGone(machine => SessionOf(machine) is not null);
         UpdateAgentStatus();
         CollectNewDiagnostics();
         FixCoordinatorIfAClientIsMarkedAsIt();
         UpdateInputSharing();
         UpdateAudio();
+        OnPeersChangedForPresence();
+        UpdateFrames();
         if (_agent is null || !IsCoordinatorHere())
             return;
 

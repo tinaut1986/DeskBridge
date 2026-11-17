@@ -169,15 +169,18 @@ public partial class MainWindow
         menu.Items.Add(send);
 
         // Always reachable, even when a full-screen stream covers the display with DeskBridge's window.
-        var stopVideo = new Forms.ToolStripMenuItem(L.T("Stop showing other machines' screens"), null, (_, _) =>
+        if (IsCoordinatorHere())
         {
-            ForgetApplied();
-            _ = StopProfileStreamsAsync().ContinueWith(_ => Dispatcher.InvokeAsync(RestorePrimary), TaskScheduler.Default);
-        })
+            menu.Items.Add(new Forms.ToolStripMenuItem(L.T("Pause screen sharing"), null, (_, _) => _ = SetScreensPausedAsync(!_settings.ScreensPaused))
+            {
+                Checked = _settings.ScreensPaused,
+                Enabled = !_settings.Independent,
+            });
+        }
+        menu.Items.Add(new Forms.ToolStripMenuItem(L.T("Independent machines"), null, (_, _) => _ = SetIndependentAsync(!_settings.Independent))
         {
-            Enabled = !_videoReceivers.IsEmpty,
-        };
-        menu.Items.Add(stopVideo);
+            Checked = _settings.Independent,
+        });
 
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(L.T("Quit"), null, (_, _) => Quit());

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">DeskBridge</string>
+    <string name="intro">This device joins your DeskBridge machines. On the coordinator, add it in Machines with the same id and press Detect.</string>
+    <string name="machine">This device\'s id</string>
+    <string name="connect_to">Coordinator address</string>
+    <string name="connect_to_hint">192.168.1.10 or desktop:47900</string>
+    <string name="shared_key">Shared key</string>
+    <string name="start">Connect</string>
+    <string name="stop">Disconnect</string>
+    <string name="status_stopped">Not connected.</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Connected to %1$s.</string>
+    <string name="error_key">The shared key is not valid: copy it from Connection and security on the coordinator.</string>
+    <string name="error_missing">Fill in this device\'s id and the coordinator address.</string>
+    <string name="notification_channel">Connection</string>
+    <string name="log_connected">Connected to %1$s at %2$s.</string>
+    <string name="log_lost">Lost the connection to %1$s; reconnecting.</string>
+    <string name="log_profile">Profile \'%1$s\' received.</string>
+    <string name="warning_profiles_pending">Android does not show or lend screens yet: this version only joins the machines.</string>
+</resources>

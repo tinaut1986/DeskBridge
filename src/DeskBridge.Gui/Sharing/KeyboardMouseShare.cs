@@ -18,11 +18,19 @@ public sealed class KeyboardMouseShare : IDisposable
 {
     private const int VkControl = 0x11, VkLControl = 0xA2, VkRControl = 0xA3;
     private const int VkMenu = 0x12, VkLMenu = 0xA4, VkRMenu = 0xA5, VkHome = 0x24;
+    private const int VkShift = 0x10, VkLShift = 0xA0, VkRShift = 0xA1;
+
+    /// <summary>
+    /// Ctrl+Alt+Shift+Home while the cursor is on another machine: back here, and then everything off (independent
+    /// machines). Elsewhere the same keys reach Windows' hotkey (see MainWindow.Emergency).
+    /// </summary>
+    public Action? Emergency { get; set; }
 
     private abstract record Item;
     private sealed record EnterItem(InputEnterMessage Message) : Item;
     private sealed record EventItem(InputEvent Event) : Item;
-    private sealed record ReleaseItem : Item;
+    /// <param name="Machine">Who lets go (a drag left held there); null: where the items go.</param>
+    private sealed record ReleaseItem(string? Machine = null) : Item;
 
     private readonly object _gate = new();
     private readonly CoordinatorHandover _logic;
@@ -38,6 +46,9 @@ public sealed class KeyboardMouseShare : IDisposable
     private readonly Task _sender;
     private string? _target; // where queued items go
     private int _localButtons; // mouse buttons held on this PC (bit per button)
+    private int _remoteButtons; // mouse buttons sent to the machine that has the cursor (bit per button)
+    private string? _heldOn; // the cursor came back mid-drag: that machine keeps the buttons held...
+    private int _heldButtons; // ...these ones, until they are let go here or the cursor goes back there
     private long _settleUntil;
     private int _parkedX, _parkedY; // where the local cursor waits while the other machine has it
     private int _settleFromX, _settleFromY;
@@ -208,8 +219,9 @@ public sealed class KeyboardMouseShare : IDisposable
                     case MouseDecision.Enter enter:
                         InputInjector.SetCursor(enter.ParkX, enter.ParkY);
                         (_parkedX, _parkedY) = (enter.ParkX, enter.ParkY);
+                        ResumeOrDrop(enter.Machine);
                         _target = enter.Machine;
-                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY, enter.Holes, enter.AreaDesk)));
+                        Enqueue(new EnterItem(new InputEnterMessage(enter.Side, enter.Fraction, enter.X, enter.Y, enter.Peers, enter.Area, enter.SpeedX, enter.SpeedY, enter.Holes, enter.AreaDesk, HoldsDrag: true)));
                         var how = enter.Area is null ? "past the edge" : "onto its display (on the desk, or shown here)";
                         Task.Run(() => _log($"[input] keyboard and mouse to {enter.Machine} at ({enter.X}, {enter.Y}), {how}"));
                         Pointer(hide: true); // not left in sight here while the other machine has the cursor
@@ -220,7 +232,7 @@ public sealed class KeyboardMouseShare : IDisposable
                         EnqueueMove(forward.Dx, forward.Dy);
                         if (_mirror.Position is not null)
                         {
-                            _mirror.Move(forward.Dx, forward.Dy);
+                            _mirror.Move(forward.Dx, forward.Dy, _remoteButtons != 0);
                             PublishPointer();
                         }
                         return true;
@@ -230,6 +242,18 @@ public sealed class KeyboardMouseShare : IDisposable
             }
             if (_logic.Remote is null)
             {
+                // Let go here of a button pressed over there (a window dragged out of that machine): it is let go there.
+                if (_heldOn is { } heldOn && ButtonUp(m) is int up && (_heldButtons & (1 << up)) != 0)
+                {
+                    _heldButtons &= ~(1 << up);
+                    if (_heldButtons == 0)
+                    {
+                        _heldOn = null;
+                        Enqueue(new ReleaseItem(heldOn));
+                        Task.Run(() => _log($"[input] drag from {heldOn} dropped off it: let go there"));
+                    }
+                    return true;
+                }
                 _localButtons = m.Message switch
                 {
                     NativeMessages.LeftDown => _localButtons | 1,
@@ -253,6 +277,8 @@ public sealed class KeyboardMouseShare : IDisposable
                 NativeMessages.HWheel => new InputEvent(InputKind.Wheel, X: (short)(m.Data >> 16), Extended: true),
                 _ => null,
             };
+            if (e is { Kind: InputKind.MouseButton })
+                _remoteButtons = e.Down ? _remoteButtons | (1 << e.Code) : _remoteButtons & ~(1 << e.Code);
             if (e is not null)
                 Enqueue(new EventItem(e));
             return true;
@@ -283,8 +309,10 @@ public sealed class KeyboardMouseShare : IDisposable
     {
         if (k.Injected)
             return false;
-        bool isModifier = k.VirtualKey is VkControl or VkLControl or VkRControl or VkMenu or VkLMenu or VkRMenu;
+        bool isModifier = k.VirtualKey is VkControl or VkLControl or VkRControl or VkMenu or VkLMenu or VkRMenu
+                          or VkShift or VkLShift or VkRShift;
         string? cameBack = null;
+        bool emergency = false;
         lock (_gate)
         {
             if (isModifier)
@@ -309,6 +337,7 @@ public sealed class KeyboardMouseShare : IDisposable
             bool alt = _modifiersDown.Overlaps([VkMenu, VkLMenu, VkRMenu]);
             if (k.Down && k.VirtualKey == VkHome && ctrl && alt)
             {
+                emergency = _modifiersDown.Overlaps([VkShift, VkLShift, VkRShift]);
                 cameBack = _logic.Remote;
                 var (x, y) = _logic.ReturnHere();
                 Settle(_parkedX, _parkedY);
@@ -317,6 +346,7 @@ public sealed class KeyboardMouseShare : IDisposable
                 _mirror.Clear();
                 PublishPointer();
                 Enqueue(new ReleaseItem());
+                _remoteButtons = 0;
             }
             else if (!k.Down && _localDown.Remove(k.VirtualKey))
             {
@@ -331,6 +361,8 @@ public sealed class KeyboardMouseShare : IDisposable
         }
         if (cameBack is not null)
             _remoteChanged(null);
+        if (emergency)
+            Emergency?.Invoke();
         return true;
     }
 
@@ -345,14 +377,17 @@ public sealed class KeyboardMouseShare : IDisposable
             {
                 case MouseDecision.Enter next:
                     // Straight on to another display placed on the desk (maybe of the same machine).
+                    HoldDrag(from);
+                    ResumeOrDrop(next.Machine);
                     _target = next.Machine;
-                    Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area, next.SpeedX, next.SpeedY, next.Holes, next.AreaDesk)));
+                    Enqueue(new EnterItem(new InputEnterMessage(next.Side, next.Fraction, next.X, next.Y, next.Peers, next.Area, next.SpeedX, next.SpeedY, next.Holes, next.AreaDesk, HoldsDrag: true)));
                     Task.Run(() => _log($"[input] keyboard and mouse from {from} on to {next.Machine} at ({next.X}, {next.Y})"));
                     Mirror(next);
                     if (next.Machine != from)
                         _remoteChanged(next.Machine);
                     return;
                 case MouseDecision.Here here:
+                    HoldDrag(from);
                     _mirror.Clear();
                     PublishPointer();
                     Settle(_parkedX, _parkedY);
@@ -378,6 +413,46 @@ public sealed class KeyboardMouseShare : IDisposable
         Pointer(hide: false);
         _remoteChanged(null);
     }
+
+    /// <summary>
+    /// The cursor came back from <paramref name="machine"/> with buttons held there (a window being dragged): that
+    /// machine keeps them held, and the drag goes on if the cursor goes back there before they are let go.
+    /// </summary>
+    private void HoldDrag(string machine)
+    {
+        if (_remoteButtons == 0)
+            return;
+        if (_heldOn is { } other && other != machine)
+            Enqueue(new ReleaseItem(other));
+        (_heldOn, _heldButtons, _remoteButtons) = (machine, _remoteButtons, 0);
+        Task.Run(() => _log($"[input] back from {machine} mid-drag: kept held there"));
+    }
+
+    /// <summary>
+    /// The cursor goes to <paramref name="machine"/>: a drag kept held there goes on; one kept held on another
+    /// machine is let go there.
+    /// </summary>
+    private void ResumeOrDrop(string machine)
+    {
+        _remoteButtons = 0;
+        if (_heldOn is not { } held)
+            return;
+        if (held == machine)
+            _remoteButtons = _heldButtons;
+        else
+            Enqueue(new ReleaseItem(held));
+        (_heldOn, _heldButtons) = (null, 0);
+    }
+
+    /// <summary>The button a hooked message lets go (0 left, 1 right, 2 middle, 3 X1, 4 X2), or null.</summary>
+    private static int? ButtonUp(HookedMouse m) => m.Message switch
+    {
+        NativeMessages.LeftUp => 0,
+        NativeMessages.RightUp => 1,
+        NativeMessages.MiddleUp => 2,
+        NativeMessages.XUp => (m.Data >> 16) == 1 ? 3 : 4,
+        _ => null,
+    };
 
     private void EnqueueMove(int dx, int dy)
     {
@@ -444,6 +519,22 @@ public sealed class KeyboardMouseShare : IDisposable
                     if (item is EventItem ev)
                     {
                         events.Add(ev.Event);
+                        continue;
+                    }
+                    if (item is ReleaseItem { Machine: { } other } && other != target)
+                    {
+                        // A drag left held on a machine that no longer gets the items.
+                        if (_sessionOf(other) is { } otherSession)
+                        {
+                            try
+                            {
+                                await otherSession.NotifyAsync(new InputReleaseMessage(), ct);
+                            }
+                            catch (ControlException)
+                            {
+                                // it lets go by itself when the connection drops
+                            }
+                        }
                         continue;
                     }
                     if (events.Count > 0)

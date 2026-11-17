@@ -327,4 +327,34 @@ public class HandoverTests
         Assert.InRange(up.X, 1895, 1905);
         Assert.InRange(up.Y, -3, -1);
     }
+
+    [Fact]
+    public void A_drag_jumps_into_the_nearest_display_of_that_machine_past_an_empty_gap()
+    {
+        // The laptop's virtual display shown on display 3, and its panel (1920 wide on the desk) below the right
+        // half of display 2 and the left half of display 3.
+        DisplayRect desk3 = new(0, 0, 1920, 1080);
+        DisplayRect virtualDisplay = new(0, -1080, 1920, 1080), panel = new(0, 0, 2880, 1800);
+        var h = new CoordinatorHandover([new(-1920, 0, 1920, 1080), desk3, new(1920, 0, 1920, 1080)],
+        [
+            InputLayout.Lent("laptop", desk3, virtualDisplay),
+            InputLayout.Desk("laptop", panel, new VirtualPosition(-960, 1080), 1920.0 / 2880),
+        ]);
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(1500, 500));
+
+        // Down at the right of display 3, past the panel (nothing there): without a button it stops at the edge...
+        var free = ClientHandover.Move(enter.Area!, enter.Peers, 1500, -1, 0, 3, null, enter.AreaDesk);
+        Assert.False(free.Left);
+        Assert.Equal((1500, -1), (free.X, free.Y));
+        // ...dragging, it lands on the panel's top edge, at its right end (desk x 959).
+        var drag = ClientHandover.Move(enter.Area!, enter.Peers, 1500, -1, 0, 3, null, enter.AreaDesk, dragging: true);
+        Assert.False(drag.Left);
+        Assert.InRange(drag.X, 2870, 2879);
+        Assert.InRange(drag.Y, 0, 3);
+
+        // Up from the left half of the panel, into display 2 (the desktop's own): it goes back to the desktop
+        // either way (dragging, the coordinator keeps the drag going and brings it back here).
+        Assert.True(ClientHandover.Move(enter.Area!, enter.Peers, 300, 1, 0, -3, null, enter.AreaDesk, dragging: true).Left);
+        Assert.True(ClientHandover.Move(enter.Area!, enter.Peers, 300, 1, 0, -3, null, enter.AreaDesk).Left);
+    }
 }
