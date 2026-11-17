@@ -136,6 +136,17 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             return;
         }
 
+        // A virtual monitor that is Windows' primary display (a profile made it so) cannot be moved away from (0,0):
+        // its whole new mode was refused and it stayed at the driver's default (800x600). A physical display of this
+        // PC is made primary first; the profile makes the virtual one primary again once it is in place.
+        var detailed = WindowsDisplayDetector.DetectDetailed(includeVirtual: true);
+        if (detailed.FirstOrDefault(d => d.IsPrimary) is { } primary && devices.Contains(primary.DeviceName)
+            && detailed.FirstOrDefault(d => !devices.Contains(d.DeviceName)) is { } physical)
+        {
+            log($"[virtual displays] {primary.DeviceName} is the primary display: display {physical.Config.Id} is made primary while they are set up");
+            WindowsDisplayDetector.MakePrimary(physical.Config.Id, log);
+        }
+
         // A monitor that is not part of the desktop cannot be given a mode directly: extend the desktop onto
         // every connected display first, as Windows' display settings do.
         if (devices.Take(displays.Count).Any(d => !IsAttached(d)))

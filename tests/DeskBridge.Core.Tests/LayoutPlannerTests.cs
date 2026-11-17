@@ -42,7 +42,8 @@ public class LayoutPlannerTests
         Assert.Equal("desktop", vd.Machine);
         var s = Assert.Single(plan.Streams);
         Assert.Equal(("desktop", "laptop", "1"), (s.SourceMachine, s.SinkMachine, s.SinkDisplay));
-        Assert.Contains(plan.Warnings, w => w.Contains("laptop"));
+        // The laptop shows the desktop's screen, as asked: in use, nothing to warn about.
+        Assert.DoesNotContain(plan.Warnings, w => w.Contains("laptop"));
     }
 
     [Fact]
