@@ -29,6 +29,7 @@ public sealed class AgentHost : IAsyncDisposable
         this.detector = detector;
         this.log = log;
         this.files = files;
+        applier.IsConnected = machine => machine == local.Machine || Directory.Find(machine) is not null;
         AcceptConfigFrom = ConnectsTo;
         AcceptProfilesFrom = from => from == local.Machine || ConnectsTo(from)
                                      || (string.IsNullOrWhiteSpace(local.ConnectTo) && !IsLinkedClient(from));
@@ -113,7 +114,29 @@ public sealed class AgentHost : IAsyncDisposable
         return true;
     }
 
-    /// <summary>The configuration the coordinator sent with the last profile (so non-coordinators know the others).</summary>
+    /// <summary>
+    /// On the coordinator, a machine connected or went away: its virtual displays here come or go with it (see
+    /// <see cref="PlanApplier.IsConnected"/>). With <paramref name="removing"/> false, only additions. Whether
+    /// anything changed.
+    /// </summary>
+    public async Task<bool> RefreshVirtualDisplaysAsync(bool removing, CancellationToken ct = default)
+    {
+        if (_lastApplied is not { } last || last.Plan.Coordinator != local.Machine)
+            return false;
+        await _applyLock.WaitAsync(ct);
+        try
+        {
+            // Read again under the lock: a profile applied meanwhile has placed them already.
+            if (_lastApplied is not { } now || now.Plan.Coordinator != local.Machine)
+                return false;
+            return await applier.RefreshVirtualDisplaysAsync(now.Plan, local.Machine, removing, ct);
+        }
+        finally
+        {
+            _applyLock.Release();
+        }
+    }
+
     /// <summary>The coordinator whose profile is in place here (null when none is).</summary>
     public string? AppliedBy => _lastApplied?.Plan.Coordinator;
 
