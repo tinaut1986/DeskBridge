@@ -291,8 +291,13 @@ public static class ClientHandover
     /// Where each of <paramref name="displays"/> is on the coordinator's desk (same order): going from one to
     /// another follows the desk, so the cursor comes out where it went in as seen on the desk.
     /// </param>
+    /// <param name="dragging">
+    /// A mouse button is held here (a window being dragged): pushed past an edge into nothing (no display of
+    /// the coordinator or of this machine there on the desk), the cursor jumps to the nearest display of this
+    /// machine that way instead of stopping, so a drag can go between displays that do not touch.
+    /// </param>
     public static ClientMove Move(IReadOnlyList<DisplayRect> displays, IReadOnlyList<DisplayRect> peers, int fromX, int fromY, int dx, int dy,
-        IReadOnlyList<DisplayRect>? holes = null, IReadOnlyList<DisplayRect>? desk = null)
+        IReadOnlyList<DisplayRect>? holes = null, IReadOnlyList<DisplayRect>? desk = null, bool dragging = false)
     {
         int x = fromX + dx, y = fromY + dy;
         if (holes is not null && InputLayout.Contains(holes, x, y) && !InputLayout.Contains(holes, fromX, fromY))
@@ -311,6 +316,14 @@ public static class ClientHandover
                 {
                     var (b, bd) = (displays[to], desk[to]);
                     int bx = b.X + (int)Math.Floor((qx - bd.X) * b.Width / bd.Width), by = b.Y + (int)Math.Floor((qy - bd.Y) * b.Height / bd.Height);
+                    return new ClientMove(Math.Clamp(bx, b.X, b.Right - 1), Math.Clamp(by, b.Y, b.Bottom - 1), false, 0);
+                }
+                if (dragging && !InputLayout.Contains(peers, x, y) && JumpTarget(desk, from, qx, qy) is int jump)
+                {
+                    // Across the gap: the nearest point of that display on the desk.
+                    var (b, bd) = (displays[jump], desk[jump]);
+                    double px = Math.Clamp(qx, bd.X, bd.Right - 1), py = Math.Clamp(qy, bd.Y, bd.Bottom - 1);
+                    int bx = b.X + (int)Math.Floor((px - bd.X) * b.Width / bd.Width), by = b.Y + (int)Math.Floor((py - bd.Y) * b.Height / bd.Height);
                     return new ClientMove(Math.Clamp(bx, b.X, b.Right - 1), Math.Clamp(by, b.Y, b.Bottom - 1), false, 0);
                 }
                 // Nothing of this machine there on the desk: not onto its other displays as its own desktop has them.
@@ -334,6 +347,31 @@ public static class ClientHandover
     }
 
     private static bool Inside(DisplayRect d, int x, int y) => x >= d.X && x < d.Right && y >= d.Y && y < d.Bottom;
+
+    /// <summary>
+    /// The display on the desk nearest to (<paramref name="qx"/>, <paramref name="qy"/>) that lies wholly past an
+    /// edge of display <paramref name="from"/> the point went out of (below it when pushed down, and so on), or null.
+    /// </summary>
+    private static int? JumpTarget(IReadOnlyList<DisplayRect> desk, int from, double qx, double qy)
+    {
+        var a = desk[from];
+        int? best = null;
+        double bestDistance = double.MaxValue;
+        for (int i = 0; i < desk.Count; i++)
+        {
+            var d = desk[i];
+            bool beyond = (qx >= a.Right && d.X >= a.Right) || (qx < a.X && d.Right <= a.X)
+                          || (qy >= a.Bottom && d.Y >= a.Bottom) || (qy < a.Y && d.Bottom <= a.Y);
+            if (i == from || !beyond)
+                continue;
+            double ex = qx < d.X ? d.X - qx : qx >= d.Right ? qx - d.Right + 1 : 0;
+            double ey = qy < d.Y ? d.Y - qy : qy >= d.Bottom ? qy - d.Bottom + 1 : 0;
+            double distance = ex * ex + ey * ey;
+            if (distance < bestDistance)
+                (best, bestDistance) = (i, distance);
+        }
+        return best;
+    }
 
     private static int IndexAt(IReadOnlyList<DisplayRect> displays, int x, int y)
     {
