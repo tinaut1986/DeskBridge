@@ -86,11 +86,14 @@ class VideoStream(
     fun close() {
         if (closed) return
         closed = true
-        try {
-            channel.send(VideoPacket.Stop)
-        } catch (_: IOException) {
-        }
-        channel.close()
+        // Often called on the main thread (Back on the screen), where Android forbids the network.
+        Thread({
+            try {
+                channel.send(VideoPacket.Stop)
+            } catch (_: IOException) {
+            }
+            channel.close()
+        }, "deskbridge-video-close").apply { isDaemon = true }.start()
     }
 
     private fun receive() {
@@ -123,6 +126,7 @@ class VideoStream(
             channel.close()
             synchronized(lock) { stopDecoder() }
             decoderThread.quitSafely()
+            sender.shutdown()
             VideoStreams.ended(this)
             log("[video] $from's screen is no longer shown")
             main.post { view?.onEnded() }
@@ -256,7 +260,12 @@ class VideoStream(
             synchronized(lock) { if (c === codec) restartDecoder() }
         }
 
-        override fun onOutputFormatChanged(c: MediaCodec, format: MediaFormat) {}
+        override fun onOutputFormatChanged(c: MediaCodec, format: MediaFormat) {
+            // What the decoder took the colours to be (from the stream, or its own guess when the stream says nothing).
+            fun value(key: String) = if (format.containsKey(key)) format.getInteger(key).toString() else "?"
+            log("[video] decoder output: standard ${value(MediaFormat.KEY_COLOR_STANDARD)}, range ${value(MediaFormat.KEY_COLOR_RANGE)}, " +
+                "transfer ${value(MediaFormat.KEY_COLOR_TRANSFER)} (709 = 1, 601 = 2/4; limited = 2, full = 1; SDR = 3)")
+        }
     }
 
     /** At most one a second, unless [force]d (a new decoder). */
@@ -267,12 +276,20 @@ class VideoStream(
         send(VideoPacket.KeyFrameRequest)
     }
 
+    /** Small packets back to the coordinator, in order, on a thread of their own: never on the main thread (Android
+     * forbids the network there; the decoder can start from it, when the screen opens) nor the decoder's. */
+    private val sender = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "deskbridge-video-send").apply { isDaemon = true } }
+
     private fun send(type: VideoPacket, body: ByteArray = ByteArray(0)) {
         if (closed) return
-        // Never on the decoder's or the receiving thread for long: a small packet, sent as is.
         try {
-            channel.send(type, body)
-        } catch (_: IOException) {
+            sender.execute {
+                try {
+                    if (!closed) channel.send(type, body)
+                } catch (_: IOException) {
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
         }
     }
 
