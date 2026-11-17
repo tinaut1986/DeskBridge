@@ -241,6 +241,8 @@
   "The download is corrupt (checksum mismatch). Try again.": "Загрузка повреждена (не совпала контрольная сумма). Повторите попытку.",
   "The file arrived damaged (checksum mismatch).": "Файл пришёл повреждённым (контрольная сумма не совпадает).",
   "The file arrived incomplete.": "Файл пришёл не полностью.",
+  "The graphics driver of this machine ({gpu}) cannot capture or encode video right now, so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.": "Графический драйвер этого компьютера ({gpu}) сейчас не может захватывать или кодировать видео, поэтому его экран нельзя отправить. Перезагрузите этот компьютер; если не поможет, переустановите графический драйвер.",
+  "The graphics driver of this machine stopped working (Windows is using the Microsoft Basic Display Adapter), so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.": "Графический драйвер этого компьютера перестал работать (Windows использует базовый видеоадаптер Майкрософт), поэтому его экран нельзя отправить. Перезагрузите этот компьютер; если не поможет, переустановите графический драйвер.",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "Компьютер с клавиатурой и мышью — координатор: профили редактируются и применяются с него. Оставьте порт пустым, чтобы использовать порт по умолчанию.",
   "The machines keep the profile as it was applied until you press Apply profile.": "Компьютеры сохраняют профиль в применённом виде, пока вы не нажмёте «Применить профиль».",
   "The new version arrived damaged; nothing was changed.": "Новая версия пришла повреждённой; ничего не изменено.",

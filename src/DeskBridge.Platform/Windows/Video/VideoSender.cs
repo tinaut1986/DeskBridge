@@ -150,6 +150,13 @@ public sealed class VideoSender : IAsyncDisposable
                     failures.Enqueue(DateTime.UtcNow);
                     while (failures.Count > 0 && DateTime.UtcNow - failures.Peek() > TimeSpan.FromMinutes(1))
                         failures.Dequeue();
+                    if (GraphicsHealth.IsBroken(ex) && GraphicsHealth.Problem(_monitorX, _monitorY) is { } broken)
+                    {
+                        // The driver stopped working (e.g. it crashed): trying again every second only fills the log.
+                        _log($"[video] {broken}");
+                        Fail(broken);
+                        break;
+                    }
                     if (ex is not CaptureChangedException)
                         _log($"[video] capture/encode failed, starting again: {ex.Message}" + (_encoder is { } e ? $" ({e.Stats})" : ""));
                     if (failures.Count >= 5)

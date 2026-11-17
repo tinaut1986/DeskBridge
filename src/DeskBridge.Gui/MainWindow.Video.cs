@@ -66,6 +66,13 @@ public partial class MainWindow
                        ?? displays.FirstOrDefault()) is { } d ? (d.X, d.Y) : null;
                 if (position is not { } display)
                     return new ErrorMessage(L.T("This machine has no display to send."));
+                // A graphics driver that stopped working (it crashed) cannot send anything: said once, plainly, instead
+                // of a stream that fails and is asked for again every few seconds.
+                if (Platform.Windows.Video.GraphicsHealth.Problem(display.X, display.Y) is { } broken)
+                {
+                    AddLog($"[video] {start.Key}: {broken}");
+                    return new ErrorMessage(broken);
+                }
 
                 var key = Dispatcher.Invoke(() => _vm.LocalKey.Trim());
                 VideoChannel channel;
@@ -317,7 +324,9 @@ public partial class MainWindow
         catch (ControlException ex)
         {
             _videoPending.TryRemove(stream.Key, out _);
-            AddLog(L.T("Could not start the video from {machine}: {error}", ("machine", MachineName(stream.SourceMachine)), ("error", ex.Message)));
+            var text = L.T("Could not start the video from {machine}: {error}", ("machine", MachineName(stream.SourceMachine)), ("error", ex.Message));
+            AddLog(text);
+            Dispatcher.Invoke(() => Notify(text)); // e.g. its graphics driver stopped working: the display stays dark
         }
     }
 

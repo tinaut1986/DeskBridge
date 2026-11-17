@@ -241,6 +241,8 @@
   "The download is corrupt (checksum mismatch). Try again.": "下载的文件已损坏（校验和不匹配）。请重试。",
   "The file arrived damaged (checksum mismatch).": "文件到达时已损坏（校验和不匹配）。",
   "The file arrived incomplete.": "文件未完整到达。",
+  "The graphics driver of this machine ({gpu}) cannot capture or encode video right now, so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.": "此电脑的显卡驱动（{gpu}）目前无法捕获或编码视频，因此无法发送其屏幕。请重启此电脑；如果仍无效，请重新安装显卡驱动。",
+  "The graphics driver of this machine stopped working (Windows is using the Microsoft Basic Display Adapter), so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.": "此电脑的显卡驱动已停止工作（Windows 正在使用 Microsoft 基本显示适配器），因此无法发送其屏幕。请重启此电脑；如果仍无效，请重新安装显卡驱动。",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "连接键盘和鼠标的电脑即为协调端：方案在它上面编辑和应用。端口留空则使用默认值。",
   "The machines keep the profile as it was applied until you press Apply profile.": "在你点击“应用配置文件”之前，各电脑保持已应用时的配置。",
   "The new version arrived damaged; nothing was changed.": "新版本在传输中损坏；没有做任何更改。",

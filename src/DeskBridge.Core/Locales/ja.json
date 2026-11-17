@@ -241,6 +241,8 @@
   "The download is corrupt (checksum mismatch). Try again.": "ダウンロードが破損しています（チェックサムが一致しません）。もう一度お試しください。",
   "The file arrived damaged (checksum mismatch).": "ファイルが破損した状態で届きました（チェックサムが一致しません）。",
   "The file arrived incomplete.": "ファイルが不完全な状態で届きました。",
+  "The graphics driver of this machine ({gpu}) cannot capture or encode video right now, so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.": "このマシンのグラフィックドライバー（{gpu}）は現在ビデオをキャプチャまたはエンコードできません。そのため画面を送信できません。このマシンを再起動してください。直らない場合はグラフィックドライバーを再インストールしてください。",
+  "The graphics driver of this machine stopped working (Windows is using the Microsoft Basic Display Adapter), so its screen cannot be sent. Restart this machine; if that does not help, reinstall the graphics driver.": "このマシンのグラフィックドライバーが動作を停止しました（Windows は Microsoft Basic Display Adapter を使用しています）。そのため画面を送信できません。このマシンを再起動してください。直らない場合はグラフィックドライバーを再インストールしてください。",
   "The machine with the keyboard and mouse is the coordinator: profiles are edited and applied from it. Leave the port empty to use the default.": "キーボードとマウスを持つマシンがコーディネーターです。プロファイルの編集と適用はそこから行います。ポートを空にすると既定値を使用します。",
   "The machines keep the profile as it was applied until you press Apply profile.": "「プロファイルを適用」を押すまで、各マシンは適用したときのプロファイルのままです。",
   "The new version arrived damaged; nothing was changed.": "新しいバージョンが破損して届きました。何も変更していません。",
