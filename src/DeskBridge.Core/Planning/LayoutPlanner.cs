@@ -151,7 +151,8 @@ public static class LayoutPlanner
                 int refresh = s.RefreshHz ?? display.RefreshHz;
                 int bitrate = s.BitrateMbps ?? DefaultBitrateMbps(width, height, refresh);
 
-                if (width * display.Height != height * display.Width)
+                // (Within a pixel: sizes are rounded to whole pairs of pixels for the encoder.)
+                if (Math.Abs((double)width / height - (double)display.Width / display.Height) > 2.0 / height)
                     warnings.Add(L.T("Display '{display}' of '{machine}' is {native} but receives {stream}: the aspect ratio differs, there will be black bars.",
                         ("display", display.Id), ("machine", machine.Id), ("native", $"{display.Width}x{display.Height}"), ("stream", $"{width}x{height}")));
                 if (refresh > display.RefreshHz)
@@ -174,7 +175,10 @@ public static class LayoutPlanner
             bool keepsOwn = machine.Displays.Any(d =>
                 (assignments.GetValueOrDefault((machine.Id, d.Id))?.UsedBy ?? machine.Id) == machine.Id);
             bool borrows = virtualDisplays.Any(v => v.Machine == machine.Id);
-            if (!keepsOwn && !borrows)
+            // Its displays all show the coordinator (a tablet as one more monitor): it is in use, as intended.
+            bool showsCoordinator = machine.Id != coordinator.Id && machine.Displays.Count > 0 && machine.Displays.All(d =>
+                assignments.GetValueOrDefault((machine.Id, d.Id))?.UsedBy == coordinator.Id);
+            if (!keepsOwn && !borrows && !showsCoordinator)
                 warnings.Add(L.T("'{machine}' has no visible display in profile '{profile}'.", ("machine", machine.Id), ("profile", profile.Name)));
         }
 
@@ -246,7 +250,7 @@ public static class LayoutPlanner
 
             // Shown on the coordinator's desk next to this machine's own displays: placed in this machine's desktop
             // the same way round, so Windows moves the cursor (and dragged windows) between them as seen there.
-            var fromDesk = DeskPlaced(config, borrower, mine);
+            var fromDesk = DeskPlaced(config, borrower, mine, assignments);
             // The coordinator's own virtual displays shown on a display of another machine that is on its desk (e.g.
             // the laptop below the monitors, used as one more monitor): exactly where that display is on the desk,
             // unless the profile places them by hand.
@@ -309,6 +313,8 @@ public static class LayoutPlanner
                        Math.Max(bounds.Right, originX + width), Math.Max(bounds.Bottom, originY + height));
                 empty = false;
             }
+
+            MatchTheDesk(config, borrower, assignments, result);
         }
         // Keep the plan's original order (by lent display).
         return virtualDisplays.Select(v => result.Single(r => r.Key == v.Key)).ToList();
@@ -320,7 +326,8 @@ public static class LayoutPlanner
     /// on the monitor above the laptop panel, the virtual display goes above the panel on the laptop. The group
     /// keeps its arrangement on the desk; the one closest to a display of the borrower anchors it, touching it.
     /// </summary>
-    private static List<VirtualDisplaySpec> DeskPlaced(DeskBridgeConfig config, MachineConfig borrower, List<VirtualDisplaySpec> mine)
+    private static List<VirtualDisplaySpec> DeskPlaced(DeskBridgeConfig config, MachineConfig borrower, List<VirtualDisplaySpec> mine,
+        IReadOnlyDictionary<(string, string), DisplayAssignment> assignments)
     {
         var coordinator = config.Machines.Single(m => m.HasInput);
         if (borrower.HasInput || borrower.DeskPositions is not { Count: > 0 } desk)
@@ -331,8 +338,10 @@ public static class LayoutPlanner
             .Where(x => x.Display is not null)
             .Select(x => (x.Spec, Here: new DisplayRect(x.Display!.X, x.Display.Y, x.Display.Width, x.Display.Height)))
             .ToList();
+        // Only its displays that show itself: one lent to another machine (the laptop panel showing the desktop) is
+        // not the borrower on the desk, and nothing of the borrower goes around it.
         var own = borrower.Displays
-            .Where(d => desk.ContainsKey(d.Id))
+            .Where(d => desk.ContainsKey(d.Id) && ShowsItself(borrower, d.Id, assignments))
             .Select(d =>
             {
                 int? chosen = borrower.DeskWidths is { } widths && widths.TryGetValue(d.Id, out var w) && w > 0 ? w : null;
@@ -365,6 +374,69 @@ public static class LayoutPlanner
         }
         int dx = x - here.X, dy = y - here.Y;
         return shown.Select(s => s.Spec with { X = s.Here.X + dx, Y = s.Here.Y + dy }).ToList();
+    }
+
+    private static bool ShowsItself(MachineConfig machine, string display, IReadOnlyDictionary<(string, string), DisplayAssignment> assignments) =>
+        assignments.GetValueOrDefault((machine.Id, display))?.UsedBy is not { } user || user == machine.Id;
+
+    /// <summary>
+    /// A virtual display of <paramref name="borrower"/> shown on a display of a third machine that is on the
+    /// coordinator's desk (the laptop's screen on a tablet, relayed): placed in the borrower's desktop next to one of
+    /// its displays already on the desk, the way the desk has them (below it when the tablet is below), so a window
+    /// dragged there goes where the desk shows it. Left where it was if that would overlap another display.
+    /// </summary>
+    private static void MatchTheDesk(DeskBridgeConfig config, MachineConfig borrower,
+        IReadOnlyDictionary<(string, string), DisplayAssignment> assignments, List<VirtualDisplaySpec> result)
+    {
+        var coordinator = config.Machines.Single(m => m.HasInput);
+        if (borrower.HasInput)
+            return;
+        static DisplayRect Rect(VirtualDisplaySpec v) => new(v.X, v.Y, v.Width, v.Height);
+        DisplayRect? DeskOf(MachineConfig machine, string display)
+        {
+            if (machine.DeskPositions?.TryGetValue(display, out var p) != true || machine.Displays.FirstOrDefault(d => d.Id == display) is not { } d)
+                return null;
+            int? chosen = machine.DeskWidths is { } widths && widths.TryGetValue(display, out var w) && w > 0 ? w : null;
+            var (dw, dh) = Input.InputLayout.DeskSize(d.Width, d.Height, d.Scale, chosen);
+            return new DisplayRect(p!.X, p.Y, dw, dh);
+        }
+
+        // Where the borrower already is on the desk: its virtual displays shown on the coordinator's monitors, and its
+        // own displays placed there that show itself.
+        var anchors = new List<(DisplayRect Here, DisplayRect Desk)>();
+        foreach (var v in result.Where(v => v.Machine == borrower.Id && v.ForMachine == coordinator.Id))
+            if (coordinator.Displays.FirstOrDefault(d => d.Id == v.ForDisplay) is { } cd)
+                anchors.Add((Rect(v), new DisplayRect(cd.X, cd.Y, cd.Width, cd.Height)));
+        foreach (var d in borrower.Displays.Where(d => ShowsItself(borrower, d.Id, assignments)))
+            if (DeskOf(borrower, d.Id) is { } onDesk)
+                anchors.Add((new DisplayRect(d.X, d.Y, d.Width, d.Height), onDesk));
+
+        foreach (var v in result.Where(v => v.Machine == borrower.Id && v.ForMachine != coordinator.Id && v.ForMachine != borrower.Id).ToList())
+        {
+            if (assignments[(v.ForMachine, v.ForDisplay)].Position is not null || anchors.Count == 0
+                || config.Machines.FirstOrDefault(m => m.Id == v.ForMachine) is not { } lender || DeskOf(lender, v.ForDisplay) is not { } target)
+                continue;
+            var (here, onDesk) = anchors.OrderBy(a => Gap(target, a.Desk)).First();
+            double scale = (double)onDesk.Width / here.Width;
+            int x, y;
+            if (target.Bottom <= onDesk.Y || target.Y >= onDesk.Bottom)
+            {
+                y = target.Bottom <= onDesk.Y ? here.Y - v.Height : here.Bottom;
+                x = Math.Clamp(here.X + (int)Math.Round((target.X - onDesk.X) / scale), here.X - v.Width + 1, here.Right - 1);
+            }
+            else
+            {
+                x = target.Right <= onDesk.X ? here.X - v.Width : here.Right;
+                y = Math.Clamp(here.Y + (int)Math.Round((target.Y - onDesk.Y) / scale), here.Y - v.Height + 1, here.Bottom - 1);
+            }
+            var placed = new DisplayRect(x, y, v.Width, v.Height);
+            var others = borrower.Displays.Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height))
+                .Concat(result.Where(o => o.Machine == borrower.Id && o.Key != v.Key).Select(Rect));
+            if (others.Any(placed.Overlaps))
+                continue;
+            result[result.FindIndex(r => r.Key == v.Key)] = v with { X = x, Y = y };
+            anchors.Add((placed, target));
+        }
     }
 
     /// <summary>Distance between two rectangles (0 when they touch or overlap).</summary>

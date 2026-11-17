@@ -86,11 +86,22 @@ public partial class MainWindow
             var rects = physical.ToDictionary(d => d.Config.Id, d => new DisplayRect(d.Config.X, d.Config.Y, d.Config.Width, d.Config.Height));
             wanted = PrimaryChoice.Decide(rects, original, lent, chosen);
         }
+        else if (chosen is not null && displays.Any(d => d.Config.Id == chosen))
+        {
+            wanted = chosen;
+        }
         else
         {
-            wanted = chosen is not null && displays.Any(d => d.Config.Id == chosen) ? chosen : original;
+            // Nothing chosen: like on the coordinator, a primary display that shows the coordinator's screen (covered
+            // by its video) gives way to the nearest one that does not, e.g. this PC's virtual display shown on one of
+            // the coordinator's monitors; otherwise the taskbar and new windows would land under that video.
+            var covered = plan.StreamsTo(here).Select(s => s.SinkDisplay).ToHashSet();
+            var rects = displays.ToDictionary(d => d.Config.Id, d => new DisplayRect(d.Config.X, d.Config.Y, d.Config.Width, d.Config.Height));
+            wanted = PrimaryChoice.Decide(rects, original, covered, null);
         }
 
+        if (plan.PrimaryDisplayOf(here) is { } asked)
+            AddLog($"[displays] primary display: the profile asks for {asked} (display {chosen ?? "not found"}); now {current}, original {original}: {wanted}");
         if (wanted == current)
         {
             if (wanted == original)

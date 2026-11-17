@@ -143,7 +143,7 @@ public partial class MainWindow
             OnAudioOpened(channel);
             return;
         }
-        if (TryStartOutgoing(channel))
+        if (TryStartOutgoing(channel) || TryJoinRelay(channel))
             return;
         if (!_videoPending.TryRemove(channel.StreamKey, out var target) || target.Machine != channel.RemoteMachine)
         {
@@ -271,6 +271,11 @@ public partial class MainWindow
             await StartOutgoingStreamAsync(stream);
             return;
         }
+        if (stream.SinkMachine != here)
+        {
+            await StartRelayAsync(stream); // between two other machines: through this PC
+            return;
+        }
         if (stream.SinkMachine != here || _videoReceivers.ContainsKey(stream.Key) || _videoPending.ContainsKey(stream.Key))
             return;
         // A reconnection and a restart can both ask at once: one request per stream at a time.
@@ -344,6 +349,7 @@ public partial class MainWindow
     {
         _streamPlan = null;
         await StopOutgoingStreamsAsync();
+        StopRelays();
         foreach (var (key, receiver) in _videoReceivers.ToArray())
         {
             if (key.StartsWith("test-", StringComparison.Ordinal) || key.StartsWith("probe-", StringComparison.Ordinal))
@@ -358,8 +364,8 @@ public partial class MainWindow
     {
         if (_streamPlan is not { } plan)
             return;
-        var here = _vm.LocalMachine.Trim();
-        foreach (var stream in plan.Streams.Where(s => s.SourceMachine == machine || (s.SinkMachine == machine && s.SourceMachine == here)))
+        // Its streams to this PC, this PC's to it, and those relayed between it and another machine.
+        foreach (var stream in plan.Streams.Where(s => s.SourceMachine == machine || s.SinkMachine == machine))
             _ = StartProfileStreamAsync(stream);
     }
 

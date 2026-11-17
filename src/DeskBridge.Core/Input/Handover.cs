@@ -222,7 +222,11 @@ public sealed class CoordinatorHandover
         // Mapped back through the display of that machine it left from (each has its own place and scale here).
         var from = _targets
             .Where(t => t.Machine == remote.Machine && (t.Confine || t.Lent is not null))
-            .OrderBy(t => t.Displays.Min(d => Distance(d, rx, ry)))
+            // Not one the point is inside: that machine sent the cursor back instead of moving it there, so it left
+            // from another one (e.g. past the right edge of the display shown on the coordinator's display 3, into
+            // the machine's own next virtual display, which is shown on a tablet below display 3 on the desk).
+            .OrderBy(t => t.Displays.Any(d => rx >= d.X && rx < d.Right && ry >= d.Y && ry < d.Bottom) ? 1 : 0)
+            .ThenBy(t => t.Displays.Min(d => Distance(d, rx, ry)))
             .ThenBy(t => t.Lent is null) // on a display shown here (a window over the video there): through that one
             .FirstOrDefault() ?? remote;
         var (dx, dy) = from.ToDesk(rx, ry);
