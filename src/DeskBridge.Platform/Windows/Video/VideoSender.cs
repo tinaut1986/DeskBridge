@@ -406,8 +406,13 @@ public sealed class VideoSender : IAsyncDisposable
         _stop.Cancel();
     }
 
+    private int _disposed;
+
     public async ValueTask DisposeAsync()
     {
+        // Closed from more than one place (stopped by hand, and by its own end): once is enough.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         _stop.Cancel();
         _captureThread.Join(2000);
         try

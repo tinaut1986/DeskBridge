@@ -39,9 +39,6 @@ public partial class MainWindow
     {
         switch (message)
         {
-            case StartVideoMessage start when !start.Send:
-                return new ErrorMessage(L.T("This machine cannot receive video yet."));
-
             case StartVideoMessage start:
             {
                 if (_agent is not { } agent)
@@ -49,6 +46,8 @@ public partial class MainWindow
                 var endpoint = agent.Reverse?.ConnectedTo == from ? agent.CoordinatorEndpoint : CoordinatorEndpointFromConfig(from);
                 if (endpoint is not { } ep)
                     return new ErrorMessage(L.T("This machine does not know how to reach {machine}.", ("machine", from)));
+                if (!start.Send)
+                    return await ReceiveForCoordinatorAsync(from, start, ep, ct);
 
                 // A planned virtual display (where it ended up), a physical display by id, or the main display.
                 var displays = Platform.Windows.WindowsDisplayDetector.DetectAll();
@@ -113,6 +112,14 @@ public partial class MainWindow
                         await sender.DisposeAsync();
                     }
                 }
+                foreach (var (key, receiver) in _videoReceivers.ToArray()) // a screen of the coordinator shown here
+                {
+                    if (stop.Key is null || stop.Key == key)
+                    {
+                        _videoReceivers.TryRemove(key, out _);
+                        await receiver.DisposeAsync();
+                    }
+                }
                 return new OkMessage();
 
             default:
@@ -136,6 +143,8 @@ public partial class MainWindow
             OnAudioOpened(channel);
             return;
         }
+        if (TryStartOutgoing(channel))
+            return;
         if (!_videoPending.TryRemove(channel.StreamKey, out var target) || target.Machine != channel.RemoteMachine)
         {
             AddLog($"[video] unexpected video connection from {channel.RemoteMachine} ({channel.StreamKey}), closed");
@@ -259,7 +268,7 @@ public partial class MainWindow
         var here = _vm.LocalMachine.Trim();
         if (stream.SourceMachine == here)
         {
-            AddLog($"[video] {stream.Key}: showing this PC's displays on another machine is not available yet");
+            await StartOutgoingStreamAsync(stream);
             return;
         }
         if (stream.SinkMachine != here || _videoReceivers.ContainsKey(stream.Key) || _videoPending.ContainsKey(stream.Key))
@@ -334,6 +343,7 @@ public partial class MainWindow
     private async Task StopProfileStreamsAsync()
     {
         _streamPlan = null;
+        await StopOutgoingStreamsAsync();
         foreach (var (key, receiver) in _videoReceivers.ToArray())
         {
             if (key.StartsWith("test-", StringComparison.Ordinal) || key.StartsWith("probe-", StringComparison.Ordinal))
@@ -348,7 +358,8 @@ public partial class MainWindow
     {
         if (_streamPlan is not { } plan)
             return;
-        foreach (var stream in plan.Streams.Where(s => s.SourceMachine == machine))
+        var here = _vm.LocalMachine.Trim();
+        foreach (var stream in plan.Streams.Where(s => s.SourceMachine == machine || (s.SinkMachine == machine && s.SourceMachine == here)))
             _ = StartProfileStreamAsync(stream);
     }
 
@@ -361,6 +372,8 @@ public partial class MainWindow
     /// <summary>Every video stream to or from this PC stops (sound goes on).</summary>
     private async Task StopVideoStreamsAsync()
     {
+        _outgoingTargets.Clear();
+        _outgoingPending.Clear();
         foreach (var (key, sender) in _videoSenders.ToArray())
         {
             _videoSenders.TryRemove(key, out _);

@@ -45,6 +45,7 @@ public partial class MainWindow
     {
         if (_agent is not { } agent)
             return;
+        _ = StopOutgoingStreamsAsync(machine => agent.Directory.Find(machine) is null); // asked for again when it is back
         foreach (var receiver in _videoReceivers.Values.ToArray())
         {
             var machine = receiver.RemoteMachine;
