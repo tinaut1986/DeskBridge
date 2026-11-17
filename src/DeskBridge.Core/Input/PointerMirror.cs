@@ -40,7 +40,8 @@ public sealed class PointerMirror
     }
 
     /// <summary>A relative move sent over (coordinator pixels). False once it takes the cursor back out.</summary>
-    public bool Move(int dx, int dy)
+    /// <param name="dragging">A mouse button is held over there (see <see cref="ClientHandover.Move(IReadOnlyList{DisplayRect}, IReadOnlyList{DisplayRect}, int, int, int, int, IReadOnlyList{DisplayRect}?, IReadOnlyList{DisplayRect}?, bool)"/>).</param>
+    public bool Move(int dx, int dy, bool dragging = false)
     {
         if (Position is null)
             return false;
@@ -49,7 +50,7 @@ public sealed class PointerMirror
         int mx = (int)Math.Truncate(_restX), my = (int)Math.Truncate(_restY);
         _restX -= mx;
         _restY -= my;
-        var move = ClientHandover.Move(_displays, _peers, _x, _y, mx, my, _holes, _desk);
+        var move = ClientHandover.Move(_displays, _peers, _x, _y, mx, my, _holes, _desk, dragging);
         if (move.Left)
         {
             Clear();
