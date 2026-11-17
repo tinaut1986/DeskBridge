@@ -28,6 +28,7 @@
   "Asking {machine} for its displays...": "正在向 {machine} 获取显示器信息...",
   "Authentication failed: is the shared key the same on both machines?": "身份验证失败：两台电脑上的共享密钥是否相同？",
   "Auto": "自动",
+  "Automatic colour": "自动颜色",
   "Below": "下方",
   "Beta": "Beta",
   "Bitrate (Mbps)": "码率 (Mbps)",
@@ -42,6 +43,7 @@
   "Clipboard not shared: the text is too long.": "剪贴板未共享：文本太长。",
   "Close": "关闭",
   "Collect diagnostics from all machines": "收集所有电脑的诊断信息",
+  "Colour of {machine}": "{machine} 的颜色",
   "Communication error with {host}: {error}": "与 {host} 通信出错：{error}",
   "Connect to": "连接到",
   "Connected to {machine} at {host}.": "已连接到 {host} 上的 {machine}。",
@@ -332,6 +334,5 @@
   "{where}: resolution '{value}' is not like 1920x1080.": "{where}：分辨率“{value}”格式不是 1920x1080 这样。",
   "{where}: set both width and height, or neither.": "{where}：宽度和高度要么都设置，要么都不设置。",
   "{where}: width must be between {min} and {max}.": "{where}：宽度必须在 {min} 到 {max} 之间。",
-  "★ primary": "★ 主显示器",
   "★ primary of {machine}": "★ {machine} 的主显示器"
 }

@@ -81,6 +81,11 @@ public sealed class MachineVm : ObservableObject
     public string Address { get => _address; set => Set(ref _address, value); }
     public int? ControlPort { get => _controlPort; set => Set(ref _controlPort, value); }
 
+    private string? _color;
+
+    /// <summary>Its colour chosen on the Layout map ("#RRGGBB"); null: by its place in the list.</summary>
+    public string? Color { get => _color; set => Set(ref _color, value); }
+
     /// <summary>The coordinator. Setting it on one machine clears it on the others (see <see cref="EditorModel"/>).</summary>
     public bool HasInput
     {
@@ -379,7 +384,7 @@ public sealed class EditorModel
         var model = new EditorModel { ControlPort = config.ControlPort };
         foreach (var m in config.Machines)
         {
-            var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort };
+            var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort, Color = m.Color };
             foreach (var d in m.Displays)
                 vm.Displays.Add(DisplayVm.From(d));
             model.Machines.Add(vm);
@@ -435,7 +440,8 @@ public sealed class EditorModel
                 : m.DeskPositions.Where(p => m.Displays.Any(d => d.Id.Trim() == p.Key)).ToDictionary(),
             DeskWidths: m.HasInput || !m.DeskWidths.Any(w => m.DeskPositions.ContainsKey(w.Key))
                 ? null
-                : m.DeskWidths.Where(w => m.DeskPositions.ContainsKey(w.Key)).ToDictionary())).ToList();
+                : m.DeskWidths.Where(w => m.DeskPositions.ContainsKey(w.Key)).ToDictionary(),
+            Color: string.IsNullOrWhiteSpace(m.Color) ? null : m.Color.Trim())).ToList();
 
         var profiles = Profiles.Select(p => new ProfileConfig(
             p.Name.Trim(),

@@ -25,6 +25,7 @@ namespace DeskBridge.Gui;
 
 public partial class MainWindow : Window
 {
+    /// <summary>Machines without a colour of their own take these, by their place in the list.</summary>
     private static readonly Color[] MachineColors =
     [
         Color.FromRgb(0x25, 0x63, 0xEB), // blue
@@ -32,6 +33,17 @@ public partial class MainWindow : Window
         Color.FromRgb(0x05, 0x96, 0x69), // green
         Color.FromRgb(0x7C, 0x3A, 0xED), // purple
         Color.FromRgb(0xDB, 0x27, 0x77), // pink
+    ];
+
+    /// <summary>The colours a machine can be given on the Layout map (the defaults first).</summary>
+    private static readonly Color[] ChoosableColors =
+    [
+        .. MachineColors,
+        Color.FromRgb(0xDC, 0x26, 0x26), // red
+        Color.FromRgb(0xCA, 0x8A, 0x04), // yellow
+        Color.FromRgb(0x08, 0x91, 0xB2), // cyan
+        Color.FromRgb(0x65, 0xA3, 0x0D), // lime
+        Color.FromRgb(0x57, 0x53, 0x4E), // grey
     ];
 
     private static Brush ErrorBrush => ThemeManager.Resource("ErrorText");
@@ -581,9 +593,27 @@ public partial class MainWindow : Window
 
     private Color ColorOf(MachineVm machine)
     {
+        if (ParseColor(machine.Color) is { } chosen)
+            return chosen;
         int index = _vm.Model.Machines.IndexOf(machine);
         return MachineColors[Math.Max(index, 0) % MachineColors.Length];
     }
+
+    private static Color? ParseColor(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        try
+        {
+            return ColorConverter.ConvertFromString(text.Trim()) is Color c ? Color.FromRgb(c.R, c.G, c.B) : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
     /// <summary>The plan of the selected profile as edited right now, or null while it has errors.</summary>
     private LayoutPlan? CurrentPlan()

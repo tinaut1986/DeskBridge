@@ -28,6 +28,7 @@
   "Asking {machine} for its displays...": "Richiesta degli schermi a {machine}...",
   "Authentication failed: is the shared key the same on both machines?": "Autenticazione non riuscita: la chiave condivisa è la stessa su entrambi i computer?",
   "Auto": "Auto",
+  "Automatic colour": "Colore automatico",
   "Below": "Sotto",
   "Beta": "Beta",
   "Bitrate (Mbps)": "Bitrate (Mbps)",
@@ -42,6 +43,7 @@
   "Clipboard not shared: the text is too long.": "Appunti non condivisi: il testo è troppo lungo.",
   "Close": "Chiudi",
   "Collect diagnostics from all machines": "Raccogli la diagnostica di tutti i computer",
+  "Colour of {machine}": "Colore di {machine}",
   "Communication error with {host}: {error}": "Errore di comunicazione con {host}: {error}",
   "Connect to": "Connetti a",
   "Connected to {machine} at {host}.": "Connesso a {machine} su {host}.",
@@ -332,6 +334,5 @@
   "{where}: resolution '{value}' is not like 1920x1080.": "{where}: la risoluzione '{value}' non è nel formato 1920x1080.",
   "{where}: set both width and height, or neither.": "{where}: imposta sia la larghezza sia l'altezza, oppure nessuna delle due.",
   "{where}: width must be between {min} and {max}.": "{where}: la larghezza deve essere tra {min} e {max}.",
-  "★ primary": "★ principale",
   "★ primary of {machine}": "★ principale di {machine}"
 }
