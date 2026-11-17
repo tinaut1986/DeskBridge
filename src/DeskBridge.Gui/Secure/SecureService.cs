@@ -71,18 +71,74 @@ public static class SecureService
     /// </summary>
     public static void Install(string exe, Action<string> log)
     {
+        bool installed = IsInstalled();
         StopAndWait();
-        Directory.CreateDirectory(Folder);
-        File.Copy(exe, Exe, overwrite: true);
-        if (!IsInstalled())
+        try
         {
-            Sc($"create {Name} binPath= \"\\\"{Exe}\\\" --service\" start= auto DisplayName= \"DeskBridge Helper\"", log);
-            Sc($"description {Name} \"Lets DeskBridge show and use the lock screen and administrator prompts of this PC from the coordinator.\"", log);
-            // Started again by Windows if it ever stops on its own.
-            Sc($"failure {Name} reset= 60 actions= restart/5000/restart/5000/restart/30000", log);
+            Directory.CreateDirectory(Folder);
+            CopyWhenFree(exe);
+            if (!installed)
+            {
+                Sc($"create {Name} binPath= \"\\\"{Exe}\\\" --service\" start= auto DisplayName= \"DeskBridge Helper\"", log);
+                Sc($"description {Name} \"Lets DeskBridge show and use the lock screen and administrator prompts of this PC from the coordinator.\"", log);
+                // Started again by Windows if it ever stops on its own.
+                Sc($"failure {Name} reset= 60 actions= restart/5000/restart/5000/restart/30000", log);
+            }
+            log($"[secure] service installed ({Exe})");
         }
-        Sc($"start {Name}", log);
-        log($"[secure] service installed ({Exe})");
+        finally
+        {
+            // Whatever happened to the copy, a service that was there runs again (with its older copy if the new one
+            // could not go in): stopped, the lock screen and administrator prompts could not be used from the
+            // coordinator at all.
+            if (installed || IsInstalled())
+                Sc($"start {Name}", log);
+        }
+    }
+
+    /// <summary>
+    /// Copies <paramref name="exe"/> over the service's copy, waiting for whatever still holds it (the helper
+    /// it started can take a few seconds to go after the service stops); one still there after that is closed.
+    /// </summary>
+    private static void CopyWhenFree(string exe)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Copy(exe, Exe, overwrite: true);
+                return;
+            }
+            catch (IOException) when (attempt < 10)
+            {
+                if (attempt == 5)
+                    CloseHelpers();
+                Thread.Sleep(1000);
+            }
+        }
+    }
+
+    /// <summary>The DeskBridge processes running the service's copy (its helper, once the service is stopped).</summary>
+    private static void CloseHelpers()
+    {
+        foreach (var helper in Process.GetProcessesByName("DeskBridge"))
+        {
+            try
+            {
+                if (string.Equals(helper.MainModule?.FileName, Exe, StringComparison.OrdinalIgnoreCase))
+                {
+                    helper.Kill();
+                    helper.WaitForExit(3000);
+                }
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+            }
+            finally
+            {
+                helper.Dispose();
+            }
+        }
     }
 
     /// <summary>Stops and removes the service and its copy of DeskBridge (administrator rights).</summary>
