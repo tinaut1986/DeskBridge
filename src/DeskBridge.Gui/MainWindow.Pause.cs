@@ -16,7 +16,8 @@ namespace DeskBridge.Gui;
 /// <item>Independent machines (any PC): this PC stops talking to the others, and each one works on its own.</item>
 /// <item>A coordinator that goes away (switched off, restarted, off the network): after a short wait, the
 /// machine lets go of its part of the profile, so no virtual display is left that nobody shows. On the
-/// coordinator, a machine that goes away stops being shown at once.</item>
+/// coordinator, a machine that goes away stops being shown at once, and the virtual displays it showed go after
+/// the same wait.</item>
 /// </list>
 /// </summary>
 public partial class MainWindow
@@ -31,6 +32,43 @@ public partial class MainWindow
     {
         DropStreamsOfGoneMachines();
         WatchCoordinator();
+        RefreshVirtualDisplaysForPresence();
+    }
+
+    private CancellationTokenSource? _virtualDisplaysGone;
+
+    /// <summary>
+    /// On the coordinator: a virtual display here for a machine that connects is put in place at once; one for a
+    /// machine that went away goes after a short wait (it may be back at once), so the cursor and windows do not
+    /// get lost on a display nobody shows.
+    /// </summary>
+    private void RefreshVirtualDisplaysForPresence()
+    {
+        if (_agent is not { } agent || !IsCoordinatorHere())
+            return;
+        _ = RefreshAsync(removing: false);
+        _virtualDisplaysGone?.Cancel();
+        var gone = _virtualDisplaysGone = new CancellationTokenSource();
+        _ = Task.Delay(CoordinatorGrace, gone.Token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled)
+                Dispatcher.InvokeAsync(() => RefreshAsync(removing: true));
+        }, TaskScheduler.Default);
+
+        async Task RefreshAsync(bool removing)
+        {
+            try
+            {
+                if (_agent == agent && await agent.RefreshVirtualDisplaysAsync(removing))
+                    AddLog(removing
+                        ? "[virtual displays] a machine is not connected any more: its virtual displays here are taken off"
+                        : "[virtual displays] a machine connected: its virtual displays here are in place again");
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                AddLog($"[virtual displays] {ex.Message}");
+            }
+        }
     }
 
     /// <summary>Another machine is connected to this one right now (the borders and the rest only mean something then).</summary>
@@ -104,18 +142,23 @@ public partial class MainWindow
                 Platform.Windows.WindowsDisplayDetector.DetectAll().Count > Platform.Windows.WindowsDisplayDetector.DetectDetailed().Count);
             if (!virtualHere)
                 return;
+            PrimaryOffVirtual();
             await agent.ReleaseAsync(L.T("{address} cannot be reached: this PC works on its own (without virtual displays) until it connects.",
                 ("address", reverse.Target)), evenIfNothingApplied: true);
-            RestorePrimary();
             UpdateAgentStatus();
         }), TaskScheduler.Default);
     }
 
-    /// <summary>This PC leaves its part of the profile: no streams, no virtual displays, its own primary display.</summary>
-    private async Task ReleaseHereAsync(string reason)
+    /// <summary>
+    /// This PC leaves its part of the profile: no streams, no virtual displays, its own primary display (given back
+    /// before the virtual displays go: Windows does not take its primary display off the desktop).
+    /// </summary>
+    /// <param name="always">Also virtual displays left over from before this agent started (independent machines).</param>
+    private async Task ReleaseHereAsync(string reason, bool always = false)
     {
+        PrimaryOffVirtual();
         if (_agent is { } agent)
-            await agent.ReleaseAsync(reason);
+            await agent.ReleaseAsync(reason, evenIfNothingApplied: always);
         await StopVideoStreamsAsync();
         _lentDisplays.Clear();
         _mirroredDisplays.Clear();
@@ -205,7 +248,7 @@ public partial class MainWindow
                 }
             }
             SaveUserSettings(_settings with { Independent = true });
-            await ReleaseHereAsync(L.T("Independent machines: this PC no longer connects to the others."));
+            await ReleaseHereAsync(L.T("Independent machines: this PC no longer connects to the others."), always: true);
             await RestartAgentAsync(CurrentLocalSettings(showErrors: false)); // stops it, and does not start it again
             _vm.Status = L.T("Independent machines: this PC no longer connects to the others.");
         }

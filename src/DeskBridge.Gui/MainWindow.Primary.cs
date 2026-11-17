@@ -53,12 +53,44 @@ public partial class MainWindow
     /// <summary>
     /// Before a profile is applied here (agent thread): a machine that places virtual displays goes back to its
     /// original arrangement first, so they are placed where the plan says (its coordinates are the original ones).
+    /// A virtual display that is the primary one gives that back first too, whatever the plan: it may be about to
+    /// go away, and Windows does not take its primary display off the desktop.
     /// </summary>
     private void OnPlanApplyingForPrimary(LayoutPlan plan) => Dispatcher.Invoke(() =>
     {
-        if (_options.SnapshotDir is null && plan.VirtualDisplaysOf(_vm.LocalMachine.Trim()).Any() && OriginalPrimary() is not null)
-            RestorePrimary();
+        if (_options.SnapshotDir is not null)
+            return;
+        if ((plan.VirtualDisplaysOf(_vm.LocalMachine.Trim()).Any() && OriginalPrimary() is not null) || VirtualIsPrimary())
+            PrimaryOffVirtual();
     });
+
+    /// <summary>The primary display is a virtual one (the Virtual Display Driver's).</summary>
+    private static bool VirtualIsPrimary()
+    {
+        string? primary = WindowsDisplayDetector.PrimaryId();
+        return primary is not null && WindowsDisplayDetector.DetectDetailed().All(d => d.Config.Id != primary);
+    }
+
+    /// <summary>
+    /// Before this PC's virtual displays go away (another profile, a pause, independent machines, its coordinator
+    /// gone): the primary display goes back to one of its own. Windows does not take its primary display off the
+    /// desktop, so a virtual one that is primary would stay, with the taskbar, new windows and the cursor on a
+    /// display that nobody shows any more. The original primary display, or the nearest physical one to (0,0).
+    /// </summary>
+    private void PrimaryOffVirtual()
+    {
+        RestorePrimary();
+        if (!VirtualIsPrimary())
+            return;
+        var nearest = WindowsDisplayDetector.DetectDetailed()
+            .OrderBy(d => (long)d.Config.X * d.Config.X + (long)d.Config.Y * d.Config.Y)
+            .FirstOrDefault();
+        if (nearest is null)
+            return;
+        AddLog($"[displays] the primary display is a virtual one: display {nearest.Config.Id} takes over before virtual displays go");
+        if (WindowsDisplayDetector.MakePrimary(nearest.Config.Id, AddLog))
+            ForgetOriginalPrimary();
+    }
 
     /// <summary>After a profile is applied here (agent thread): the primary display it needs, before its streams start.</summary>
     private void OnPlanAppliedForPrimary(LayoutPlan plan) => Dispatcher.Invoke(() =>

@@ -77,6 +77,12 @@
   equipo puede elegir la suya por perfil (en el portátil, incluso su pantalla virtual). Cambiar la principal
   mueve el origen de Windows: las disposiciones guardan las coordenadas de la colocación original y
   `DeskOffset` convierte (entrada, vídeo, *Detectar*). La original se guarda en un fichero y se devuelve al cerrar.
+  Antes de quitar pantallas virtuales (otro perfil, pausa, equipos independientes, coordinador perdido), la
+  principal vuelve a una pantalla física: Windows no quita del escritorio su pantalla principal, y una virtual
+  que lo fuera se quedaba encendida y principal, sin que nadie la mostrara.
+- **Pantallas virtuales según quién está conectado**: el coordinador solo crea las pantallas virtuales de las
+  máquinas conectadas (`PlanApplier.IsConnected`). Las de una máquina que se conecta se ponen al momento; las
+  de una que se va se quitan a los 10 s, por si vuelve enseguida.
 - **Escritorio seguro** (pantalla de bloqueo, avisos de UAC), opcional: un programa normal no puede capturarlo
   ni escribir en él. El servicio `DeskBridgeHelper` (SYSTEM) mantiene un ayudante (`--secure-helper`) en la
   sesión de la consola, con su token; el ayudante sigue el escritorio de entrada (`OpenInputDesktop`,
