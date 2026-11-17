@@ -164,9 +164,36 @@ public partial class MainWindow
         if (EffectivePrimary(profile, machine, coordinator) == id)
             marks.Add(machine);
         if (shows != machine && machine == coordinator
-            && profile.PrimaryDisplays.GetValueOrDefault(shows.Id.Trim()) == ProfileConfig.ShowsPrefix + id)
+            && (profile.PrimaryDisplays.GetValueOrDefault(shows.Id.Trim()) == ProfileConfig.ShowsPrefix + id
+                || GivesWayHere(profile, shows, coordinator, id)))
             marks.Add(shows);
         return marks;
+    }
+
+    /// <summary>
+    /// Nothing chosen for <paramref name="other"/>, and its own primary display shows another machine: it gives way
+    /// to its virtual display (see OnPlanAppliedForPrimary), the one shown on the coordinator's first display that
+    /// shows it, <paramref name="display"/> here.
+    /// </summary>
+    private static bool GivesWayHere(ProfileVm profile, MachineVm other, MachineVm coordinator, string display)
+    {
+        if (profile.PrimaryDisplays.ContainsKey(other.Id.Trim()) || OwnPrimaryLent(profile, other) is null)
+            return false;
+        var first = profile.Assignments
+            .Where(a => a.Owner == coordinator && a.UsedBy == other)
+            .Select(a => a.Display.Id.Trim())
+            .FirstOrDefault();
+        return first == display;
+    }
+
+    /// <summary>Its own primary display (the one at 0,0) when the profile lends it to another machine; otherwise null.</summary>
+    private static string? OwnPrimaryLent(ProfileVm profile, MachineVm machine)
+    {
+        var own = machine.Displays.FirstOrDefault(d => d.X == 0 && d.Y == 0) ?? machine.Displays.FirstOrDefault();
+        if (own is null)
+            return null;
+        bool lent = profile.Assignments.Any(a => a.Owner == machine && a.Display == own && a.UsedBy != machine);
+        return lent ? own.Id.Trim() : null;
     }
 
     /// <summary>The display id that is (or will be) primary on that machine with this profile, among its own.</summary>
@@ -181,7 +208,14 @@ public partial class MainWindow
         if (chosen is not null && chosen.StartsWith(ProfileConfig.ShowsPrefix, StringComparison.Ordinal))
             return null; // its virtual display, marked on the coordinator's display that shows it
         if (machine != coordinator)
-            return chosen is not null && own.Any(d => d.Id == chosen) ? chosen : original;
+        {
+            if (chosen is not null && own.Any(d => d.Id == chosen))
+                return chosen;
+            // Its primary shows another machine: it gives way to its virtual display (marked where that is shown).
+            return OwnPrimaryLent(profile, machine) is not null && profile.Assignments.Any(a => a.Owner == coordinator && a.UsedBy == machine)
+                ? null
+                : original;
+        }
         var lent = profile.Assignments.Where(a => a.Owner == coordinator && a.UsedBy != coordinator).Select(a => a.Display.Id.Trim()).ToHashSet();
         return PrimaryChoice.Decide(own.ToDictionary(d => d.Id, d => d.Rect), original, lent, chosen);
     }
