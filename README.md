@@ -118,10 +118,12 @@ keyboard and mouse, sound, microphone, clipboard, files, remote updates, lock sc
 
 Video is only sent when the screen changes: a still screen costs almost no network or GPU.
 
-**Android** (tablet or phone as one more computer): phase 1 is done, the protocol in Kotlin and an app that joins
-the computers; showing screens comes next. See [docs/android.md](docs/android.md).
+**Android** (tablet or phone as one more computer): it joins the computers by scanning a QR the coordinator
+shows (Connection and security, *QR for a phone*), and shows one of the coordinator's screens full screen, as one
+more monitor (mode 1). Touch back to the coordinator and the tablet's own screen driven from the desktop come
+next. See [docs/android.md](docs/android.md).
 
-Next, in order: full-resolution colour (4:4:4) for coloured text; camera; the Android modes. See the
+Next, in order: the rest of the Android modes; full-resolution colour (4:4:4) for coloured text; camera. See the
 [roadmap](docs/arquitectura.md#hoja-de-ruta).
 
 ## Build and test
