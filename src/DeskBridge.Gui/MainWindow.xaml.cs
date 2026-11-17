@@ -76,6 +76,7 @@ public partial class MainWindow : Window
         ThemeManager.Changed += ScheduleRedraw;
         InitTray();
         UpdateChannelMenu();
+        RegisterEmergencyHotkey();
 
         _updater = new Updater(WantsBetas, () => L.Current, () => this, beforeInstall: () => _quitting = true);
         if (options.SnapshotDir is null)
