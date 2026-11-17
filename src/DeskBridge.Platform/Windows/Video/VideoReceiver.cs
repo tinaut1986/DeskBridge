@@ -114,6 +114,11 @@ public sealed class VideoReceiver : IAsyncDisposable
                         _log($"[video] {_channel.RemoteMachine}: {_format?.Width}x{_format?.Height}@{_format?.Fps}, {_format?.Gpu}, {_format?.Encoder}");
                         decoder?.Dispose();
                         decoder = new H264Decoder(video);
+                        // A new format is a new source: the other machine's secure desktop helper (another process,
+                        // another clock) taking over while a UAC prompt or the lock screen is up, or the sender back
+                        // after it. Measured against the old source's frames, its frames all looked late and none was
+                        // shown: the prompt never appeared on a lent display.
+                        lateFrames = new LateFrames(TimeSpan.FromTicks(LateTicks));
                         break;
 
                     case VideoPacket.Pointer:
