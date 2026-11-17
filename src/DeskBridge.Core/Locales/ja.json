@@ -28,6 +28,7 @@
   "Asking {machine} for its displays...": "{machine} にディスプレイを問い合わせています...",
   "Authentication failed: is the shared key the same on both machines?": "認証に失敗しました。両方のマシンで共有キーが同じか確認してください。",
   "Auto": "自動",
+  "Automatic colour": "自動の色",
   "Below": "下",
   "Beta": "ベータ",
   "Bitrate (Mbps)": "ビットレート (Mbps)",
@@ -42,6 +43,7 @@
   "Clipboard not shared: the text is too long.": "クリップボードを共有できません：テキストが長すぎます。",
   "Close": "閉じる",
   "Collect diagnostics from all machines": "すべてのマシンの診断情報を収集",
+  "Colour of {machine}": "{machine} の色",
   "Communication error with {host}: {error}": "{host} との通信エラー：{error}",
   "Connect to": "接続先",
   "Connected to {machine} at {host}.": "{host} の {machine} に接続しました。",
@@ -332,6 +334,5 @@
   "{where}: resolution '{value}' is not like 1920x1080.": "{where}：解像度「{value}」は 1920x1080 の形式ではありません。",
   "{where}: set both width and height, or neither.": "{where}：幅と高さは両方指定するか、両方とも指定しないでください。",
   "{where}: width must be between {min} and {max}.": "{where}：幅は {min} から {max} の間にしてください。",
-  "★ primary": "★ メイン",
   "★ primary of {machine}": "★ {machine} のメイン"
 }

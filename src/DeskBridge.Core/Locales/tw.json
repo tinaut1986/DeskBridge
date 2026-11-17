@@ -28,6 +28,7 @@
   "Asking {machine} for its displays...": "正在向 {machine} 取得螢幕資訊...",
   "Authentication failed: is the shared key the same on both machines?": "驗證失敗：兩台電腦上的共用金鑰是否相同？",
   "Auto": "自動",
+  "Automatic colour": "自動顏色",
   "Below": "下方",
   "Beta": "測試版",
   "Bitrate (Mbps)": "位元率 (Mbps)",
@@ -42,6 +43,7 @@
   "Clipboard not shared: the text is too long.": "剪貼簿未共用：文字太長。",
   "Close": "關閉",
   "Collect diagnostics from all machines": "收集所有電腦的診斷資訊",
+  "Colour of {machine}": "{machine} 的顏色",
   "Communication error with {host}: {error}": "與 {host} 通訊時發生錯誤：{error}",
   "Connect to": "連線到",
   "Connected to {machine} at {host}.": "已連線到 {host} 上的 {machine}。",
@@ -332,6 +334,5 @@
   "{where}: resolution '{value}' is not like 1920x1080.": "{where}：解析度「{value}」的格式不是 1920x1080 這樣。",
   "{where}: set both width and height, or neither.": "{where}：寬度和高度要麼都設定，要麼都不設定。",
   "{where}: width must be between {min} and {max}.": "{where}：寬度必須在 {min} 到 {max} 之間。",
-  "★ primary": "★ 主螢幕",
   "★ primary of {machine}": "★ {machine} 的主螢幕"
 }

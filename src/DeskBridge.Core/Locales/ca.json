@@ -28,6 +28,7 @@
   "Asking {machine} for its displays...": "Demanant a {machine} les seves pantalles...",
   "Authentication failed: is the shared key the same on both machines?": "L'autenticació ha fallat: la clau compartida és la mateixa en tots dos equips?",
   "Auto": "Auto",
+  "Automatic colour": "Color automàtic",
   "Below": "A sota",
   "Beta": "Beta",
   "Bitrate (Mbps)": "Bitrate (Mbps)",
@@ -42,6 +43,7 @@
   "Clipboard not shared: the text is too long.": "Porta-retalls no compartit: el text és massa llarg.",
   "Close": "Tanca",
   "Collect diagnostics from all machines": "Recull el diagnòstic de tots els equips",
+  "Colour of {machine}": "Color de {machine}",
   "Communication error with {host}: {error}": "Error de comunicació amb {host}: {error}",
   "Connect to": "Connecta a",
   "Connected to {machine} at {host}.": "Connectat a {machine} a {host}.",
@@ -332,6 +334,5 @@
   "{where}: resolution '{value}' is not like 1920x1080.": "{where}: la resolució '{value}' no té el format 1920x1080.",
   "{where}: set both width and height, or neither.": "{where}: indica l'amplada i l'alçada, o cap de les dues.",
   "{where}: width must be between {min} and {max}.": "{where}: l'amplada ha d'estar entre {min} i {max}.",
-  "★ primary": "★ principal",
   "★ primary of {machine}": "★ principal de {machine}"
 }

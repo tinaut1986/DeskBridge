@@ -28,6 +28,7 @@
   "Asking {machine} for its displays...": "Запрос дисплеев у {machine}...",
   "Authentication failed: is the shared key the same on both machines?": "Не удалось пройти аутентификацию: одинаков ли общий ключ на обоих компьютерах?",
   "Auto": "Авто",
+  "Automatic colour": "Автоматический цвет",
   "Below": "Снизу",
   "Beta": "Бета",
   "Bitrate (Mbps)": "Битрейт (Mbps)",
@@ -42,6 +43,7 @@
   "Clipboard not shared: the text is too long.": "Буфер обмена не передан: текст слишком длинный.",
   "Close": "Закрыть",
   "Collect diagnostics from all machines": "Собрать диагностику со всех компьютеров",
+  "Colour of {machine}": "Цвет {machine}",
   "Communication error with {host}: {error}": "Ошибка связи с {host}: {error}",
   "Connect to": "Подключаться к",
   "Connected to {machine} at {host}.": "Подключено к {machine} по адресу {host}.",
@@ -332,6 +334,5 @@
   "{where}: resolution '{value}' is not like 1920x1080.": "{where}: разрешение «{value}» не похоже на 1920x1080.",
   "{where}: set both width and height, or neither.": "{where}: укажите и ширину, и высоту, либо ничего.",
   "{where}: width must be between {min} and {max}.": "{where}: ширина должна быть от {min} до {max}.",
-  "★ primary": "★ основной",
   "★ primary of {machine}": "★ основной для {machine}"
 }

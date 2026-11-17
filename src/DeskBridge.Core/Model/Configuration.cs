@@ -29,6 +29,10 @@ public sealed record DisplayConfig(string Id, int Width, int Height, int Refresh
 /// Width chosen for a display on the desk (by display id), e.g. the same as the monitor it sits under so the
 /// edges line up; without one it takes its visual size (its width at Windows' scale). The height follows.
 /// </param>
+/// <param name="Color">
+/// Its colour ("#RRGGBB") on the Layout map and in the border around the displays it shows; none: one of a fixed
+/// set, by its place in the list.
+/// </param>
 public sealed record MachineConfig(
     string Id,
     string Name,
@@ -39,7 +43,8 @@ public sealed record MachineConfig(
     PlacementSide? InputSide = null,
     VirtualPosition? InputPosition = null,
     IReadOnlyDictionary<string, VirtualPosition>? DeskPositions = null,
-    IReadOnlyDictionary<string, int>? DeskWidths = null);
+    IReadOnlyDictionary<string, int>? DeskWidths = null,
+    string? Color = null);
 
 /// <summary>
 /// How a lent display is streamed. Every value is optional: by default the virtual display
