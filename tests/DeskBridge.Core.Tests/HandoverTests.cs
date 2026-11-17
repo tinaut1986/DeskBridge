@@ -156,6 +156,27 @@ public class HandoverTests
     }
 
     [Fact]
+    public void Past_the_right_of_a_shown_display_the_cursor_comes_back_right_not_onto_the_machines_next_display()
+    {
+        // Display 3 (the middle one) shows the laptop's virtual display v1; its v2, right next to v1 on the laptop,
+        // is shown on a tablet placed BELOW display 3 on the desk (relayed through the desktop).
+        var middle = Desktop[1];
+        var v1 = new DisplayRect(2144, -1080, 1920, 1080);
+        var v2 = new DisplayRect(4064, -1080, 2000, 1200);
+        var lent = InputLayout.Lent("laptop-oscar", middle, v1);
+        var tablet = InputLayout.Desk("laptop-oscar", v2, new VirtualPosition(491, 1080), 1332.0 / 2000);
+        var h = new CoordinatorHandover(Desktop, [lent, tablet]);
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(1000, 300));
+        // On the laptop, right of v1 is v2 there, but on the desk it is display 1: back to the desktop...
+        var right = ClientHandover.Move(enter.Area!, enter.Peers, v1.Right - 1, -800, 20, 0, desk: enter.AreaDesk);
+        Assert.True(right.Left);
+        // ...and it lands on display 1 at that height, not next to the tablet below display 3.
+        var back = Assert.IsType<MouseDecision.Here>(h.Back(0.5, right.X, right.Y));
+        Assert.True(back.X >= 1920 && back.Y < 1080, $"landed at {back.X},{back.Y}");
+    }
+
+    [Fact]
     public void A_laptop_display_placed_on_the_desk_is_reached_past_the_edge_and_keeps_the_cursor()
     {
         // The laptop panel dragged under the middle display.
