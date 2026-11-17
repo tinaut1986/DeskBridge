@@ -1,12 +1,13 @@
 # Tablet o móvil Android como un equipo más
 
-Estado: **fase 1 hecha** (protocolo en Kotlin y app que se une a los equipos). Código en `android/`; cómo
-compilarlo, en [desarrollo.md](desarrollo.md#app-de-android-android).
+Estado: **fases 1 a 3 hechas** (protocolo en Kotlin, app que se une a los equipos, el coordinador como emisor
+y el modo 1: la tablet muestra una pantalla del coordinador). Código en `android/`; cómo compilarlo, en
+[desarrollo.md](desarrollo.md#app-de-android-android).
 
-Para probarla: en la app, el id del dispositivo, la dirección del coordinador y la clave compartida, y
-*Conectar*. En el coordinador, añadir un equipo con ese id en *Equipos* y pulsar *Detectar*: sale la pantalla
-de la tablet (resolución, Hz y escala). Aplicar un perfil responde con un aviso: los modos llegan en las fases
-siguientes.
+Para probarla: en el coordinador, *Conexión y seguridad* → *QR para el móvil*, y escanearlo con la cámara de la
+tablet (o con *Escanear QR* en la app): la app se abre con la dirección y la clave rellenas y se conecta. La
+tablet aparece sola en *Equipos*. Para el modo 1, en un perfil, su pantalla muestra al coordinador; la app
+necesita el permiso *Mostrarse sobre otras aplicaciones* (lo pide ella).
 
 Caso típico: el sobremesa (coordinador, con teclado y ratón) y una tablet Android al lado. La tablet entra en la
 Disposición como cualquier otro equipo y cada perfil decide qué hace su pantalla:

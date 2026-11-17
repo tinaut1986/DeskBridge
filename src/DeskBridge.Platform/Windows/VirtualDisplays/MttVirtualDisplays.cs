@@ -23,12 +23,23 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
     /// <summary>Where each planned virtual display ended up (its top-left corner in this PC's desktop), by key.</summary>
     public static ConcurrentDictionary<string, (int X, int Y)> Placed { get; } = new();
 
+    /// <summary>The monitor (a \\.\DISPLAYn name) of each planned virtual display, by key.</summary>
+    private static ConcurrentDictionary<string, string> PlacedDevices { get; } = new();
+
     /// <summary>
     /// Where the planned virtual display <paramref name="key"/> ("machine/vN") is: as placed when the profile was
     /// applied, or else the N-th of the driver's monitors on the desktop (after a restart of the app, for example).
     /// </summary>
     public static (int X, int Y)? Find(string key)
     {
+        // Where its monitor is now: the whole desktop moves when the primary display changes (after the profile
+        // placed it), so the position it was given may be stale.
+        if (PlacedDevices.TryGetValue(key, out var device) && IsAttached(device))
+        {
+            var now = new DevMode { Size = (ushort)Marshal.SizeOf<DevMode>() };
+            if (EnumDisplaySettingsW(device, EnumCurrentSettings, ref now))
+                return (now.PositionX, now.PositionY);
+        }
         if (Placed.TryGetValue(key, out var placed))
             return placed;
         int slash = key.LastIndexOf("/v", StringComparison.Ordinal);
@@ -62,6 +73,7 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
     public async Task SetDisplaysAsync(IReadOnlyList<VirtualDisplaySpec> displays, CancellationToken ct = default)
     {
         Placed.Clear();
+        PlacedDevices.Clear();
         bool installed = await Task.Run(IsInstalled, ct);
         if (!installed && displays.Count > 0 && await Task.Run(RestartStoppedDriver, ct))
         {
@@ -176,6 +188,7 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
             if (EnumDisplaySettingsW(devices[i], EnumCurrentSettings, ref current))
             {
                 Placed[displays[i].Key] = (current.PositionX, current.PositionY);
+                PlacedDevices[displays[i].Key] = devices[i];
                 log($"[virtual displays] {displays[i].Key} = {devices[i]} {current.PelsWidth}x{current.PelsHeight}@{current.DisplayFrequency} at ({current.PositionX},{current.PositionY})");
             }
         }

@@ -24,6 +24,14 @@ public partial class MainWindow
     private static IReadOnlyList<DisplayRect> LocalDisplays() =>
         PlatformServices.DisplayDetector().DetectDisplays().Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList();
 
+    /// <summary>
+    /// The coordinator's desktop for keyboard and mouse sharing: its own virtual displays too (those another machine
+    /// shows, e.g. the tablet under the monitors). Without them, the cursor coming back from a machine shown on a
+    /// display above one of them found nothing there and stayed stuck at that machine's edge.
+    /// </summary>
+    private static IReadOnlyList<DisplayRect> CoordinatorDisplays() =>
+        Platform.Windows.WindowsDisplayDetector.DetectAll().Select(d => new DisplayRect(d.X, d.Y, d.Width, d.Height)).ToList();
+
     private ControlSession? SessionOf(string machine) => _agent?.Directory.Find(machine);
 
     /// <summary>Connected machines that can get the cursor, with where their displays are around this PC's.</summary>
@@ -104,7 +112,7 @@ public partial class MainWindow
         {
             try
             {
-                var local = LocalDisplays();
+                var local = CoordinatorDisplays();
                 _share = new KeyboardMouseShare(local, InputTargets(local), SessionOf, AddLog,
                     machine => Dispatcher.BeginInvoke(() =>
                     {
@@ -132,7 +140,7 @@ public partial class MainWindow
 
     private void RefreshInputTargets()
     {
-        var local = LocalDisplays();
+        var local = CoordinatorDisplays();
         _share?.Update(local, InputTargets(local));
     }
 

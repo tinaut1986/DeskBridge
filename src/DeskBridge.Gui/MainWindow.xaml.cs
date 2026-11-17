@@ -606,6 +606,20 @@ public partial class MainWindow : Window
     {
         if (ParseColor(machine.Color) is { } chosen)
             return chosen;
+        // Without a colour of its own: the first one, in the list's order, that no other machine has (chosen by
+        // hand, or given to a machine before it), so two machines never share one while there are colours left.
+        var taken = _vm.Model.Machines.Select(m => ParseColor(m.Color)).OfType<Color>().ToHashSet();
+        foreach (var other in _vm.Model.Machines)
+        {
+            if (ParseColor(other.Color) is not null)
+                continue;
+            var free = ChoosableColors.Where(c => !taken.Contains(c)).Cast<Color?>().FirstOrDefault();
+            if (free is not { } color)
+                break; // more machines than colours: by place, as before
+            if (other == machine)
+                return color;
+            taken.Add(color);
+        }
         int index = _vm.Model.Machines.IndexOf(machine);
         return MachineColors[Math.Max(index, 0) % MachineColors.Length];
     }

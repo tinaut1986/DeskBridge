@@ -17,5 +17,13 @@
     <string name="log_connected">Connected to %1$s at %2$s.</string>
     <string name="log_lost">Lost the connection to %1$s; reconnecting.</string>
     <string name="log_profile">Profile \'%1$s\' received.</string>
-    <string name="warning_profiles_pending">Android does not show or lend screens yet: this version only joins the machines.</string>
+    <string name="warning_profiles_pending">This Android version only shows the coordinator\'s screens: having it use its own screen with the coordinator\'s keyboard and mouse comes later.</string>
+    <string name="error_cannot_send">This Android device cannot send its screen yet.</string>
+    <string name="error_overlay">To show the coordinator\'s screen, allow DeskBridge to display over other apps on this device (open the app there).</string>
+    <string name="overlay_needed">To show the coordinator\'s screens, DeskBridge needs to display over other apps.</string>
+    <string name="overlay_allow">Allow</string>
+    <string name="scan_qr">Scan QR</string>
+    <string name="qr_loaded">Coordinator details loaded from the QR: connecting.</string>
+    <string name="qr_invalid">This QR is not a DeskBridge one: on the coordinator, Connection and security, QR for a phone.</string>
+    <string name="qr_failed">Could not scan: %1$s</string>
 </resources>
