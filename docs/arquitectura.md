@@ -123,4 +123,5 @@ Pendiente:
 1. **Fase 4**: una pantalla del sobremesa mostrada en el portátil (el sentido contrario).
 2. **Color 4:4:4** para el texto de colores (HEVC/H.264 4:4:4 donde la GPU lo permita).
 3. **Cámara**: ver [microfono-camara.md](microfono-camara.md).
-4. Linux / Avalonia: en pausa.
+4. **Android**: tablet o móvil como pantalla extra o como equipo controlado; ver [android.md](android.md).
+5. Linux / Avalonia: en pausa.
