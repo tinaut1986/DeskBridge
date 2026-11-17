@@ -28,4 +28,6 @@ android {
 
 dependencies {
     implementation(project(":protocol"))
+    // Google's QR scanner (Play services): no camera permission, the scanning screen is Google's.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }

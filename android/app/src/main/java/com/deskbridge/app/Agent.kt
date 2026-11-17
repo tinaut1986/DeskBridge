@@ -23,6 +23,8 @@ import com.deskbridge.protocol.GetDisplaysMessage
 import com.deskbridge.protocol.OkMessage
 import com.deskbridge.protocol.PingMessage
 import com.deskbridge.protocol.ProtocolJson
+import com.deskbridge.protocol.StartVideoMessage
+import com.deskbridge.protocol.StopVideoMessage
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -98,6 +100,7 @@ class Agent(private val context: Context, private val settings: Settings) {
 
     fun stop() {
         stopped = true
+        VideoStreams.stop()
         session?.close()
         synchronized(wake) { wake.notifyAll() }
         thread?.interrupt()
@@ -131,6 +134,7 @@ class Agent(private val context: Context, private val settings: Settings) {
                 keepAlive(s)
                 s.close()
                 session = null
+                VideoStreams.stop() // the coordinator's screens go with it (asked for again when it is back)
                 if (!stopped) AgentState.log(context.getString(R.string.log_lost, s.remoteMachine))
             } catch (e: ControlException) {
                 if (e.message != lastError) {
@@ -184,11 +188,57 @@ class Agent(private val context: Context, private val settings: Settings) {
             else {
                 settings.config = request.config.toString()
                 AgentState.log(context.getString(R.string.log_profile, request.profile))
-                // Nothing to set up here yet: the modes (extra display, own screen) come in later phases.
-                AppliedMessage(settings.machine, request.profile, listOf(context.getString(R.string.warning_profiles_pending)))
+                // Mode 1 (this screen shows one of the coordinator's) needs nothing here: the coordinator asks for
+                // the stream. The other modes come in later phases.
+                val warnings = if (showsCoordinator(request.config, request.profile, from)) emptyList()
+                    else listOf(context.getString(R.string.warning_profiles_pending))
+                AppliedMessage(settings.machine, request.profile, warnings)
             }
         }
+        is StartVideoMessage -> startVideo(from, request)
+        is StopVideoMessage -> {
+            VideoStreams.stop(request.key)
+            OkMessage
+        }
         else -> ErrorMessage("This Android device does not handle ${request::class.simpleName} yet.")
+    }
+
+    /**
+     * The coordinator asks this device to show one of its screens (mode 1): the video connection is opened from
+     * here (like every connection of this device), then shown full screen. Sending this device's screen is not
+     * possible yet.
+     */
+    private fun startVideo(from: String, start: StartVideoMessage): ControlMessage {
+        if (start.send) return ErrorMessage(context.getString(R.string.error_cannot_send))
+        // Android only lets an app in the background open a screen with "Display over other apps".
+        if (!android.provider.Settings.canDrawOverlays(context)) {
+            AgentState.log(context.getString(R.string.error_overlay))
+            return ErrorMessage(context.getString(R.string.error_overlay))
+        }
+        val (host, port) = ControlClient.parseAddress(settings.connectTo)
+        return try {
+            val channel = ControlClient.openVideo(host, port, settings.machine, ControlAuth.decodeKey(settings.sharedKey), start.key, from)
+            VideoStreams.add(VideoStream(start.key, from, channel, AgentState::log))
+            VideoActivity.start(context, start.key)
+            OkMessage
+        } catch (e: ControlException) {
+            ErrorMessage(e.message ?: e.toString())
+        }
+    }
+
+    /** In [profile], a display of this device shows a screen of [coordinator]. */
+    private fun showsCoordinator(config: JsonElement, profile: String, coordinator: String): Boolean = try {
+        config.jsonObject["profiles"]?.jsonArray
+            ?.map { it.jsonObject }
+            ?.firstOrNull { (it["name"] as? JsonPrimitive)?.content == profile }
+            ?.get("assignments")?.jsonArray
+            ?.map { it.jsonObject }
+            ?.any {
+                (it["machine"] as? JsonPrimitive)?.content == settings.machine
+                    && (it["usedBy"] as? JsonPrimitive)?.content == coordinator
+            } == true
+    } catch (e: IllegalArgumentException) {
+        false
     }
 
     /** The machine with HasInput in a configuration. */

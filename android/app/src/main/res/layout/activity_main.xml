@@ -23,6 +23,13 @@
             android:layout_marginBottom="16dp"
             android:text="@string/intro" />
 
+        <Button
+            android:id="@+id/scan"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/scan_qr" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -62,6 +69,28 @@
             android:layout_height="wrap_content"
             android:importantForAutofill="no"
             android:inputType="textPassword" />
+
+        <LinearLayout
+            android:id="@+id/overlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/overlay_needed" />
+
+            <Button
+                android:id="@+id/overlay_allow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/overlay_allow" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/toggle"
