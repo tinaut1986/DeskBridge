@@ -94,6 +94,12 @@ public sealed class CoordinatorHandover
         return holes.Count > 0 ? holes : null;
     }
 
+    /// <summary>
+    /// The machine that keeps buttons held for a drag (the cursor came back here mid-drag): over the whole picture
+    /// of this PC it shows, the cursor goes back to it (<see cref="InputTarget.WhileDragging"/>).
+    /// </summary>
+    public string? DragHeldOn { get; set; }
+
     /// <summary>The point is on a display of this PC that shows another machine (not on one of its windows seen here).</summary>
     public bool IsOverLent(int x, int y) =>
         _targets.Any(t => t.Lent is { } l && !t.Island && x >= l.X && x < l.Right && y >= l.Y && y < l.Bottom);
@@ -115,7 +121,8 @@ public sealed class CoordinatorHandover
         // A display that shows another machine's screen: that machine gets the cursor at the same spot.
         foreach (var target in _targets)
         {
-            if (target.Lent is not { } lent || !(x >= lent.X && x < lent.Right && y >= lent.Y && y < lent.Bottom))
+            if (target.Lent is not { } lent || !(x >= lent.X && x < lent.Right && y >= lent.Y && y < lent.Bottom)
+                || (target.WhileDragging && DragHeldOn != target.Machine))
                 continue;
             var shown = target.Displays[0];
             var (ex, ey) = EdgeGeometry.ClampToDisplays(target.Displays, target.ToClient(x, y).X, target.ToClient(x, y).Y);
@@ -123,6 +130,14 @@ public sealed class CoordinatorHandover
             (_parkX, _parkY) = (lent.X + lent.Width / 2, lent.Y + lent.Height / 2);
             _remote = target;
             RemoteSide = PlacementSide.Right;
+            if (target.WhileDragging)
+            {
+                // Onto that machine's display that shows this one, the dragged window with it. Only that display: past
+                // its edges the cursor comes back here (and on to that machine's display shown here, as usual), and
+                // once let go, off its windows too.
+                return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY,
+                    [shown], 1 / target.ScaleX, 1 / target.ScaleY, null, [lent]);
+            }
             return new MouseDecision.Enter(target.Machine, ex, ey, PeersOf(target), PlacementSide.Right, 0.5, _parkX, _parkY,
                 AreaOf(target.Machine) ?? [shown], 1 / target.ScaleX, 1 / target.ScaleY, HolesOf(target.Machine),
                 AreaDeskOf(target.Machine));
@@ -202,7 +217,7 @@ public sealed class CoordinatorHandover
     }
 
     private IEnumerable<(DisplayRect Display, DisplayRect Desk)> AreaPairs(string machine) =>
-        _targets.Where(t => t.Machine == machine && (t.Confine || t.Lent is not null))
+        _targets.Where(t => t.Machine == machine && (t.Confine || t.Lent is not null) && !t.WhileDragging)
             .SelectMany(t => t.Displays.Select(d => (Display: d, Desk: t.Lent ?? t.ToDesk(d))))
             .DistinctBy(p => p.Display);
 
@@ -224,7 +239,10 @@ public sealed class CoordinatorHandover
 
         // Left one of that machine's windows over this PC's picture there (an island): back onto that picture, mapped
         // through it (the whole display over there shows it, at its scale), when the point is still on it.
-        var island = _targets.FirstOrDefault(t => t.Island && t.Machine == remote.Machine && t.Lent is { } l
+        // On that machine's display that shows this PC (it knows where it draws the picture): through that picture.
+        var island = _targets.FirstOrDefault(t => t.WhileDragging && t.Machine == remote.Machine
+                                                  && InputLayout.Contains(t.Displays, rx, ry))
+                     ?? _targets.FirstOrDefault(t => t.Island && t.Machine == remote.Machine && t.Lent is { } l
             && _displays.Any(d => d.X <= l.X && d.Y <= l.Y && d.Right >= l.Right && d.Bottom >= l.Bottom
                                   && Inside(d, t.ToDesk(rx, ry))));
         // Mapped back through the display of that machine it left from (each has its own place and scale here).
