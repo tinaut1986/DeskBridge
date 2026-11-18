@@ -42,12 +42,16 @@ public partial class MainWindow
             if (VideoWindow.CoveredOn(x, y) is not { } covered)
                 continue;
             // In this PC's original arrangement, as the coordinator's layout has its displays.
+            // Not slivers (a line a window leaves at the top of the panel): nothing to use there.
             var parts = covered.Parts
+                .Where(p => p.Here.W >= 8 && p.Here.H >= 8)
                 .Select(p => new CoveredPart(
                     new DisplayRect(p.Here.X - ox, p.Here.Y - oy, p.Here.W, p.Here.H),
                     new DisplayRect(p.Picture.X, p.Picture.Y, p.Picture.W, p.Picture.H)))
                 .ToList();
-            var message = new WindowsOverVideoMessage(stream, covered.PictureWidth, covered.PictureHeight, parts);
+            var d = covered.Drawn;
+            var message = new WindowsOverVideoMessage(stream, covered.PictureWidth, covered.PictureHeight, parts,
+                new DisplayRect(d.X - ox, d.Y - oy, d.W, d.H));
             string text = JsonSerializer.Serialize(message, ConfigLoader.JsonOptions);
             if (_coveredSent.TryGetValue(stream, out var sent) && sent == text)
                 continue;
@@ -84,7 +88,7 @@ public partial class MainWindow
     private void OnWindowsOverVideo(string from, WindowsOverVideoMessage message)
     {
         int before = _islands.TryGetValue((from, message.Stream), out var old) ? old.Parts.Count : 0;
-        if (message.Parts.Count == 0)
+        if (message.Parts.Count == 0 && message.Shown is null)
             _islands.TryRemove((from, message.Stream), out _);
         else
             _islands[(from, message.Stream)] = message;
@@ -120,6 +124,10 @@ public partial class MainWindow
                 if (part.Here.Width > 0 && part.Here.Height > 0)
                     result.Add(InputLayout.Lent(machine, onThisPc, part.Here, island: true));
             }
+            // While a window of it is dragged: the whole picture, so the window can be dragged onto that display.
+            if (covered.Shown is { Width: > 0, Height: > 0 } shown)
+                result.Add(InputLayout.Lent(machine, new DisplayRect(at.X, at.Y, display.Width, display.Height), shown,
+                    whileDragging: true));
         }
         return result;
     }

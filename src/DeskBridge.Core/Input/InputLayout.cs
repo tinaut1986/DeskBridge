@@ -18,12 +18,16 @@ namespace DeskBridge.Core.Input;
 /// (a 2880-pixel panel at 200% takes 1440 on the desk, like its visual size), or for a bigger picture shown on a
 /// smaller display here. Coordinate on the desk = coordinate there × scale + offset.
 /// </param>
+/// <param name="WhileDragging">
+/// An island that only counts while a drag of that machine is held (the cursor came back here mid-drag): the whole
+/// picture of this PC that machine shows, so a window of it can be dragged onto that display.
+/// </param>
 public sealed record InputTarget(string Machine, IReadOnlyList<DisplayRect> Displays, int OffsetX, int OffsetY, DisplayRect? Lent = null,
-    bool Confine = false, double ScaleX = 1, double ScaleY = 1, bool Island = false)
+    bool Confine = false, double ScaleX = 1, double ScaleY = 1, bool Island = false, bool WhileDragging = false)
 {
     /// <summary>The same target after a refresh (lists are rebuilt, so records do not compare equal).</summary>
     public bool SameAs(InputTarget other) =>
-        Machine == other.Machine && Lent == other.Lent && Confine == other.Confine && Island == other.Island && OffsetX == other.OffsetX
+        Machine == other.Machine && Lent == other.Lent && Confine == other.Confine && Island == other.Island && WhileDragging == other.WhileDragging && OffsetX == other.OffsetX
         && OffsetY == other.OffsetY && ScaleX == other.ScaleX && ScaleY == other.ScaleY && Displays.SequenceEqual(other.Displays);
 
     /// <summary>A point of that machine on the coordinator's desk.</summary>
@@ -130,12 +134,13 @@ public static class InputLayout
     /// Not a display showing that machine but one of its windows seen here over a display of this PC (on that
     /// machine's own display that shows this PC): the cursor goes to it there, and comes back past its edges.
     /// </param>
-    public static InputTarget Lent(string machine, DisplayRect lent, DisplayRect shown, bool island = false)
+    /// <param name="whileDragging">An island over the whole picture that only counts while a drag of that machine is held.</param>
+    public static InputTarget Lent(string machine, DisplayRect lent, DisplayRect shown, bool island = false, bool whileDragging = false)
     {
         // The picture fills the display here (scaled as needed): the same proportions both ways.
         double sx = (double)lent.Width / shown.Width, sy = (double)lent.Height / shown.Height;
         return new(machine, [shown], lent.X - (int)Math.Round(shown.X * sx), lent.Y - (int)Math.Round(shown.Y * sy), lent,
-            ScaleX: sx, ScaleY: sy, Island: island);
+            ScaleX: sx, ScaleY: sy, Island: island || whileDragging, WhileDragging: whileDragging);
     }
 
     /// <summary>

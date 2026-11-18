@@ -204,10 +204,11 @@ public sealed class VideoWindow : IDisposable
 
     /// <summary>
     /// This PC's windows on top of the video window over the monitor at (<paramref name="monitorX"/>,
-    /// <paramref name="monitorY"/>), each clipped to the picture, with the same part in the picture's own pixels;
-    /// null when there is no such video window or no picture yet.
+    /// <paramref name="monitorY"/>), each clipped to the picture, with the same part in the picture's own pixels,
+    /// and where the picture is drawn on the screen; null when there is no such video window or no picture yet.
     /// </summary>
-    public static (int PictureWidth, int PictureHeight, List<((int X, int Y, int W, int H) Here, (int X, int Y, int W, int H) Picture)> Parts)?
+    public static (int PictureWidth, int PictureHeight, List<((int X, int Y, int W, int H) Here, (int X, int Y, int W, int H) Picture)> Parts,
+        (int X, int Y, int W, int H) Drawn)?
         CoveredOn(int monitorX, int monitorY)
     {
         var (hwnd, window) = Windows.FirstOrDefault(w => w.Value._monitor is { } m && m.X == monitorX && m.Y == monitorY);
@@ -230,7 +231,7 @@ public sealed class VideoWindow : IDisposable
             int pr = (int)Math.Ceiling((right - drawLeft) * (double)picW / dw), pb = (int)Math.Ceiling((bottom - drawTop) * (double)picH / dh);
             parts.Add(((left, top, right - left, bottom - top), (px, py, pr - px, pb - py)));
         }
-        return (picW, picH, parts);
+        return (picW, picH, parts, (drawLeft, drawTop, dw, dh));
     }
 
     /// <summary>Where the video windows are on the screen, with their window handles.</summary>

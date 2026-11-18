@@ -166,6 +166,14 @@ public sealed class InputReceiver(
             return x >= video.X && x < video.Right && y >= video.Y && y < video.Bottom;
         return InputLayout.Contains(_ownWindows, x, y);
     }
+
+    /// <summary>
+    /// The point is on the coordinator's picture here, off this PC's windows, with no button held (a window dragged
+    /// onto this display and let go there, and the cursor moved off it): it belongs to the coordinator. Called
+    /// right after <see cref="StaysOnOwnWindow"/>, which reads where the pictures and windows are.
+    /// </summary>
+    private bool OverPicture(int x, int y) =>
+        _buttons == 0 && InputLayout.Contains(_videoAreas, x, y) && !InputLayout.Contains(_ownWindows, x, y);
     private long? _lastSeq;
     private long _lastReport;
 
@@ -242,7 +250,9 @@ public sealed class InputReceiver(
                             continue;
                         }
                         var move = _peers is { } peers
-                            ? ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes, _areaDesk, dragging: _buttons != 0)
+                            ? OverPicture(_x + mx, _y + my)
+                                ? new ClientMove(_x + mx, _y + my, true, 0.5)
+                                : ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes, _areaDesk, dragging: _buttons != 0)
                             : ClientHandover.Move(_displays, _side, _x, _y, mx, my);
                         if (move.Left)
                         {
