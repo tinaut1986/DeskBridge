@@ -305,7 +305,7 @@ public sealed class AgentHost : IAsyncDisposable
                 IdentifyRequested?.Invoke(identify);
                 return new OkMessage();
 
-            case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage or InputCursorMessage:
+            case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage or InputCursorMessage or WindowsOverVideoMessage:
                 if (InputHandler is { } input)
                     await input(from, request);
                 return new OkMessage();

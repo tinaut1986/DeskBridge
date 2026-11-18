@@ -172,9 +172,11 @@ public partial class MainWindow
         if (_videoReceivers.TryGetValue(start.Key, out var replaced))
             _ = replaced.DisposeAsync().AsTask();
         _videoReceivers[start.Key] = receiver;
+        TrackCoordinatorScreen(start.Key, from, (monitor.X, monitor.Y));
         _ = receiver.Completion.ContinueWith(async _ =>
         {
-            _videoReceivers.TryRemove(new KeyValuePair<string, VideoReceiver>(start.Key, receiver));
+            if (_videoReceivers.TryRemove(new KeyValuePair<string, VideoReceiver>(start.Key, receiver)))
+                TrackCoordinatorScreen(start.Key, from, null);
             await receiver.DisposeAsync();
             await Dispatcher.InvokeAsync(ScheduleRedraw);
         }, TaskScheduler.Default);
@@ -197,7 +199,8 @@ public partial class MainWindow
     {
         if (_rescueTimer is not null)
             return;
-        _rescueTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        // Often enough for the coordinator to follow a window moved or opened over the picture (see ReportWindowsOverVideo).
+        _rescueTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _rescueTimer.Tick += (_, _) =>
         {
             if (_videoReceivers.IsEmpty || IsCoordinatorHere())
@@ -212,6 +215,7 @@ public partial class MainWindow
                 .Select(d => (d.X, d.Y, d.Width, d.Height))
                 .ToList();
             WindowRescue.Run(free, AddLog);
+            ReportWindowsOverVideo();
         };
         _rescueTimer.Start();
     }

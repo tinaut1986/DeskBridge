@@ -3,6 +3,7 @@ using DeskBridge.Core.Input;
 using DeskBridge.Core.Model;
 using DeskBridge.Core.Planning;
 using DeskBridge.Platform.Windows.Input;
+using DeskBridge.Platform.Windows.Video;
 
 namespace DeskBridge.Gui.Sharing;
 
@@ -140,6 +141,31 @@ public sealed class InputReceiver(
     }
 
     private GlobalInputHook? _localWatch;
+
+    private List<DisplayRect> _videoAreas = [], _ownWindows = [];
+    private long _coverRead;
+
+    /// <summary>
+    /// Over a display here that shows the coordinator, this PC's own windows on top of that picture are this PC's
+    /// (the coordinator sent the cursor here over one of them): moving from that display onto one of them stays here,
+    /// even when it moved or another one is next to it; and while a button is held (one being dragged), anywhere on
+    /// that display. Past them, the coordinator's picture: the cursor goes back by the usual rules.
+    /// </summary>
+    private bool StaysOnOwnWindow(int fromX, int fromY, int x, int y)
+    {
+        if (Environment.TickCount64 - _coverRead > 150)
+        {
+            _coverRead = Environment.TickCount64;
+            _videoAreas = VideoWindow.Areas().Select(a => new DisplayRect(a.X, a.Y, a.Width, a.Height)).ToList();
+            _ownWindows = _videoAreas.Count == 0 ? [] : VideoWindow.WindowsAbove().Select(w => new DisplayRect(w.X, w.Y, w.Width, w.Height)).ToList();
+        }
+        var video = _videoAreas.FirstOrDefault(a => fromX >= a.X && fromX < a.Right && fromY >= a.Y && fromY < a.Bottom);
+        if (video.Width == 0)
+            return false;
+        if (_buttons != 0)
+            return x >= video.X && x < video.Right && y >= video.Y && y < video.Bottom;
+        return InputLayout.Contains(_ownWindows, x, y);
+    }
     private long? _lastSeq;
     private long _lastReport;
 
@@ -208,6 +234,13 @@ public sealed class InputReceiver(
                         int mx = (int)Math.Truncate(_restX), my = (int)Math.Truncate(_restY);
                         _restX -= mx;
                         _restY -= my;
+                        if (StaysOnOwnWindow(_x, _y, _x + mx, _y + my))
+                        {
+                            (_x, _y) = (_x + mx, _y + my);
+                            MoveCursor(_x, _y);
+                            ShowPointer();
+                            continue;
+                        }
                         var move = _peers is { } peers
                             ? ClientHandover.Move(_displays, peers, _x, _y, mx, my, _holes, _areaDesk, dragging: _buttons != 0)
                             : ClientHandover.Move(_displays, _side, _x, _y, mx, my);
