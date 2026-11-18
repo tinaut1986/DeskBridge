@@ -42,7 +42,9 @@ public partial class MainWindow
             if (VideoWindow.CoveredOn(x, y) is not { } covered)
                 continue;
             // In this PC's original arrangement, as the coordinator's layout has its displays.
+            // Not slivers (a line a window leaves at the top of the panel): nothing to use there.
             var parts = covered.Parts
+                .Where(p => p.Here.W >= 8 && p.Here.H >= 8)
                 .Select(p => new CoveredPart(
                     new DisplayRect(p.Here.X - ox, p.Here.Y - oy, p.Here.W, p.Here.H),
                     new DisplayRect(p.Picture.X, p.Picture.Y, p.Picture.W, p.Picture.H)))

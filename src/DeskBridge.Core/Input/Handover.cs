@@ -228,8 +228,10 @@ public sealed class CoordinatorHandover
             && _displays.Any(d => d.X <= l.X && d.Y <= l.Y && d.Right >= l.Right && d.Bottom >= l.Bottom
                                   && Inside(d, t.ToDesk(rx, ry))));
         // Mapped back through the display of that machine it left from (each has its own place and scale here).
+        // Never through another of its windows seen here: their scale only holds over them (a sliver of a window
+        // at the top of the laptop panel sent the cursor coming back from a hole far off, a bit further each time).
         var from = island ?? _targets
-            .Where(t => t.Machine == remote.Machine && (t.Confine || t.Lent is not null))
+            .Where(t => t.Machine == remote.Machine && (t.Confine || t.Lent is not null) && (!t.Island || t.SameAs(remote)))
             // Not one the point is inside: that machine sent the cursor back instead of moving it there, so it left
             // from another one (e.g. past the right edge of the display shown on the coordinator's display 3, into
             // the machine's own next virtual display, which is shown on a tablet below display 3 on the desk).
