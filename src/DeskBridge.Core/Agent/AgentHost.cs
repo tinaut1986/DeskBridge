@@ -142,6 +142,9 @@ public sealed class AgentHost : IAsyncDisposable
 
     public event Action<DeskBridgeConfig>? ConfigReceived;
 
+    /// <summary>The coordinator asks to show on each display which one it is (any thread).</summary>
+    public event Action<IdentifyDisplaysMessage>? IdentifyRequested;
+
     /// <summary>Takes a clipboard from another machine; false (or unset) refuses it.</summary>
     public Func<string, ClipboardMessage, Task<bool>>? ClipboardHandler { get; set; }
 
@@ -272,6 +275,12 @@ public sealed class AgentHost : IAsyncDisposable
 
             case GetDisplaysMessage:
                 return new DisplaysMessage(local.Machine, detector.DetectDisplays());
+
+            case IdentifyDisplaysMessage identify:
+                if (!AcceptProfilesFrom(from))
+                    return new ErrorMessage(L.T("Only the coordinator can do that."));
+                IdentifyRequested?.Invoke(identify);
+                return new OkMessage();
 
             case InputEnterMessage or InputEventsMessage or InputLeaveMessage or InputReleaseMessage or InputCursorMessage:
                 if (InputHandler is { } input)

@@ -16,6 +16,32 @@ public class LayoutPlannerTests
         ],
         [new("p", [new DisplayAssignment("a", lent.Id, "b", stream)])]);
 
+    private static DeskBridgeConfig LentWithSecondDisplay(IReadOnlyList<string>? disconnected) => new(
+        [
+            new("a", "A", "10.0.0.1", [new DisplayConfig("1", 1920, 1080), new DisplayConfig("2", 1920, 1080, X: 1920)],
+                HasInput: true, Disconnected: disconnected),
+            new("b", "B", "10.0.0.2", [new DisplayConfig("1", 1920, 1080)]),
+        ],
+        [new("p", [new DisplayAssignment("a", "1", "b", null)])]);
+
+    [Fact]
+    public void A_disconnected_display_is_left_out_of_the_plan_with_a_warning()
+    {
+        var plan = LayoutPlanner.Plan(LentWithSecondDisplay(["1"]), "p");
+
+        Assert.Empty(plan.Streams);
+        Assert.DoesNotContain(plan.InputRoutes, r => r.Display == "1");
+        Assert.Contains(plan.Warnings, w => w.Contains("'1'") && w.Contains("'a'"));
+    }
+
+    [Fact]
+    public void A_machine_whose_displays_are_all_disconnected_keeps_them()
+    {
+        var plan = LayoutPlanner.Plan(LentWithSecondDisplay(["1", "2"]), "p");
+
+        Assert.Single(plan.Streams);
+    }
+
     [Fact]
     public void Example_config_is_valid()
     {

@@ -77,6 +77,7 @@ public partial class MainWindow
         agent.PlanApplying += OnPlanApplyingForPrimary;
         agent.VideoOpened += OnVideoOpened;
         agent.ConfigReceived += config => Dispatcher.BeginInvoke(() => OnConfigReceived(config));
+        agent.IdentifyRequested += message => Dispatcher.BeginInvoke(() => ShowIdentify(message));
         // The coordinator takes profiles only from itself; a machine that connects to no one but is not
         // the coordinator (reached directly) takes them from the coordinator named in the profile.
         var defaultAccept = agent.AcceptProfilesFrom;

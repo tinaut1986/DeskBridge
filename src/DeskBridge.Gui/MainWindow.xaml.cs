@@ -70,6 +70,7 @@ public partial class MainWindow : Window
         L.Changed += OnLanguageChanged;
         LoadConfig();
         LoadLocalSettings();
+        RefreshLocalDisplays();
         InitSharing();
         BuildLanguageMenu();
         BuildThemeMenu();
@@ -539,6 +540,9 @@ public partial class MainWindow : Window
             control.ToolTip = reason;
             ToolTipService.SetShowOnDisabled(control, true);
         }
+        DetectAllButton.IsEnabled = !client;
+        DetectAllButton.ToolTip = reason ?? L.T("Reads the displays of every connected machine again (one that is not there now is kept as disconnected) and shows on each one which display it is.");
+        ToolTipService.SetShowOnDisabled(DetectAllButton, true);
         VideoTestButton.IsEnabled = !client;
         VideoTestButton.ToolTip = client ? L.T("Only the coordinator can show another machine's screen.") : null;
         ToolTipService.SetShowOnDisabled(VideoTestButton, true);
@@ -805,6 +809,7 @@ public partial class MainWindow : Window
     {
         if (IsClientHere())
             return; // the buttons are disabled: profiles are applied from the coordinator
+        RefreshLocalDisplays();
         if (_vm.SelectedProfile is not { } profile || !SaveConfig())
             return;
         if (_settings.Independent)
@@ -929,27 +934,66 @@ public partial class MainWindow : Window
             }
         }
 
-        int removed = MergeDisplays(machine, detected);
-        _vm.Status = L.T("{machine}: {count} displays detected, {removed} removed. Save to keep them.",
-            ("machine", machine), ("count", detected.Count), ("removed", removed));
+        int off = MergeDisplays(machine, detected);
+        _vm.Status = L.T("{machine}: {count} displays detected, {off} disconnected (kept for when they come back). Save to keep them.",
+            ("machine", machine), ("count", detected.Count), ("off", off));
     }
 
-    /// <summary>Updates a machine's displays in place, so profiles keep their settings for displays that still exist.</summary>
-    /// <returns>How many displays were removed.</returns>
+    /// <summary>
+    /// This PC's displays as Windows has them now (in the original arrangement's coordinates), into the configuration:
+    /// the desk is drawn and profiles are planned from it, and Windows can move or renumber displays (a cable moved to
+    /// another port, a driver update) without anyone pressing Detect. Other machines are refreshed when they connect.
+    /// Saves the configuration when something changed. Returns whether it did.
+    /// </summary>
+    private bool RefreshLocalDisplays()
+    {
+        if (_options.SnapshotDir is not null || !IsCoordinatorHere() // a client's configuration comes from the coordinator
+            || _vm.Model.Machines.FirstOrDefault(m => m.Id.Trim() == _vm.LocalMachine.Trim()) is not { } self)
+            return false;
+        var (ox, oy) = DeskOffset();
+        var detected = PlatformServices.DisplayDetector().DetectDisplays().Select(d => d with { X = d.X - ox, Y = d.Y - oy }).ToList();
+        if (detected.Count == 0)
+            return false;
+
+        static string Describe(IEnumerable<(DisplayConfig Display, bool Off)> displays) =>
+            string.Join(", ", displays.OrderBy(d => d.Display.Y).ThenBy(d => d.Display.X)
+                .Select(d => $"{d.Display.Id} {d.Display.Width}x{d.Display.Height} at ({d.Display.X},{d.Display.Y}){(d.Off ? " disconnected" : "")}"));
+        string before = Describe(self.Displays.Select(d => (d.ToConfig(), d.Disconnected)));
+        MergeDisplays(self, detected);
+        string after = Describe(self.Displays.Select(d => (d.ToConfig(), d.Disconnected)));
+        if (before == after)
+            return false;
+
+        AddLog($"[displays] this PC's displays changed in Windows: {before} -> {after}");
+        if (CurrentConfig(showErrors: false) is { } config)
+            ConfigLoader.Save(_options.ConfigPath, config);
+        return true;
+    }
+
+    /// <summary>
+    /// Updates a machine's displays in place, so profiles keep their settings for displays that still exist. One
+    /// Windows does not list (turned off, a cable out) is not removed but marked disconnected, profiles and all,
+    /// for when it comes back; with nothing detected, nothing changes (a machine always keeps its displays).
+    /// </summary>
+    /// <returns>How many displays are disconnected now.</returns>
     private static int MergeDisplays(MachineVm machine, IReadOnlyList<DisplayConfig> detected)
     {
+        if (detected.Count == 0)
+            return machine.Displays.Count(d => d.Disconnected);
         foreach (var d in detected)
         {
-            var existing = machine.Displays.FirstOrDefault(x => x.Id == d.Id);
+            var existing = machine.Displays.FirstOrDefault(x => x.Id.Trim() == d.Id);
             if (existing is null)
                 machine.Displays.Add(DisplayVm.From(d));
             else
+            {
                 existing.CopyFrom(d);
+                existing.Disconnected = false;
+            }
         }
-        var removed = machine.Displays.Where(x => detected.All(d => d.Id != x.Id)).ToList();
-        foreach (var gone in removed)
-            machine.Displays.Remove(gone);
-        return removed.Count;
+        foreach (var gone in machine.Displays.Where(x => detected.All(d => d.Id != x.Id.Trim())))
+            gone.Disconnected = true;
+        return machine.Displays.Count(d => d.Disconnected);
     }
 
     // ------------------------------------------------------------------ this PC tab

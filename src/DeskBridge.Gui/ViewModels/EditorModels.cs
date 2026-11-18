@@ -52,6 +52,11 @@ public sealed class DisplayVm : ObservableObject
     /// <summary>Windows' scale for it, in percent.</summary>
     public int Scale { get => _scale; set => Set(ref _scale, value); }
 
+    private bool _disconnected;
+
+    /// <summary>Not listed by Windows the last time it was detected: kept for when it comes back, left out of plans.</summary>
+    public bool Disconnected { get => _disconnected; set => Set(ref _disconnected, value); }
+
     public string Summary => $"{Width}x{Height} @ {RefreshHz} Hz";
 
     public static DisplayVm From(DisplayConfig d) =>
@@ -386,7 +391,11 @@ public sealed class EditorModel
         {
             var vm = new MachineVm { Id = m.Id, Name = m.Name, Address = m.Address, ControlPort = m.ControlPort, Color = m.Color };
             foreach (var d in m.Displays)
-                vm.Displays.Add(DisplayVm.From(d));
+            {
+                var display = DisplayVm.From(d);
+                display.Disconnected = m.Disconnected?.Contains(d.Id) == true;
+                vm.Displays.Add(display);
+            }
             model.Machines.Add(vm);
             vm.HasInput = m.HasInput;
         }
@@ -441,7 +450,8 @@ public sealed class EditorModel
             DeskWidths: m.HasInput || !m.DeskWidths.Any(w => m.DeskPositions.ContainsKey(w.Key))
                 ? null
                 : m.DeskWidths.Where(w => m.DeskPositions.ContainsKey(w.Key)).ToDictionary(),
-            Color: string.IsNullOrWhiteSpace(m.Color) ? null : m.Color.Trim())).ToList();
+            Color: string.IsNullOrWhiteSpace(m.Color) ? null : m.Color.Trim(),
+            Disconnected: m.Displays.Where(d => d.Disconnected).Select(d => d.Id.Trim()).ToList() is { Count: > 0 } off ? off : null)).ToList();
 
         var profiles = Profiles.Select(p => new ProfileConfig(
             p.Name.Trim(),

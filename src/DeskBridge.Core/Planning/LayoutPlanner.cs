@@ -101,6 +101,45 @@ public static class LayoutPlanner
             errors.Add(L.T("{where}: bitrate must be between {min} and {max} Mbps.", ("where", where), ("min", MinBitrateMbps), ("max", MaxBitrateMbps)));
     }
 
+    /// <summary>
+    /// The configuration without the displays marked disconnected (and what profiles do with them): they are not
+    /// there to show or be shown. A machine keeps at least one display, even if all of them are marked.
+    /// </summary>
+    public static DeskBridgeConfig WithoutDisconnected(DeskBridgeConfig config, string? profileName = null, List<string>? warnings = null)
+    {
+        var gone = new HashSet<(string Machine, string Display)>();
+        var machines = config.Machines.Select(m =>
+        {
+            if (m.Disconnected is not { Count: > 0 } off)
+                return m;
+            var left = m.Displays.Where(d => !off.Contains(d.Id)).ToList();
+            if (left.Count == 0)
+                return m; // at least one: nothing is left out
+            foreach (var d in m.Displays.Where(d => off.Contains(d.Id)))
+                gone.Add((m.Id, d.Id));
+            return m with { Displays = left };
+        }).ToList();
+        if (gone.Count == 0)
+            return config;
+
+        if (warnings is not null && config.Profiles.FirstOrDefault(p => p.Name == profileName) is { } profile)
+            foreach (var a in profile.Assignments.Where(a => gone.Contains((a.Machine, a.Display))))
+                warnings.Add(L.T("Display '{display}' of '{machine}' is disconnected: it does not show {other} until it is back.",
+                    ("display", a.Display), ("machine", a.Machine), ("other", a.UsedBy)));
+        // A primary display that is gone: Windows' own choice instead ("shows:N" is display N of the coordinator).
+        string coordinator = config.Machines.FirstOrDefault(m => m.HasInput)?.Id ?? "";
+        bool Gone(KeyValuePair<string, string> primary) =>
+            primary.Value.StartsWith(ProfileConfig.ShowsPrefix, StringComparison.Ordinal)
+                ? gone.Contains((coordinator, primary.Value[ProfileConfig.ShowsPrefix.Length..]))
+                : gone.Contains((primary.Key, primary.Value));
+        var profiles = config.Profiles.Select(p => p with
+        {
+            Assignments = p.Assignments.Where(a => !gone.Contains((a.Machine, a.Display))).ToList(),
+            PrimaryDisplays = p.PrimaryDisplays?.Where(kv => !Gone(kv)).ToDictionary(kv => kv.Key, kv => kv.Value),
+        }).ToList();
+        return config with { Machines = machines, Profiles = profiles };
+    }
+
     public static LayoutPlan Plan(DeskBridgeConfig config, string profileName)
     {
         var errors = Validate(config).ToList();
@@ -110,14 +149,16 @@ public static class LayoutPlanner
         if (errors.Count > 0)
             throw new ConfigException(errors);
 
+        var warnings = new List<string>();
+        config = WithoutDisconnected(config, profile!.Name, warnings);
+        profile = config.Profiles.First(p => p.Name == profileName);
         var coordinator = config.Machines.Single(m => m.HasInput);
-        var assignments = profile!.Assignments.ToDictionary(a => (a.Machine, a.Display));
+        var assignments = profile.Assignments.ToDictionary(a => (a.Machine, a.Display));
 
         var virtualDisplays = new List<VirtualDisplaySpec>();
         var streams = new List<StreamSpec>();
         var inputRoutes = new List<InputRoute>();
         var nextVirtualIndex = new Dictionary<string, int>();
-        var warnings = new List<string>();
 
         foreach (var machine in config.Machines)
         {
