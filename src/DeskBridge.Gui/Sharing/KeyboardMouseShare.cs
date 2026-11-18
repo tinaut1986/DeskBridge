@@ -214,6 +214,7 @@ public sealed class KeyboardMouseShare : IDisposable
                 // taskbar): it stays usable from here; only over the video does the cursor go to the other machine.
                 bool stay = _logic.Remote is null
                             && (_localButtons != 0 || (_logic.IsOverLent(m.X, m.Y) && !VideoWindow.IsVideoAt(m.X, m.Y)));
+                _logic.DragHeldOn = _heldOn; // a window of it dragged here: onto its display showing this PC too
                 switch (_logic.OnMouseMove(m.X, m.Y, dragging: stay))
                 {
                     case MouseDecision.Enter enter:
