@@ -63,7 +63,10 @@ public sealed class CoordinatorHandover
         _targets = targets;
         if (_remote is not null)
             // The same target (a machine can be reachable past an edge and through displays showing it); gone: back here.
-            _remote = targets.FirstOrDefault(t => t.SameAs(_remote));
+            // A window of that machine it went into (an island) moves and changes size: any other way to that
+            // machine keeps it there, the machine itself gives it back past the window's edge.
+            _remote = targets.FirstOrDefault(t => t.SameAs(_remote))
+                      ?? (_remote.Island ? targets.FirstOrDefault(t => t.Machine == _remote.Machine) : null);
     }
 
     /// <summary>
@@ -91,9 +94,9 @@ public sealed class CoordinatorHandover
         return holes.Count > 0 ? holes : null;
     }
 
-    /// <summary>The point is on a display of this PC that shows another machine.</summary>
+    /// <summary>The point is on a display of this PC that shows another machine (not on one of its windows seen here).</summary>
     public bool IsOverLent(int x, int y) =>
-        _targets.Any(t => t.Lent is { } l && x >= l.X && x < l.Right && y >= l.Y && y < l.Bottom);
+        _targets.Any(t => t.Lent is { } l && !t.Island && x >= l.X && x < l.Right && y >= l.Y && y < l.Bottom);
 
     /// <param name="dragging">
     /// A mouse button is held on this PC (something is being dragged here): the cursor does not leave, so a window
@@ -219,8 +222,13 @@ public sealed class CoordinatorHandover
             return new MouseDecision.Here(ex, ey);
         }
 
+        // Left one of that machine's windows over this PC's picture there (an island): back onto that picture, mapped
+        // through it (the whole display over there shows it, at its scale), when the point is still on it.
+        var island = _targets.FirstOrDefault(t => t.Island && t.Machine == remote.Machine && t.Lent is { } l
+            && _displays.Any(d => d.X <= l.X && d.Y <= l.Y && d.Right >= l.Right && d.Bottom >= l.Bottom
+                                  && Inside(d, t.ToDesk(rx, ry))));
         // Mapped back through the display of that machine it left from (each has its own place and scale here).
-        var from = _targets
+        var from = island ?? _targets
             .Where(t => t.Machine == remote.Machine && (t.Confine || t.Lent is not null))
             // Not one the point is inside: that machine sent the cursor back instead of moving it there, so it left
             // from another one (e.g. past the right edge of the display shown on the coordinator's display 3, into
@@ -228,6 +236,7 @@ public sealed class CoordinatorHandover
             .OrderBy(t => t.Displays.Any(d => rx >= d.X && rx < d.Right && ry >= d.Y && ry < d.Bottom) ? 1 : 0)
             .ThenBy(t => t.Displays.Min(d => Distance(d, rx, ry)))
             .ThenBy(t => t.Lent is null) // on a display shown here (a window over the video there): through that one
+            .ThenBy(t => t.Island) // not through a window of it seen here, past its edge
             .FirstOrDefault() ?? remote;
         var (dx, dy) = from.ToDesk(rx, ry);
         if (!InputLayout.Contains(_displays, dx, dy)
@@ -252,6 +261,8 @@ public sealed class CoordinatorHandover
             MouseDecision.Enter enter => (enter.X, enter.Y),
             _ => (0, 0),
         };
+
+    private static bool Inside(DisplayRect d, (int X, int Y) p) => p.X >= d.X && p.X < d.Right && p.Y >= d.Y && p.Y < d.Bottom;
 
     private static long Distance(DisplayRect d, int x, int y)
     {

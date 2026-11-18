@@ -7,8 +7,9 @@ namespace DeskBridge.Platform.Windows.Video;
 /// On a machine whose display shows a screen of the coordinator (the laptop panel showing the desktop's fourth
 /// monitor), that display belongs to the coordinator for the mouse: a window of this machine that opens there (a
 /// dialog, settings, a prompt of an app) can be neither seen behind the video nor reached with the coordinator's
-/// mouse. Such windows are moved onto a display of this machine that is not covered (e.g. its virtual display, shown
-/// on one of the coordinator's monitors), where the coordinator's mouse reaches them.
+/// mouse. Such windows, behind the video, are moved onto a display of this machine that is not covered (e.g. its
+/// virtual display, shown on one of the coordinator's monitors), where the coordinator's mouse reaches them. Those on
+/// top of the video stay: the coordinator sends the cursor here over them (see WindowsOverVideoMessage).
 /// </summary>
 [SupportedOSPlatform("windows")]
 public static class WindowRescue
@@ -24,6 +25,9 @@ public static class WindowRescue
         if ((GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0)
             return 0;
         var target = free[0];
+        // Those on top of the video can be seen, and used from the coordinator (the cursor comes here over them):
+        // they stay. Only those behind it, out of sight, are moved.
+        var above = VideoWindow.HandlesAbove();
         int moved = 0;
         var windows = new List<nint>();
         EnumWindows((hwnd, _) =>
@@ -34,7 +38,7 @@ public static class WindowRescue
         foreach (var hwnd in windows)
         {
             // (DeskBridge's own window too: only its video windows stay where they are.)
-            if (covered.Any(c => c.Hwnd == hwnd) || !IsMovable(hwnd))
+            if (covered.Any(c => c.Hwnd == hwnd) || above.Contains(hwnd) || !IsMovable(hwnd))
                 continue;
             if (!GetWindowRect(hwnd, out var r))
                 continue;

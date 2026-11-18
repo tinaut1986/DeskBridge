@@ -87,7 +87,11 @@ public partial class MainWindow
         // A display of that machine shown here AND placed on the desk (no virtual display yet: its main display is
         // streamed instead) would be on the desk twice and the cursor would bounce between both: only the display
         // showing it counts while that lasts.
-        return lent.Concat(edges.Where(e => !shown.Any(l => l.Machine == e.Machine && e.Displays[0] == l.There))).ToList();
+        // Windows of other machines over this PC's pictures there come first: they are on top of everything else.
+        return IslandTargets(connected)
+            .Concat(lent)
+            .Concat(edges.Where(e => !shown.Any(l => l.Machine == e.Machine && e.Displays[0] == l.There)))
+            .ToList();
     }
 
     private InputReceiver Receiver() => _receiver ??= new InputReceiver(
@@ -113,6 +117,11 @@ public partial class MainWindow
         if (message is InputCursorMessage cursor)
         {
             _share?.OnCursor(from, cursor);
+            return Task.CompletedTask;
+        }
+        if (message is WindowsOverVideoMessage covered)
+        {
+            OnWindowsOverVideo(from, covered);
             return Task.CompletedTask;
         }
         return Receiver().HandleAsync(from, message);
