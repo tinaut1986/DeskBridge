@@ -49,13 +49,33 @@ public partial class MainWindow
             .Where(s => s.SourceMachine == _vm.LocalMachine.Trim())
             .Select(s => (s.SinkMachine, s.SinkDisplay))
             .ToHashSet();
-        var edges = _vm.Model.Machines
-            .Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim()))
-            .SelectMany(m => m.Displays
-                .Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()) && !showingThisPc.Contains((m.Id.Trim(), d.Id.Trim())))
-                .Select(d => InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height),
-                    new VirtualPosition(m.DeskPositions[d.Id.Trim()].X + ox, m.DeskPositions[d.Id.Trim()].Y + oy),
-                    InputLayout.DeskScale(d.Width, d.Height, d.Scale, m.DeskWidths.TryGetValue(d.Id.Trim(), out var w) ? w : null))));
+        // A display on the desk that shows a third machine (the tablet showing the laptop, relayed through this PC):
+        // the cursor goes to the machine shown there, onto the display it sends, at the size of the one showing it.
+        // Not to the machine the display belongs to: it would not even take the cursor (it is busy showing).
+        var shownElsewhere = (_streamPlan?.Streams ?? [])
+            .Where(s => s.SourceMachine != _vm.LocalMachine.Trim() && s.SinkMachine != _vm.LocalMachine.Trim())
+            .ToDictionary(s => (s.SinkMachine, s.SinkDisplay), s => s);
+        var edges = new List<InputTarget>();
+        foreach (var m in _vm.Model.Machines.Where(m => m.Id.Trim() != _vm.LocalMachine.Trim() && connected.Contains(m.Id.Trim())))
+        {
+            foreach (var d in m.Displays.Where(d => m.DeskPositions.ContainsKey(d.Id.Trim()) && !showingThisPc.Contains((m.Id.Trim(), d.Id.Trim()))))
+            {
+                var position = new VirtualPosition(m.DeskPositions[d.Id.Trim()].X + ox, m.DeskPositions[d.Id.Trim()].Y + oy);
+                int? deskWidth = m.DeskWidths.TryGetValue(d.Id.Trim(), out var w) ? w : null;
+                if (shownElsewhere.TryGetValue((m.Id.Trim(), d.Id.Trim()), out var stream))
+                {
+                    // Only once the stream is there (where the sender's display is): until then, nowhere.
+                    if (_relays.TryGetValue(stream.Key, out var relay) && relay.There is { } there && connected.Contains(stream.SourceMachine))
+                    {
+                        double scale = (double)InputLayout.DeskSize(d.Width, d.Height, d.Scale, deskWidth).Width / Math.Max(1, there.Width);
+                        edges.Add(InputLayout.Desk(stream.SourceMachine, there, position, scale));
+                    }
+                    continue;
+                }
+                edges.Add(InputLayout.Desk(m.Id.Trim(), new DisplayRect(d.X, d.Y, d.Width, d.Height), position,
+                    InputLayout.DeskScale(d.Width, d.Height, d.Scale, deskWidth)));
+            }
+        }
         // Displays here that show another machine's screen: entering one moves the cursor to that machine (where
         // that display is now: it moves when the primary display changes).
         var here = PlatformServices.DisplayDetector().DetectDisplays().ToDictionary(d => d.Id, d => new DisplayRect(d.X, d.Y, d.Width, d.Height));
@@ -67,8 +87,11 @@ public partial class MainWindow
         // A display of that machine shown here AND placed on the desk (no virtual display yet: its main display is
         // streamed instead) would be on the desk twice and the cursor would bounce between both: only the display
         // showing it counts while that lasts.
-        edges = edges.Where(e => !shown.Any(l => l.Machine == e.Machine && e.Displays[0] == l.There));
-        return lent.Concat(edges).ToList();
+        // Windows of other machines over this PC's pictures there come first: they are on top of everything else.
+        return IslandTargets(connected)
+            .Concat(lent)
+            .Concat(edges.Where(e => !shown.Any(l => l.Machine == e.Machine && e.Displays[0] == l.There)))
+            .ToList();
     }
 
     private InputReceiver Receiver() => _receiver ??= new InputReceiver(
@@ -94,6 +117,11 @@ public partial class MainWindow
         if (message is InputCursorMessage cursor)
         {
             _share?.OnCursor(from, cursor);
+            return Task.CompletedTask;
+        }
+        if (message is WindowsOverVideoMessage covered)
+        {
+            OnWindowsOverVideo(from, covered);
             return Task.CompletedTask;
         }
         return Receiver().HandleAsync(from, message);

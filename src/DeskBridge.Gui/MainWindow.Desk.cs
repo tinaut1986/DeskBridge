@@ -274,14 +274,37 @@ public partial class MainWindow
         bool isSelected = assignment is not null && assignment == selected;
 
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // Which machine above the number, on every display: display 1 of one machine is not display 1 of another
+        // (the same as each display shows on itself when Detect identifies them).
         text.Children.Add(new TextBlock
         {
-            Text = foreign ? $"{machine} · {display.Id}" : display.Id,
-            FontSize = foreign ? 14 : 22,
+            Text = machine.ToString(),
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(color),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        text.Children.Add(new TextBlock
+        {
+            Text = display.Id,
+            FontSize = 22,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(color),
             HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, -4, 0, 0),
         });
+        if (display.Disconnected)
+        {
+            text.Children.Add(new TextBlock
+            {
+                Text = L.T("disconnected"),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = ThemeManager.Resource("WarningText"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+        }
         if (foreign && onDesk)
         {
             text.Children.Add(new TextBlock
@@ -350,6 +373,14 @@ public partial class MainWindow
                     : L.T("Display {display} of {machine}: drag it onto the desk of {coordinator} to use it from there.", ("display", display.Id), ("machine", machine), ("coordinator", coordinator)))
                 : L.T("Display {display} of {machine}: {mode}", ("display", display.Id), ("machine", machine), ("mode", display.Summary)),
         };
+        if (display.Disconnected)
+        {
+            // Not there now (turned off, a cable out): kept with what profiles do with it, left out of plans.
+            tile.Opacity = 0.55;
+            tile.BorderBrush = DashedBrush(color);
+            tile.ToolTip = L.T("Display {display} of {machine} is not connected now: it is kept, with what profiles do with it, for when it comes back. Detect displays again once it is back.",
+                ("display", display.Id), ("machine", machine));
+        }
         Canvas.SetLeft(tile, frame.ToCanvasX(rect.X) + 3);
         Canvas.SetTop(tile, frame.ToCanvasY(rect.Y) + 3);
         canvas.Children.Add(tile);

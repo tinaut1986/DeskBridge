@@ -158,22 +158,8 @@ public sealed class VideoWindow : IDisposable
     {
         var result = new List<(int, int, int, int)>();
         var videos = Windows.Keys.Select(h => GetWindowRect(h, out var r) ? r : default).Where(r => r.Right > r.Left).ToList();
-        if (videos.Count == 0)
-            return result;
-        for (nint hwnd = GetTopWindow(0); hwnd != 0; hwnd = GetWindow(hwnd, 2 /* GW_HWNDNEXT */))
+        foreach (var (_, bounds) in Above(stopAt: null))
         {
-            if (Windows.ContainsKey(hwnd))
-                break; // below the video windows nothing is visible over them
-            if (!IsWindowVisible(hwnd) || IsIconic(hwnd))
-                continue;
-            long ex = GetWindowLongPtrW(hwnd, -20 /* GWL_EXSTYLE */);
-            if ((ex & 0x20 /* WS_EX_TRANSPARENT */) != 0)
-                continue;
-            if (DwmGetWindowAttribute(hwnd, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0)
-                continue;
-            if (DwmGetWindowAttribute(hwnd, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, out Rect bounds, Marshal.SizeOf<Rect>()) != 0
-                && !GetWindowRect(hwnd, out bounds))
-                continue;
             foreach (var v in videos)
             {
                 int left = Math.Max(bounds.Left, v.Left), top = Math.Max(bounds.Top, v.Top);
@@ -184,6 +170,75 @@ public sealed class VideoWindow : IDisposable
         }
         return result;
     }
+
+    /// <summary>The windows of this PC on top of the video windows (they can be seen and used there).</summary>
+    public static HashSet<nint> HandlesAbove() => Above(stopAt: null).Select(a => a.Hwnd).ToHashSet();
+
+    /// <summary>
+    /// Windows above <paramref name="stopAt"/> (null: above the first video window), top first, with their
+    /// visible bounds; none when there is no video window.
+    /// </summary>
+    private static List<(nint Hwnd, Rect Bounds)> Above(nint? stopAt)
+    {
+        var result = new List<(nint, Rect)>();
+        if (Windows.IsEmpty)
+            return result;
+        for (nint hwnd = GetTopWindow(0); hwnd != 0; hwnd = GetWindow(hwnd, 2 /* GW_HWNDNEXT */))
+        {
+            if (stopAt is { } stop ? hwnd == stop : Windows.ContainsKey(hwnd))
+                break; // below it nothing is visible over it
+            if (Windows.ContainsKey(hwnd) || !IsWindowVisible(hwnd) || IsIconic(hwnd))
+                continue;
+            long ex = GetWindowLongPtrW(hwnd, -20 /* GWL_EXSTYLE */);
+            if ((ex & 0x20 /* WS_EX_TRANSPARENT */) != 0)
+                continue;
+            if (DwmGetWindowAttribute(hwnd, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0)
+                continue;
+            if (DwmGetWindowAttribute(hwnd, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, out Rect bounds, Marshal.SizeOf<Rect>()) != 0
+                && !GetWindowRect(hwnd, out bounds))
+                continue;
+            result.Add((hwnd, bounds));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// This PC's windows on top of the video window over the monitor at (<paramref name="monitorX"/>,
+    /// <paramref name="monitorY"/>), each clipped to the picture, with the same part in the picture's own pixels;
+    /// null when there is no such video window or no picture yet.
+    /// </summary>
+    public static (int PictureWidth, int PictureHeight, List<((int X, int Y, int W, int H) Here, (int X, int Y, int W, int H) Picture)> Parts)?
+        CoveredOn(int monitorX, int monitorY)
+    {
+        var (hwnd, window) = Windows.FirstOrDefault(w => w.Value._monitor is { } m && m.X == monitorX && m.Y == monitorY);
+        if (window?._converter is not { } converter || !GetWindowRect(hwnd, out var r))
+            return null;
+        int picW = converter.InputWidth, picH = converter.InputHeight;
+        var (dx, dy, dw, dh) = converter.DestRect;
+        if (picW <= 0 || picH <= 0 || dw <= 0 || dh <= 0)
+            return null;
+        // Where the picture is drawn on the screen (black bars around it when the proportions differ).
+        int drawLeft = r.Left + dx, drawTop = r.Top + dy, drawRight = drawLeft + dw, drawBottom = drawTop + dh;
+        var parts = new List<((int, int, int, int), (int, int, int, int))>();
+        foreach (var (_, b) in Above(stopAt: hwnd))
+        {
+            int left = Math.Max(b.Left, drawLeft), top = Math.Max(b.Top, drawTop);
+            int right = Math.Min(b.Right, drawRight), bottom = Math.Min(b.Bottom, drawBottom);
+            if (right <= left || bottom <= top)
+                continue;
+            int px = (int)Math.Floor((left - drawLeft) * (double)picW / dw), py = (int)Math.Floor((top - drawTop) * (double)picH / dh);
+            int pr = (int)Math.Ceiling((right - drawLeft) * (double)picW / dw), pb = (int)Math.Ceiling((bottom - drawTop) * (double)picH / dh);
+            parts.Add(((left, top, right - left, bottom - top), (px, py, pr - px, pb - py)));
+        }
+        return (picW, picH, parts);
+    }
+
+    /// <summary>Where the video windows are on the screen, with their window handles.</summary>
+    public static List<(nint Hwnd, int X, int Y, int Width, int Height)> Areas() =>
+        Windows.Keys
+            .Select(h => GetWindowRect(h, out var r) ? (h, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top) : (h, 0, 0, 0, 0))
+            .Where(a => a.Item4 > 0 && a.Item5 > 0)
+            .ToList();
 
     /// <summary>Every video window: where it is, its client size and what it draws (troubleshooting).</summary>
     public static string Report() => Windows.Count == 0
