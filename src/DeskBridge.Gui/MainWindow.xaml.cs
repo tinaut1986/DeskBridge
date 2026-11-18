@@ -121,7 +121,8 @@ public partial class MainWindow : Window
             config = CreateDefaultConfig();
         }
 
-        ShowConfig(config, _options.Profile);
+        // The profile in place selected (the one applied last time), unless the command line names one.
+        ShowConfig(config, _options.Profile ?? AppliedProfileName());
     }
 
     /// <summary>Replaces what is being edited, keeping the selected profile and machine when they still exist.</summary>
@@ -468,6 +469,8 @@ public partial class MainWindow : Window
         agent.ProfileApplied += profile => Dispatcher.BeginInvoke(() =>
         {
             _activeProfile = profile;
+            if (IsClientHere() && _vm.Model.Profiles.FirstOrDefault(p => p.Name.Trim() == profile) is { } applied)
+                _vm.SelectedProfile = applied; // a client shows what the coordinator put in place
             UpdateAgentStatus();
             UpdateAppliedIndicator();
         });
@@ -967,6 +970,8 @@ public partial class MainWindow : Window
         AddLog($"[displays] this PC's displays changed in Windows: {before} -> {after}");
         if (CurrentConfig(showErrors: false) is { } config)
             ConfigLoader.Save(_options.ConfigPath, config);
+        if (_agent is not null)
+            _ = SaveAndSyncAsync(); // the machines connected now get it (their map shows this PC's displays)
         return true;
     }
 
