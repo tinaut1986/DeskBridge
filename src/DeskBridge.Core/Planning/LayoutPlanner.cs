@@ -379,10 +379,12 @@ public static class LayoutPlanner
             .Where(x => x.Display is not null)
             .Select(x => (x.Spec, Here: new DisplayRect(x.Display!.X, x.Display.Y, x.Display.Width, x.Display.Height)))
             .ToList();
-        // Only its displays that show itself: one lent to another machine (the laptop panel showing the desktop) is
-        // not the borrower on the desk, and nothing of the borrower goes around it.
+        // Its displays that show itself, and those that show the coordinator: the laptop panel showing the desktop is
+        // still part of the laptop's own Windows desktop, where its windows go past an edge onto it, and its place on
+        // the desk is where the panel is. One lent to a third machine is not placed on the desk for the borrower.
         var own = borrower.Displays
-            .Where(d => desk.ContainsKey(d.Id) && ShowsItself(borrower, d.Id, assignments))
+            .Where(d => desk.ContainsKey(d.Id)
+                        && (ShowsItself(borrower, d.Id, assignments) || assignments.GetValueOrDefault((borrower.Id, d.Id))?.UsedBy == coordinator.Id))
             .Select(d =>
             {
                 int? chosen = borrower.DeskWidths is { } widths && widths.TryGetValue(d.Id, out var w) && w > 0 ? w : null;
