@@ -33,6 +33,10 @@ public sealed record DisplayConfig(string Id, int Width, int Height, int Refresh
 /// Its colour ("#RRGGBB") on the Layout map and in the border around the displays it shows; none: one of a fixed
 /// set, by its place in the list.
 /// </param>
+/// <param name="Disconnected">
+/// Its displays Windows did not list the last time they were detected (turned off, a cable out): kept, with what
+/// profiles do with them, for when they come back, but left out of every plan meanwhile. Null: none.
+/// </param>
 public sealed record MachineConfig(
     string Id,
     string Name,
@@ -44,7 +48,8 @@ public sealed record MachineConfig(
     VirtualPosition? InputPosition = null,
     IReadOnlyDictionary<string, VirtualPosition>? DeskPositions = null,
     IReadOnlyDictionary<string, int>? DeskWidths = null,
-    string? Color = null);
+    string? Color = null,
+    IReadOnlyList<string>? Disconnected = null);
 
 /// <summary>
 /// How a lent display is streamed. Every value is optional: by default the virtual display

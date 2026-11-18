@@ -22,6 +22,21 @@ public partial class MainWindow
 
     private static string AppliedPath => Path.Combine(AppPaths.Directory, "applied-profile.json");
 
+    /// <summary>The name of the profile applied last time from here (remembered across restarts), or null.</summary>
+    private string? AppliedProfileName()
+    {
+        if (_options.SnapshotDir is not null || !File.Exists(AppliedPath))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<AppliedState>(File.ReadAllText(AppliedPath), ConfigLoader.JsonOptions)?.Profile;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>A profile was applied from here: remember it exactly as applied.</summary>
     private void RememberApplied(string profile, DeskBridgeConfig config)
     {
@@ -60,6 +75,25 @@ public partial class MainWindow
         }
         if (state is null || state.Config.Profiles.All(p => p.Name != state.Profile))
             return;
+
+        // This PC's displays as they are now (read from Windows at start), not as they were when the profile was
+        // applied: the other machines get this configuration, and their map would show the old arrangement.
+        string here = _vm.LocalMachine.Trim();
+        if (CurrentConfig(showErrors: false)?.Machines.FirstOrDefault(m => m.Id == here) is { } now
+            && state.Config.Machines.FirstOrDefault(m => m.Id == here) is { } then
+            && JsonSerializer.Serialize(new { now.Displays, now.Disconnected }, ConfigLoader.JsonOptions)
+               != JsonSerializer.Serialize(new { then.Displays, then.Disconnected }, ConfigLoader.JsonOptions))
+        {
+            var config = state.Config with
+            {
+                Machines = state.Config.Machines.Select(m => m.Id == here ? m with { Displays = now.Displays, Disconnected = now.Disconnected } : m).ToList(),
+            };
+            if (LayoutPlanner.Validate(config).Count == 0)
+            {
+                state = state with { Config = config };
+                RememberApplied(state.Profile, state.Config);
+            }
+        }
 
         LayoutPlan plan;
         try

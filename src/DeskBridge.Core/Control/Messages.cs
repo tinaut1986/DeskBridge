@@ -41,6 +41,7 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(AppliedMessage), "applied")]
 [JsonDerivedType(typeof(GetDisplaysMessage), "getDisplays")]
 [JsonDerivedType(typeof(DisplaysMessage), "displays")]
+[JsonDerivedType(typeof(IdentifyDisplaysMessage), "identifyDisplays")]
 [JsonDerivedType(typeof(ClipboardMessage), "clipboard")]
 [JsonDerivedType(typeof(FileStartMessage), "fileStart")]
 [JsonDerivedType(typeof(FileChunkMessage), "fileChunk")]
@@ -189,6 +190,18 @@ public sealed record AppliedMessage(string Machine, string Profile, IReadOnlyLis
 public sealed record GetDisplaysMessage() : ControlMessage;
 
 public sealed record DisplaysMessage(string Machine, IReadOnlyList<DisplayConfig> Displays) : ControlMessage;
+
+/// <summary>What to write on one display of a machine while its displays are identified.</summary>
+/// <param name="Display">The display's id on that machine.</param>
+/// <param name="Machine">The machine's name, written above the number (so display 1 of one machine is not taken for another's).</param>
+/// <param name="Color">The machine's colour on the Layout map ("#RRGGBB").</param>
+public sealed record DisplayLabel(string Display, string Machine, string Color);
+
+/// <summary>
+/// From the coordinator (Layout tab, Detect): each display of this machine shows, for a few seconds, which one it
+/// is, the way Windows' Identify does, with the machine's name and colour.
+/// </summary>
+public sealed record IdentifyDisplaysMessage(IReadOnlyList<DisplayLabel> Labels, int Seconds = 4) : ControlMessage;
 
 /// <summary>Something copied on another machine: text, or an image as PNG (base64).</summary>
 public sealed record ClipboardMessage(string? Text, string? PngBase64) : ControlMessage;
