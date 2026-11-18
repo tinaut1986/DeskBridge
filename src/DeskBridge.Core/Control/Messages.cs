@@ -123,7 +123,13 @@ public sealed record CoveredPart(DisplayRect Here, DisplayRect Picture);
 /// </summary>
 /// <param name="Stream">The stream shown there.</param>
 /// <param name="PictureWidth">The picture's size, which <see cref="CoveredPart.Picture"/> is measured in.</param>
-public sealed record WindowsOverVideoMessage(string Stream, int PictureWidth, int PictureHeight, IReadOnlyList<CoveredPart> Parts) : ControlMessage;
+/// <param name="Shown">
+/// Where the whole picture is drawn on that machine (its coordinates, as the coordinator's layout has them): while
+/// a window of that machine is dragged, the cursor goes to it anywhere over the picture, so the window can be
+/// dragged onto that display. Null from older versions.
+/// </param>
+public sealed record WindowsOverVideoMessage(string Stream, int PictureWidth, int PictureHeight, IReadOnlyList<CoveredPart> Parts,
+    DisplayRect? Shown = null) : ControlMessage;
 
 /// <summary>The cursor went back to the coordinator, at this position along the edge facing it.</summary>
 /// <param name="X">Where it crossed, in this machine's coordinates (when the coordinator sent its displays).</param>

@@ -188,6 +188,35 @@ public class HandoverTests
     }
 
     [Fact]
+    public void A_laptop_window_dragged_back_here_goes_onto_the_laptop_panel_over_the_desktop_picture_there()
+    {
+        // The swap: the middle display shows the laptop's virtual display; the laptop panel (2880x1800) shows the
+        // desktop's virtual display (1920x1200, below its monitors).
+        var shown = new DisplayRect(2880, 0, 1920, 1080);
+        var panel = new DisplayRect(0, 0, 2880, 1800);
+        var displays = Desktop.Append(DesktopVirtual).ToArray();
+        var picture = InputLayout.Lent("laptop-oscar", DesktopVirtual, panel, whileDragging: true);
+        var h = new CoordinatorHandover(displays, [picture, InputLayout.Lent("laptop-oscar", Desktop[1], shown)]);
+
+        // No drag: the desktop's virtual display is the desktop's.
+        Assert.False(h.IsOverLent(-960, 1680));
+        Assert.IsType<MouseDecision.Pass>(h.OnMouseMove(-960, 1680));
+
+        // A window of the laptop dragged here (its button kept held there): over that picture the laptop gets the
+        // cursor at that point of its panel, and keeps it on the panel.
+        h.DragHeldOn = "laptop-oscar";
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(-960, 1680));
+        Assert.Equal("laptop-oscar", enter.Machine);
+        Assert.Equal((1440, 900), (enter.X, enter.Y));
+        Assert.Equal([panel], enter.Area);
+        Assert.Equal([DesktopVirtual], enter.AreaDesk);
+
+        // Coming back from the panel (let go and moved off the window): at that point of the picture.
+        h.DragHeldOn = null;
+        Assert.Equal((-1920 + 200, 1080 + 100), h.Return(0.5, 300, 150));
+    }
+
+    [Fact]
     public void A_desktop_display_showing_the_laptop_hands_the_cursor_over_at_the_same_spot()
     {
         // The middle display (3) shows the laptop's virtual display, at (2880,0) right of its own panel.
