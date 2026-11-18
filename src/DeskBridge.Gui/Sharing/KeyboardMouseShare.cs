@@ -111,7 +111,7 @@ public sealed class KeyboardMouseShare : IDisposable
     /// <summary>Tells the video windows where to draw the other machine's pointer themselves (or nowhere).</summary>
     private void PublishPointer()
     {
-        if (_mirror.Position is { } p && _targets.FirstOrDefault(t => t.Lent is not null && t.Machine == _logic.Remote
+        if (_mirror.Position is { } p && _targets.FirstOrDefault(t => t.Lent is not null && !t.Island && t.Machine == _logic.Remote
                 && p.X >= t.Displays[0].X && p.X < t.Displays[0].Right && p.Y >= t.Displays[0].Y && p.Y < t.Displays[0].Bottom) is { } target)
         {
             var shown = target.Displays[0];

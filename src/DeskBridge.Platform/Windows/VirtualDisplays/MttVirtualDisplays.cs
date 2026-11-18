@@ -107,17 +107,23 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
 
         // Every SETDISPLAYCOUNT reloads the driver, and a few reloads in a row can leave it stopped with a problem
         // (code 43, seen going from one monitor to none and back): only when it needs more monitors than it has.
-        // Fewer are taken off the desktop instead (they stay with the driver, ready for the next profile).
+        // With none needed they are only taken off the desktop (they stay with the driver, ready for the next
+        // profile). With fewer but some needed, the count goes down to that: a monitor taken off the desktop is still
+        // listed by Windows' display settings (at the driver's 800x600), as if a display were left over.
         // A size the driver does not list cannot be given to its monitors (e.g. a laptop's 2880x1800): added to its
         // settings once, then the driver is reloaded to read them.
         bool reload = await Task.Run(() => AddMissingResolutions(displays), ct);
-        if ((reload || VirtualMonitors().Count < displays.Count)
-            && Send($"SETDISPLAYCOUNT {Math.Max(displays.Count, VirtualMonitors().Count)}", wantReply: false) is null)
+        int have = VirtualMonitors().Count;
+        int want = displays.Count == 0 ? have : displays.Count;
+        bool recount = want != have;
+        if ((reload || recount) && Send($"SETDISPLAYCOUNT {want}", wantReply: false) is null)
         {
             log("[virtual displays] the Virtual Display Driver did not take the new monitor count");
             return;
         }
-        if (reload)
+        if (want < have)
+            log($"[virtual displays] {have - want} virtual monitor(s) no profile display needs: the driver keeps {want}");
+        if (reload || want < have)
             await Task.Delay(2000, ct); // its monitors go away and come back (with new names) as it reloads
         if (displays.Count == 0)
         {
@@ -134,6 +140,17 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
         {
             log($"[virtual displays] only {devices.Count} of {displays.Count} virtual monitors appeared");
             return;
+        }
+
+        // A virtual monitor that is Windows' primary display (a profile made it so) cannot be moved away from (0,0):
+        // its whole new mode was refused and it stayed at the driver's default (800x600). A physical display of this
+        // PC is made primary first; the profile makes the virtual one primary again once it is in place.
+        var detailed = WindowsDisplayDetector.DetectDetailed(includeVirtual: true);
+        if (detailed.FirstOrDefault(d => d.IsPrimary) is { } primary && devices.Contains(primary.DeviceName)
+            && detailed.FirstOrDefault(d => !devices.Contains(d.DeviceName)) is { } physical)
+        {
+            log($"[virtual displays] {primary.DeviceName} is the primary display: display {physical.Config.Id} is made primary while they are set up");
+            WindowsDisplayDetector.MakePrimary(physical.Config.Id, log);
         }
 
         // A monitor that is not part of the desktop cannot be given a mode directly: extend the desktop onto
@@ -284,11 +301,21 @@ public sealed class MttVirtualDisplays(Action<string> log) : IVirtualDisplayDriv
         {
             bool virtualDriver = device.DeviceString.Contains("Virtual Display", StringComparison.OrdinalIgnoreCase)
                                  || device.DeviceId.Contains("MttVDD", StringComparison.OrdinalIgnoreCase);
-            if (virtualDriver)
+            if (virtualDriver && HasMonitor(device.DeviceName))
                 found.Add(device.DeviceName);
             device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
         }
         return found;
+    }
+
+    /// <summary>
+    /// Whether an output of the driver has a monitor: an output can stay listed after the driver's monitor count
+    /// went down, and only the monitors count (or can be given a mode).
+    /// </summary>
+    private static bool HasMonitor(string output)
+    {
+        var monitor = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
+        return EnumDisplayDevicesW(output, 0, ref monitor, 0);
     }
 
     private static DateTime _lastRestart;

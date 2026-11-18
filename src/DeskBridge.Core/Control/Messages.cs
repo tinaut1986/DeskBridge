@@ -24,6 +24,7 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(InputLeaveMessage), "inputLeave")]
 [JsonDerivedType(typeof(InputReleaseMessage), "inputRelease")]
 [JsonDerivedType(typeof(InputCursorMessage), "inputCursor")]
+[JsonDerivedType(typeof(WindowsOverVideoMessage), "windowsOverVideo")]
 [JsonDerivedType(typeof(RelayMessage), "relay")]
 [JsonDerivedType(typeof(UpdateStartMessage), "updateStart")]
 [JsonDerivedType(typeof(UpdateChunkMessage), "updateChunk")]
@@ -41,6 +42,7 @@ namespace DeskBridge.Core.Control;
 [JsonDerivedType(typeof(AppliedMessage), "applied")]
 [JsonDerivedType(typeof(GetDisplaysMessage), "getDisplays")]
 [JsonDerivedType(typeof(DisplaysMessage), "displays")]
+[JsonDerivedType(typeof(IdentifyDisplaysMessage), "identifyDisplays")]
 [JsonDerivedType(typeof(ClipboardMessage), "clipboard")]
 [JsonDerivedType(typeof(FileStartMessage), "fileStart")]
 [JsonDerivedType(typeof(FileChunkMessage), "fileChunk")]
@@ -108,6 +110,20 @@ public sealed record InputEventsMessage(IReadOnlyList<InputEvent> Events, long? 
 /// difference (Windows rounds absolute moves, the lock screen or a touchpad moves the cursor...).
 /// </summary>
 public sealed record InputCursorMessage(long Seq, int X, int Y) : ControlMessage;
+
+/// <summary>A window of the machine that shows a screen of the coordinator, on top of that picture.</summary>
+/// <param name="Here">Where it is on that machine (its coordinates, as the coordinator's layout has them).</param>
+/// <param name="Picture">The same part of the picture, in the picture's pixels (those of the coordinator's display sent).</param>
+public sealed record CoveredPart(DisplayRect Here, DisplayRect Picture);
+
+/// <summary>
+/// From a machine that shows a screen of the coordinator on one of its own displays (the laptop panel showing the
+/// desktop): its own windows on top of that picture, so the cursor goes to it over them and they can be used where
+/// they are (an empty list: none any more). Sent when they change.
+/// </summary>
+/// <param name="Stream">The stream shown there.</param>
+/// <param name="PictureWidth">The picture's size, which <see cref="CoveredPart.Picture"/> is measured in.</param>
+public sealed record WindowsOverVideoMessage(string Stream, int PictureWidth, int PictureHeight, IReadOnlyList<CoveredPart> Parts) : ControlMessage;
 
 /// <summary>The cursor went back to the coordinator, at this position along the edge facing it.</summary>
 /// <param name="X">Where it crossed, in this machine's coordinates (when the coordinator sent its displays).</param>
@@ -189,6 +205,18 @@ public sealed record AppliedMessage(string Machine, string Profile, IReadOnlyLis
 public sealed record GetDisplaysMessage() : ControlMessage;
 
 public sealed record DisplaysMessage(string Machine, IReadOnlyList<DisplayConfig> Displays) : ControlMessage;
+
+/// <summary>What to write on one display of a machine while its displays are identified.</summary>
+/// <param name="Display">The display's id on that machine.</param>
+/// <param name="Machine">The machine's name, written above the number (so display 1 of one machine is not taken for another's).</param>
+/// <param name="Color">The machine's colour on the Layout map ("#RRGGBB").</param>
+public sealed record DisplayLabel(string Display, string Machine, string Color);
+
+/// <summary>
+/// From the coordinator (Layout tab, Detect): each display of this machine shows, for a few seconds, which one it
+/// is, the way Windows' Identify does, with the machine's name and colour.
+/// </summary>
+public sealed record IdentifyDisplaysMessage(IReadOnlyList<DisplayLabel> Labels, int Seconds = 4) : ControlMessage;
 
 /// <summary>Something copied on another machine: text, or an image as PNG (base64).</summary>
 public sealed record ClipboardMessage(string? Text, string? PngBase64) : ControlMessage;

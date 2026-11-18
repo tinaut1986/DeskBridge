@@ -51,20 +51,29 @@ public partial class MainWindow
                 AddLog($"[video] {stream.Key}: {stream.SinkMachine} is not connected; it starts when it connects");
                 return;
             }
-            if (SendPosition(stream.SourceVirtualDisplay) is not { } source)
+            var source = SendPosition(stream.SourceVirtualDisplay);
+            // The other machine connected before this PC put the profile back in place here (after a restart, or
+            // connecting again): its virtual display is coming. Waited for, rather than sending a copy of the main
+            // display until the profile is applied again.
+            for (int i = 0; i < 20 && source is { Mirror: true } && Platform.Windows.VirtualDisplays.MttVirtualDisplays.IsInstalled(); i++)
+            {
+                await Task.Delay(500);
+                source = SendPosition(stream.SourceVirtualDisplay);
+            }
+            if (source is not { } found)
             {
                 AddLog(L.T("This machine has no display to send."));
                 return;
             }
-            if (GraphicsHealth.Problem(source.X, source.Y) is { } broken)
+            if (GraphicsHealth.Problem(found.X, found.Y) is { } broken)
             {
                 AddLog($"[video] {stream.Key}: {broken}");
                 return;
             }
-            if (source.Mirror)
+            if (found.Mirror)
                 AddLog(L.T("{machine} shows a copy of this PC's main display, not a display of its own: this PC has no working Virtual Display Driver.",
                     ("machine", MachineName(stream.SinkMachine))));
-            _outgoingPending[stream.Key] = (stream.SinkMachine, source.X, source.Y, stream.RefreshHz, stream.BitrateMbps);
+            _outgoingPending[stream.Key] = (stream.SinkMachine, found.X, found.Y, stream.RefreshHz, stream.BitrateMbps);
             try
             {
                 var reply = await session.RequestAsync(new StartVideoMessage(stream.Key, Send: false, Display: stream.SinkDisplay,
@@ -163,14 +172,51 @@ public partial class MainWindow
         if (_videoReceivers.TryGetValue(start.Key, out var replaced))
             _ = replaced.DisposeAsync().AsTask();
         _videoReceivers[start.Key] = receiver;
+        TrackCoordinatorScreen(start.Key, from, (monitor.X, monitor.Y));
         _ = receiver.Completion.ContinueWith(async _ =>
         {
-            _videoReceivers.TryRemove(new KeyValuePair<string, VideoReceiver>(start.Key, receiver));
+            if (_videoReceivers.TryRemove(new KeyValuePair<string, VideoReceiver>(start.Key, receiver)))
+                TrackCoordinatorScreen(start.Key, from, null);
             await receiver.DisposeAsync();
             await Dispatcher.InvokeAsync(ScheduleRedraw);
         }, TaskScheduler.Default);
         AddLog($"[video] showing {MachineName(from)}'s screen on display {start.Display}");
-        await Dispatcher.InvokeAsync(ScheduleRedraw);
+        await Dispatcher.InvokeAsync(() =>
+        {
+            ScheduleRedraw();
+            WatchCoveredDisplays();
+        });
         return new OkMessage();
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _rescueTimer;
+
+    /// <summary>
+    /// While a display here shows a screen of the coordinator, this PC's windows that open on it (behind the video,
+    /// out of the coordinator's mouse's reach) are moved to a display of this PC that is not covered (see WindowRescue).
+    /// </summary>
+    private void WatchCoveredDisplays()
+    {
+        if (_rescueTimer is not null)
+            return;
+        // Often enough for the coordinator to follow a window moved or opened over the picture (see ReportWindowsOverVideo).
+        _rescueTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _rescueTimer.Tick += (_, _) =>
+        {
+            if (_videoReceivers.IsEmpty || IsCoordinatorHere())
+            {
+                _rescueTimer?.Stop();
+                _rescueTimer = null;
+                return;
+            }
+            var covered = VideoWindow.Areas();
+            var free = Platform.Windows.WindowsDisplayDetector.DetectAll()
+                .Where(d => !covered.Any(c => c.X == d.X && c.Y == d.Y))
+                .Select(d => (d.X, d.Y, d.Width, d.Height))
+                .ToList();
+            WindowRescue.Run(free, AddLog);
+            ReportWindowsOverVideo();
+        };
+        _rescueTimer.Start();
     }
 }

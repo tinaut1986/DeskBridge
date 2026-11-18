@@ -123,6 +123,46 @@ public class HandoverTests
         Assert.Equal((-1920, 1080), InputLayout.DefaultPosition(Desktop, Laptop, PlacementSide.Below));
     }
 
+    /// <summary>
+    /// The swap: the desktop's virtual display (1920x1200, below its monitors) is shown full screen on the laptop
+    /// panel (2880x1800, scale 1.5), and a laptop window at (288,180) 960x600 on the panel sits over that picture.
+    /// </summary>
+    private static readonly DisplayRect DesktopVirtual = new(-1920, 1080, 1920, 1200);
+
+    private static InputTarget LaptopWindow(DisplayRect onPanel) =>
+        InputLayout.Lent("laptop-oscar",
+            new DisplayRect(DesktopVirtual.X + onPanel.X * 2 / 3, DesktopVirtual.Y + onPanel.Y * 2 / 3, onPanel.Width * 2 / 3, onPanel.Height * 2 / 3),
+            onPanel, island: true);
+
+    [Fact]
+    public void A_laptop_window_over_the_desktop_picture_on_its_panel_takes_the_cursor_and_gives_it_back_past_its_edge()
+    {
+        var displays = Desktop.Append(DesktopVirtual).ToArray();
+        var window = LaptopWindow(new DisplayRect(288, 180, 960, 600)); // on the desktop: (-1728,1200) 640x400
+        var h = new CoordinatorHandover(displays, [window]);
+
+        // On the desktop's virtual display, off the window: the desktop keeps the cursor (it is not a display
+        // showing another machine, where it would stay only over its own windows).
+        Assert.False(h.IsOverLent(-1800, 1150));
+        Assert.IsType<MouseDecision.Pass>(h.OnMouseMove(-1800, 1150));
+
+        // Onto the window: the laptop gets it there, at that point of its panel.
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(-1700, 1250));
+        Assert.Equal("laptop-oscar", enter.Machine);
+        Assert.Equal((330, 255), (enter.X, enter.Y));
+
+        // The window moves while the cursor is on the laptop: the cursor stays there.
+        h.Update(displays, [LaptopWindow(new DisplayRect(600, 400, 960, 600))]);
+        Assert.Equal("laptop-oscar", h.Remote);
+
+        // Past the window's left edge, still on the panel: back on the desktop's virtual display, through the
+        // panel's scale (not through any other display of the laptop).
+        var left = ClientHandover.Move(enter.Area!, enter.Peers, 290, 300, -10, 0);
+        Assert.True(left.Left);
+        Assert.Equal(DesktopVirtual.X + (int)Math.Round(280 * 2 / 3.0), h.Return(0.5, left.X, left.Y).X);
+        Assert.Null(h.Remote);
+    }
+
     [Fact]
     public void A_desktop_display_showing_the_laptop_hands_the_cursor_over_at_the_same_spot()
     {
@@ -153,6 +193,27 @@ public class HandoverTests
         var right = ClientHandover.Move([shown], enter.Peers, 4790, 500, 20, 0);
         Assert.True(right.Left);
         Assert.Equal((1930, 500), h.Return(0.5, right.X, right.Y)); // display 1, right of the middle one
+    }
+
+    [Fact]
+    public void Past_the_right_of_a_shown_display_the_cursor_comes_back_right_not_onto_the_machines_next_display()
+    {
+        // Display 3 (the middle one) shows the laptop's virtual display v1; its v2, right next to v1 on the laptop,
+        // is shown on a tablet placed BELOW display 3 on the desk (relayed through the desktop).
+        var middle = Desktop[1];
+        var v1 = new DisplayRect(2144, -1080, 1920, 1080);
+        var v2 = new DisplayRect(4064, -1080, 2000, 1200);
+        var lent = InputLayout.Lent("laptop-oscar", middle, v1);
+        var tablet = InputLayout.Desk("laptop-oscar", v2, new VirtualPosition(491, 1080), 1332.0 / 2000);
+        var h = new CoordinatorHandover(Desktop, [lent, tablet]);
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(1000, 300));
+        // On the laptop, right of v1 is v2 there, but on the desk it is display 1: back to the desktop...
+        var right = ClientHandover.Move(enter.Area!, enter.Peers, v1.Right - 1, -800, 20, 0, desk: enter.AreaDesk);
+        Assert.True(right.Left);
+        // ...and it lands on display 1 at that height, not next to the tablet below display 3.
+        var back = Assert.IsType<MouseDecision.Here>(h.Back(0.5, right.X, right.Y));
+        Assert.True(back.X >= 1920 && back.Y < 1080, $"landed at {back.X},{back.Y}");
     }
 
     [Fact]

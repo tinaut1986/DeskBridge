@@ -296,6 +296,7 @@
                                     </ContextMenu>
                                 </Button.ContextMenu>
                             </Button>
+                            <Button x:Name="DetectAllButton" Content="{l:T 'Detect displays'}" Click="DetectAll_Click" />
                             <Button x:Name="SaveButton" Content="{l:T 'Save'}" Click="Save_Click" />
                             <Button x:Name="ApplyButton" Content="{l:T 'Apply profile'}" Style="{StaticResource Primary}" Click="Apply_Click" Margin="0" />
                         </StackPanel>
@@ -474,6 +475,7 @@
                                 <DataGridTextColumn Header="X" Binding="{Binding X}" Width="60" />
                                 <DataGridTextColumn Header="Y" Binding="{Binding Y}" Width="60" />
                                 <DataGridTextColumn Header="%" Binding="{Binding Scale}" Width="50" />
+                                <DataGridCheckBoxColumn Header="{l:T 'Disconnected'}" Binding="{Binding Disconnected, UpdateSourceTrigger=PropertyChanged}" Width="90" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>

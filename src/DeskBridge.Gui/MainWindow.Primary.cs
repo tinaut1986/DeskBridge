@@ -53,12 +53,44 @@ public partial class MainWindow
     /// <summary>
     /// Before a profile is applied here (agent thread): a machine that places virtual displays goes back to its
     /// original arrangement first, so they are placed where the plan says (its coordinates are the original ones).
+    /// A virtual display that is the primary one gives that back first too, whatever the plan: it may be about to
+    /// go away, and Windows does not take its primary display off the desktop.
     /// </summary>
     private void OnPlanApplyingForPrimary(LayoutPlan plan) => Dispatcher.Invoke(() =>
     {
-        if (_options.SnapshotDir is null && plan.VirtualDisplaysOf(_vm.LocalMachine.Trim()).Any() && OriginalPrimary() is not null)
-            RestorePrimary();
+        if (_options.SnapshotDir is not null)
+            return;
+        if ((plan.VirtualDisplaysOf(_vm.LocalMachine.Trim()).Any() && OriginalPrimary() is not null) || VirtualIsPrimary())
+            PrimaryOffVirtual();
     });
+
+    /// <summary>The primary display is a virtual one (the Virtual Display Driver's).</summary>
+    private static bool VirtualIsPrimary()
+    {
+        string? primary = WindowsDisplayDetector.PrimaryId();
+        return primary is not null && WindowsDisplayDetector.DetectDetailed().All(d => d.Config.Id != primary);
+    }
+
+    /// <summary>
+    /// Before this PC's virtual displays go away (another profile, a pause, independent machines, its coordinator
+    /// gone): the primary display goes back to one of its own. Windows does not take its primary display off the
+    /// desktop, so a virtual one that is primary would stay, with the taskbar, new windows and the cursor on a
+    /// display that nobody shows any more. The original primary display, or the nearest physical one to (0,0).
+    /// </summary>
+    private void PrimaryOffVirtual()
+    {
+        RestorePrimary();
+        if (!VirtualIsPrimary())
+            return;
+        var nearest = WindowsDisplayDetector.DetectDetailed()
+            .OrderBy(d => (long)d.Config.X * d.Config.X + (long)d.Config.Y * d.Config.Y)
+            .FirstOrDefault();
+        if (nearest is null)
+            return;
+        AddLog($"[displays] the primary display is a virtual one: display {nearest.Config.Id} takes over before virtual displays go");
+        if (WindowsDisplayDetector.MakePrimary(nearest.Config.Id, AddLog))
+            ForgetOriginalPrimary();
+    }
 
     /// <summary>After a profile is applied here (agent thread): the primary display it needs, before its streams start.</summary>
     private void OnPlanAppliedForPrimary(LayoutPlan plan) => Dispatcher.Invoke(() =>
@@ -86,11 +118,22 @@ public partial class MainWindow
             var rects = physical.ToDictionary(d => d.Config.Id, d => new DisplayRect(d.Config.X, d.Config.Y, d.Config.Width, d.Config.Height));
             wanted = PrimaryChoice.Decide(rects, original, lent, chosen);
         }
+        else if (chosen is not null && displays.Any(d => d.Config.Id == chosen))
+        {
+            wanted = chosen;
+        }
         else
         {
-            wanted = chosen is not null && displays.Any(d => d.Config.Id == chosen) ? chosen : original;
+            // Nothing chosen: like on the coordinator, a primary display that shows the coordinator's screen (covered
+            // by its video) gives way to the nearest one that does not, e.g. this PC's virtual display shown on one of
+            // the coordinator's monitors; otherwise the taskbar and new windows would land under that video.
+            var covered = plan.StreamsTo(here).Select(s => s.SinkDisplay).ToHashSet();
+            var rects = displays.ToDictionary(d => d.Config.Id, d => new DisplayRect(d.Config.X, d.Config.Y, d.Config.Width, d.Config.Height));
+            wanted = PrimaryChoice.Decide(rects, original, covered, null);
         }
 
+        if (plan.PrimaryDisplayOf(here) is { } asked)
+            AddLog($"[displays] primary display: the profile asks for {asked} (display {chosen ?? "not found"}); now {current}, original {original}: {wanted}");
         if (wanted == current)
         {
             if (wanted == original)
@@ -153,9 +196,36 @@ public partial class MainWindow
         if (EffectivePrimary(profile, machine, coordinator) == id)
             marks.Add(machine);
         if (shows != machine && machine == coordinator
-            && profile.PrimaryDisplays.GetValueOrDefault(shows.Id.Trim()) == ProfileConfig.ShowsPrefix + id)
+            && (profile.PrimaryDisplays.GetValueOrDefault(shows.Id.Trim()) == ProfileConfig.ShowsPrefix + id
+                || GivesWayHere(profile, shows, coordinator, id)))
             marks.Add(shows);
         return marks;
+    }
+
+    /// <summary>
+    /// Nothing chosen for <paramref name="other"/>, and its own primary display shows another machine: it gives way
+    /// to its virtual display (see OnPlanAppliedForPrimary), the one shown on the coordinator's first display that
+    /// shows it, <paramref name="display"/> here.
+    /// </summary>
+    private static bool GivesWayHere(ProfileVm profile, MachineVm other, MachineVm coordinator, string display)
+    {
+        if (profile.PrimaryDisplays.ContainsKey(other.Id.Trim()) || OwnPrimaryLent(profile, other) is null)
+            return false;
+        var first = profile.Assignments
+            .Where(a => a.Owner == coordinator && a.UsedBy == other)
+            .Select(a => a.Display.Id.Trim())
+            .FirstOrDefault();
+        return first == display;
+    }
+
+    /// <summary>Its own primary display (the one at 0,0) when the profile lends it to another machine; otherwise null.</summary>
+    private static string? OwnPrimaryLent(ProfileVm profile, MachineVm machine)
+    {
+        var own = machine.Displays.FirstOrDefault(d => d.X == 0 && d.Y == 0) ?? machine.Displays.FirstOrDefault();
+        if (own is null)
+            return null;
+        bool lent = profile.Assignments.Any(a => a.Owner == machine && a.Display == own && a.UsedBy != machine);
+        return lent ? own.Id.Trim() : null;
     }
 
     /// <summary>The display id that is (or will be) primary on that machine with this profile, among its own.</summary>
@@ -170,7 +240,14 @@ public partial class MainWindow
         if (chosen is not null && chosen.StartsWith(ProfileConfig.ShowsPrefix, StringComparison.Ordinal))
             return null; // its virtual display, marked on the coordinator's display that shows it
         if (machine != coordinator)
-            return chosen is not null && own.Any(d => d.Id == chosen) ? chosen : original;
+        {
+            if (chosen is not null && own.Any(d => d.Id == chosen))
+                return chosen;
+            // Its primary shows another machine: it gives way to its virtual display (marked where that is shown).
+            return OwnPrimaryLent(profile, machine) is not null && profile.Assignments.Any(a => a.Owner == coordinator && a.UsedBy == machine)
+                ? null
+                : original;
+        }
         var lent = profile.Assignments.Where(a => a.Owner == coordinator && a.UsedBy != coordinator).Select(a => a.Display.Id.Trim()).ToHashSet();
         return PrimaryChoice.Decide(own.ToDictionary(d => d.Id, d => d.Rect), original, lent, chosen);
     }
