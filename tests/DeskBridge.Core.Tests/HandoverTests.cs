@@ -164,6 +164,30 @@ public class HandoverTests
     }
 
     [Fact]
+    public void Into_a_desktop_window_over_the_laptop_picture_the_cursor_comes_back_at_that_spot_even_with_laptop_windows_elsewhere()
+    {
+        // The middle display shows the laptop's virtual display, a desktop window covers part of it; meanwhile a
+        // laptop window sits over the desktop's picture on the laptop panel (an island, somewhere else entirely).
+        var middle = Desktop[1];
+        var shown = new DisplayRect(2880, 0, 1920, 1080);
+        var displays = Desktop.Append(DesktopVirtual).ToArray();
+        var h = new CoordinatorHandover(displays,
+            [LaptopWindow(new DisplayRect(0, 0, 737, 3)), InputLayout.Lent("laptop-oscar", middle, shown)])
+        {
+            WindowsOverVideo = () => [new DisplayRect(500, 200, 800, 600)],
+        };
+
+        var enter = Assert.IsType<MouseDecision.Enter>(h.OnMouseMove(400, 300));
+        Assert.Equal([new DisplayRect(3380, 200, 800, 600)], enter.Holes);
+
+        // Into the window from its left: back on the desktop right there, mapped through the middle display
+        // (not through the laptop window over the picture on its panel).
+        var into = ClientHandover.Move(enter.Area!, enter.Peers, 3375, 300, 10, 0, enter.Holes);
+        Assert.True(into.Left);
+        Assert.Equal((505, 300), h.Return(0.5, into.X, into.Y));
+    }
+
+    [Fact]
     public void A_desktop_display_showing_the_laptop_hands_the_cursor_over_at_the_same_spot()
     {
         // The middle display (3) shows the laptop's virtual display, at (2880,0) right of its own panel.
